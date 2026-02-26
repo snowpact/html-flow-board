@@ -1,0 +1,22 @@
+{
+  "name": "html-flow-board",
+  "version": "0.1.0",
+  "description": "Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows",
+  "main": "flowboard.js",
+  "style": "flowboard.css",
+  "files": [
+    "flowboard.js",
+    "flowboard.css"
+  ],
+  "scripts": {
+    "dev": "npx serve ."
+  },
+  "keywords": [
+    "storyboard",
+    "flowchart",
+    "wireframe",
+    "svg",
+    "drag-and-drop"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,184 @@
+# html-flow-board
+
+Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows. Zero dependencies, importable via CDN.
+
+## Quick Start
+
+```html
+<link rel="stylesheet" href="flowboard.css">
+<script src="flowboard.js"></script>
+
+<div id="app" style="width:100vw;height:100vh"></div>
+
+<script>
+FlowBoard.init({
+  container: '#app',
+  project: {
+    name: "My Storyboard",
+    epics: [
+      { id: "auth", label: "Authentication", color: "#d97706" }
+    ],
+    screens: [
+      {
+        id: "login", title: "Login", epic: "auth",
+        size: "sm",
+        label: "Login page",
+        notes: "US-1.1",
+        content: `
+          <div class="fb-input">Email</div>
+          <div class="fb-btn">Sign In</div>
+        `
+      },
+      {
+        id: "home", title: "Home", epic: "auth",
+        content: `<div class="fb-text title">Welcome</div>`
+      }
+    ],
+    arrows: [
+      { from: "login", to: "home", label: "Login OK" }
+    ]
+  }
+});
+</script>
+```
+
+## API
+
+### `FlowBoard.init(config)`
+
+| Parameter | Type | Description |
+|---|---|---|
+| `config.container` | `string \| HTMLElement` | CSS selector or DOM element |
+| `config.project` | `object` | Storyboard configuration |
+
+### Project
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Project name (used as localStorage key) |
+| `epics` | `Epic[]` | Logical screen groupings |
+| `screens` | `Screen[]` | List of screens |
+| `arrows` | `Arrow[]` | Connections between screens |
+
+### Epic
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique identifier |
+| `label` | `string` | Name displayed in the legend |
+| `color` | `string` | CSS color (screen header + legend) |
+
+### Screen
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique identifier |
+| `title` | `string` | Title displayed in the header |
+| `epic` | `string` | Epic ID (determines the color) |
+| `size` | `"sm" \| "md" \| "lg"` | Width: 240px / 320px / 400px (default: `"md"`) |
+| `label` | `string` | Short description (bottom of card) |
+| `notes` | `string` | Annotation (togglable) |
+| `content` | `string` | HTML injected into the card body |
+
+### Arrow
+
+| Field | Type | Description |
+|---|---|---|
+| `from` | `string` | Source screen ID |
+| `to` | `string` | Destination screen ID |
+| `label` | `string` | Text on the arrow |
+| `dashed` | `boolean` | Dashed arrow (default: `false`) |
+| `fromSide` | `"top" \| "right" \| "bottom" \| "left"` | Departure side (auto if omitted) |
+| `toSide` | `"top" \| "right" \| "bottom" \| "left"` | Arrival side (auto if omitted) |
+
+## Features
+
+- **Pannable canvas** — drag the background to navigate
+- **Draggable screens** — free repositioning, persisted in localStorage
+- **SVG Bezier arrows** — redrawn in real time on drag
+- **Auto-layout** — automatic left-to-right placement based on the navigation graph
+- **Auto-sides** — automatic best-side calculation for arrows
+- **Zoom** — buttons + Ctrl+scroll wheel, persisted in localStorage
+- **Toggle notes** — show/hide annotations
+- **Export PNG** — via html2canvas (lazy-loaded from CDN)
+- **Reset** — restore original positions
+
+## Wireframe classes `fb-*`
+
+These classes are used inside screen `content` to build wireframes:
+
+### Structure
+| Class | Description |
+|---|---|
+| `.fb-bar` | Navigation bar |
+| `.fb-card` | Nested card |
+| `.fb-row` | Horizontal row (flex) |
+| `.fb-row.spread` | Row with `space-between` |
+| `.fb-row.wrap` | Row with wrapping |
+| `.fb-sep` | Horizontal separator |
+| `.fb-section-label` | Section label (uppercase) |
+
+### Forms
+| Class | Description |
+|---|---|
+| `.fb-input` | Input field (wireframe) |
+| `.fb-btn` | Button (green by default) |
+| `.fb-btn.outline` | Outline button |
+| `.fb-btn.danger` | Red button |
+| `.fb-btn.secondary` | Gray button |
+| `.fb-btn.small` | Compact button |
+
+### Data
+| Class | Description |
+|---|---|
+| `.fb-table` | Table with `th` and `td` |
+| `.fb-stat-card` | Stat card (value + label) |
+| `.fb-list` | Vertical list |
+| `.fb-list-item` | List item |
+| `.fb-badge` | Badge/tag |
+| `.fb-badge.green/blue/orange/red/purple` | Color variants |
+| `.fb-chip` | Chip/tag |
+
+### Media & UI
+| Class | Description |
+|---|---|
+| `.fb-img` | Image placeholder |
+| `.fb-grid-images` | 2-column image grid |
+| `.fb-icon` | Icon placeholder (square) |
+| `.fb-icon.round` | Round icon |
+| `.fb-icon.lg` | Large icon (32px) |
+| `.fb-avatar` | Round avatar (28px) |
+| `.fb-avatar.sm` | Small avatar (20px) |
+| `.fb-richtext` | Rich text block |
+| `.fb-tabs` / `.fb-tab` | Tabs |
+| `.fb-tab.active` | Active tab |
+| `.fb-progress` / `.fb-progress-fill` | Progress bar |
+
+### Text
+| Class | Description |
+|---|---|
+| `.fb-text` | Standard text |
+| `.fb-text.title` | Title (15px, bold) |
+| `.fb-text.subtitle` | Subtitle (13px, semi-bold) |
+| `.fb-text.small` | Small text (10px) |
+| `.fb-text.muted` | Gray text |
+
+### Helpers
+| Class | Description |
+|---|---|
+| `.fb-flex-1` | `flex: 1` |
+| `.fb-gap-4` / `.fb-gap-8` | Gap 4px / 8px |
+| `.fb-mt-4` / `.fb-mt-8` | Margin-top 4px / 8px |
+
+## Files
+
+| File | Description |
+|---|---|
+| `flowboard.css` | Library styles |
+| `flowboard.js` | JS logic (IIFE, zero dependencies) |
+| `index.html` | GitHub Pages demo page |
+| `examples/test.html` | Minimal import test |
+
+## License
+
+MIT

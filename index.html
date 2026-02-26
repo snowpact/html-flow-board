@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowBoard — Demo</title>
+  <link rel="stylesheet" href="flowboard.css">
+  <style>
+    body { margin: 0; padding: 0; }
+    #app { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="flowboard.js"></script>
+  <script>
+    FlowBoard.init({
+      container: '#app',
+      project: {
+        name: "OndeMARitime — Storyboard",
+        epics: [
+          { id: "auth", label: "Authentication", color: "#d97706" },
+          { id: "dashboard", label: "Dashboard", color: "#264653" },
+          { id: "producers", label: "Producers", color: "#E76F51" },
+          { id: "content", label: "Content", color: "#2A9D8F" }
+        ],
+        screens: [
+          {
+            id: "login",
+            title: "Login",
+            epic: "auth",
+            size: "sm",
+            label: "Login page",
+            notes: "US-1.4 — Google OAuth + email/password",
+            content: `
+              <div class="fb-img" style="min-height:40px">Logo</div>
+              <div class="fb-text title" style="text-align:center">Sign In</div>
+              <div class="fb-input">Email</div>
+              <div class="fb-input">Password</div>
+              <div class="fb-btn">Sign In</div>
+              <div class="fb-sep"></div>
+              <div class="fb-btn outline">Sign in with Google</div>
+              <div class="fb-text small muted" style="text-align:center">Forgot password?</div>
+            `
+          },
+          {
+            id: "dashboard",
+            title: "Dashboard",
+            epic: "dashboard",
+            size: "lg",
+            label: "Main dashboard",
+            notes: "US-2.1 — Overview with KPIs",
+            content: `
+              <div class="fb-bar">
+                <div class="fb-icon round"></div>
+                <span>Dashboard</span>
+                <span style="flex:1"></span>
+                <div class="fb-icon"></div>
+              </div>
+              <div class="fb-row">
+                <div class="fb-stat-card">
+                  <div class="fb-stat-value">128</div>
+                  <div class="fb-stat-label">Producers</div>
+                </div>
+                <div class="fb-stat-card">
+                  <div class="fb-stat-value">47</div>
+                  <div class="fb-stat-label">Content</div>
+                </div>
+                <div class="fb-stat-card">
+                  <div class="fb-stat-value">12k</div>
+                  <div class="fb-stat-label">Views</div>
+                </div>
+              </div>
+              <div class="fb-section-label">Recent activity</div>
+              <div class="fb-list">
+                <div class="fb-list-item">
+                  <div class="fb-avatar sm"></div>
+                  <span>Pierre published "Oyster Farming"</span>
+                  <span class="fb-badge green">Published</span>
+                </div>
+                <div class="fb-list-item">
+                  <div class="fb-avatar sm"></div>
+                  <span>Marie — new producer</span>
+                  <span class="fb-badge blue">New</span>
+                </div>
+                <div class="fb-list-item">
+                  <div class="fb-avatar sm"></div>
+                  <span>Jean submitted content</span>
+                  <span class="fb-badge orange">Pending</span>
+                </div>
+              </div>
+            `
+          },
+          {
+            id: "producers-list",
+            title: "Producers List",
+            epic: "producers",
+            size: "lg",
+            label: "Paginated list of producers",
+            notes: "US-3.1 — Search + filters + pagination",
+            content: `
+              <div class="fb-bar">
+                <span>Producers</span>
+                <span style="flex:1"></span>
+                <div class="fb-btn small">+ Add</div>
+              </div>
+              <div class="fb-row">
+                <div class="fb-input" style="flex:1">Search...</div>
+                <div class="fb-btn small secondary">Filter</div>
+              </div>
+              <table class="fb-table">
+                <thead>
+                  <tr><th>Name</th><th>Type</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Pierre Martin</td><td>Oyster farmer</td><td><span class="fb-badge green">Active</span></td></tr>
+                  <tr><td>Marie Duval</td><td>Fisher</td><td><span class="fb-badge green">Active</span></td></tr>
+                  <tr><td>Jean Petit</td><td>Mussel farmer</td><td><span class="fb-badge orange">Pending</span></td></tr>
+                </tbody>
+              </table>
+              <div class="fb-text small muted" style="text-align:center;margin-top:4px">Page 1 / 5</div>
+            `
+          },
+          {
+            id: "producer-detail",
+            title: "Producer Detail",
+            epic: "producers",
+            size: "md",
+            label: "Producer profile",
+            notes: "US-3.2 — Full profile + associated content",
+            content: `
+              <div class="fb-row">
+                <div class="fb-avatar"></div>
+                <div>
+                  <div class="fb-text subtitle">Pierre Martin</div>
+                  <div class="fb-text small muted">Oyster farmer — Marennes-Oléron</div>
+                </div>
+              </div>
+              <div class="fb-tabs">
+                <div class="fb-tab active">Info</div>
+                <div class="fb-tab">Content</div>
+                <div class="fb-tab">Stats</div>
+              </div>
+              <div class="fb-input">Full name</div>
+              <div class="fb-input">Specialty</div>
+              <div class="fb-input">Location</div>
+              <div class="fb-richtext">Producer biography...</div>
+              <div class="fb-row spread">
+                <div class="fb-btn small danger">Delete</div>
+                <div class="fb-btn small">Save</div>
+              </div>
+            `
+          },
+          {
+            id: "content-list",
+            title: "Content",
+            epic: "content",
+            size: "md",
+            label: "Content list",
+            notes: "US-4.1 — Content grid with filters",
+            content: `
+              <div class="fb-bar">Content</div>
+              <div class="fb-tabs">
+                <div class="fb-tab active">All</div>
+                <div class="fb-tab">Published</div>
+                <div class="fb-tab">Drafts</div>
+              </div>
+              <div class="fb-grid-images">
+                <div class="fb-img">Photo 1</div>
+                <div class="fb-img">Photo 2</div>
+                <div class="fb-img">Video 1</div>
+                <div class="fb-img">Photo 3</div>
+              </div>
+              <div class="fb-text small muted">4 items displayed</div>
+            `
+          },
+          {
+            id: "content-edit",
+            title: "Edit Content",
+            epic: "content",
+            size: "md",
+            label: "Content edit form",
+            notes: "US-4.2 — Media upload + metadata",
+            content: `
+              <div class="fb-section-label">Media</div>
+              <div class="fb-img" style="min-height:80px">Drop a file here</div>
+              <div class="fb-section-label">Information</div>
+              <div class="fb-input">Title</div>
+              <div class="fb-input">Description</div>
+              <div class="fb-row wrap fb-gap-4">
+                <div class="fb-chip">Tide</div>
+                <div class="fb-chip">Oyster farming</div>
+                <div class="fb-chip">+ Tag</div>
+              </div>
+              <div class="fb-row">
+                <div class="fb-text small">Producer:</div>
+                <div class="fb-badge blue">Pierre Martin</div>
+              </div>
+              <div class="fb-sep"></div>
+              <div class="fb-row spread">
+                <div class="fb-btn small secondary">Draft</div>
+                <div class="fb-btn small">Publish</div>
+              </div>
+            `
+          }
+        ],
+        arrows: [
+          { from: "login", to: "dashboard", label: "Login OK" },
+          { from: "dashboard", to: "producers-list", label: "Producers menu" },
+          { from: "dashboard", to: "content-list", label: "Content menu" },
+          { from: "producers-list", to: "producer-detail", label: "Click producer" },
+          { from: "content-list", to: "content-edit", label: "Edit" },
+          { from: "producer-detail", to: "content-list", label: "View content", dashed: true },
+          { from: "content-edit", to: "content-list", label: "Save", dashed: true }
+        ]
+      }
+    });
+  </script>
+</body>
+</html>
