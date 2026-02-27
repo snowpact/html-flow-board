@@ -108,8 +108,7 @@ FlowBoard.init({
 | `title` | `string` | Title displayed in the header |
 | `epic` | `string` | Epic ID (determines the color) |
 | `size` | `"sm" \| "md" \| "lg"` | Width: 240px / 320px / 400px (default: `"md"`) |
-| `label` | `string` | Short description (bottom of card) |
-| `notes` | `string` | Annotation (togglable) |
+| `notes` | `string` | Annotation displayed in footer (togglable) |
 | `content` | `string` | HTML injected into the card body |
 
 ### Arrow
@@ -127,11 +126,23 @@ FlowBoard.init({
 - **Draggable screens** — free repositioning, persisted in localStorage
 - **SVG Bezier arrows** — redrawn in real time on drag
 - **Auto-layout** — automatic left-to-right placement based on the navigation graph
-- **Auto-sides** — automatic best-side calculation for arrows
+- **Draggable arrow anchors** — drag arrow endpoints to any of 16 anchor points (5 per side on left/right, 3 per side on top/bottom), persisted in localStorage
+- **Auto-spread** — when multiple arrows connect the same pair of screens, they are automatically distributed across sub-positions to avoid visual overlap
+- **Auto-sides** — automatic best-side calculation for arrows (default when no manual override)
 - **Zoom** — buttons + Ctrl+scroll wheel, persisted in localStorage
 - **Toggle notes** — show/hide annotations
 - **Export PNG** — native browser rendering, zero dependencies
 - **Reset** — restore original positions
+
+## Arrow Anchor Points
+
+Each screen has 16 anchor points where arrows can connect. By default, FlowBoard auto-detects the best side. Drag an arrow endpoint handle to manually set its anchor position. Overrides are persisted in localStorage.
+
+**Left and right sides** — 5 positions each, evenly distributed at 1/6, 2/6, 3/6, 4/6, 5/6 of the screen height: `left-top`, `left-upper`, `left-middle`, `left-lower`, `left-bottom` (same for `right-*`). The shorthand `left` / `right` maps to the center (3/6).
+
+**Top and bottom sides** — 3 positions each, at 1/4, 1/2, 3/4 of the screen width: `top-left`, `top`, `top-right` (same for `bottom-*`).
+
+When multiple arrows connect the same pair of screens (in either direction), they are automatically spread across different sub-positions to avoid overlapping.
 
 ## Wireframe classes `fb-*`
 

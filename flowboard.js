@@ -11,6 +11,7 @@
   var GAP_X = 100;
   var GAP_Y = 40;
   var ARROW_OFFSET = 60;
+  var ARROW_BLEND = 0.15;
 
   // -- State --
   var state = {
@@ -31,8 +32,8 @@
     showNotes: true,
     hiddenEpics: {},
     arrowOverrides: {},
-    dragHandle: null,
-    handleEls: []
+    handleEls: [],
+    draggingHandle: null
   };
 
   // -- Storage helpers --
@@ -304,12 +305,12 @@
 
   // -- Toggle notes visibility --
   function toggleNotesVisibility() {
-    var notes = state.container.querySelectorAll('.fb-screen-notes');
-    for (var i = 0; i < notes.length; i++) {
+    var footers = state.container.querySelectorAll('.fb-screen-footer');
+    for (var i = 0; i < footers.length; i++) {
       if (state.showNotes) {
-        notes[i].classList.remove('fb-hidden');
+        footers[i].classList.remove('fb-hidden');
       } else {
-        notes[i].classList.add('fb-hidden');
+        footers[i].classList.add('fb-hidden');
       }
     }
   }
@@ -379,25 +380,11 @@
     body.innerHTML = screenData.content || '';
     el.appendChild(body);
 
-    // Footer (label + notes)
-    if (screenData.label || screenData.notes) {
+    // Footer (notes only)
+    if (screenData.notes) {
       var footer = document.createElement('div');
-      footer.className = 'fb-screen-footer';
-
-      if (screenData.label) {
-        var lbl = document.createElement('div');
-        lbl.className = 'fb-screen-label';
-        lbl.textContent = screenData.label;
-        footer.appendChild(lbl);
-      }
-
-      if (screenData.notes) {
-        var note = document.createElement('div');
-        note.className = 'fb-screen-notes' + (state.showNotes ? '' : ' fb-hidden');
-        note.textContent = screenData.notes;
-        footer.appendChild(note);
-      }
-
+      footer.className = 'fb-screen-footer' + (state.showNotes ? '' : ' fb-hidden');
+      footer.textContent = screenData.notes;
       el.appendChild(footer);
     }
 
@@ -563,7 +550,7 @@
       var id = state.dragTarget.dataset.screenId;
       state.positions[id] = { x: newX, y: newY };
 
-      drawArrows();
+      drawArrows(!!state.draggingHandle);
     });
 
     document.addEventListener('mouseup', function () {
@@ -574,6 +561,89 @@
         state.wrapperEl.classList.remove('fb-dragging-screen');
         savePositions();
       }
+    });
+  }
+
+  // -- Arrow handle drag --
+  function initArrowDrag() {
+    // Mousedown: event delegation on canvas for .fb-arrow-handle
+    state.canvasEl.addEventListener('mousedown', function (e) {
+      var handle = e.target.closest('.fb-arrow-handle');
+      if (!handle) return;
+
+      e.stopPropagation();
+      e.preventDefault();
+
+      var key = handle.dataset.arrowKey;
+      var end = handle.dataset.arrowEnd;
+      var screenId = handle.dataset.screenId;
+
+      // Init override from spread or auto-detected sides if needed
+      if (!state.arrowOverrides[key]) {
+        var spread = buildSpreadMap();
+        if (spread[key]) {
+          state.arrowOverrides[key] = { fromSide: spread[key].from, toSide: spread[key].to };
+        } else {
+          var parts = key.split('->');
+          var fe = state.screenEls[parts[0]];
+          var te = state.screenEls[parts[1]];
+          if (fe && te) {
+            var auto = getBestSides(fe, te);
+            state.arrowOverrides[key] = { fromSide: auto.from, toSide: auto.to };
+          } else {
+            state.arrowOverrides[key] = { fromSide: 'right', toSide: 'left' };
+          }
+        }
+      }
+
+      state.draggingHandle = { key: key, end: end, el: handle, screenId: screenId };
+      state.wrapperEl.classList.add('fb-dragging-handle');
+    });
+
+    // Mousemove: snap to nearest anchor point
+    document.addEventListener('mousemove', function (e) {
+      if (!state.draggingHandle) return;
+
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var canvasX = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
+      var canvasY = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
+
+      var screenId = state.draggingHandle.screenId;
+      var anchors = getAllAnchorPoints(screenId);
+
+      // Find nearest anchor
+      var bestDist = Infinity;
+      var bestAnchor = anchors[0];
+      for (var i = 0; i < anchors.length; i++) {
+        var dx = anchors[i].x - canvasX;
+        var dy = anchors[i].y - canvasY;
+        var dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestAnchor = anchors[i];
+        }
+      }
+
+      // Update handle position
+      state.draggingHandle.el.style.left = (bestAnchor.x - 8) + 'px';
+      state.draggingHandle.el.style.top = (bestAnchor.y - 8) + 'px';
+
+      // Update override
+      var prop = state.draggingHandle.end === 'from' ? 'fromSide' : 'toSide';
+      state.arrowOverrides[state.draggingHandle.key][prop] = bestAnchor.name;
+
+      // Redraw SVG only (skip handles — we're moving one manually)
+      drawArrows(true);
+    });
+
+    // Mouseup: finish drag
+    document.addEventListener('mouseup', function () {
+      if (!state.draggingHandle) return;
+
+      saveArrowOverrides();
+      updateHandles();
+      state.draggingHandle = null;
+      state.wrapperEl.classList.remove('fb-dragging-handle');
     });
   }
 
@@ -611,51 +681,166 @@
     var w = el.offsetWidth;
     var h = el.offsetHeight;
 
-    switch (side) {
-      case 'top':    return { x: pos.x + w / 2, y: pos.y };
-      case 'bottom': return { x: pos.x + w / 2, y: pos.y + h };
-      case 'left':   return { x: pos.x,          y: pos.y + h / 2 };
-      case 'right':  return { x: pos.x + w,      y: pos.y + h / 2 };
+    // Parse side into primary direction + fraction
+    var parts = side ? side.split('-') : [];
+    var primary, fraction;
+
+    if (parts.length === 1) {
+      primary = parts[0];
+      fraction = 0.5;
+    } else if (parts[0] === 'left' || parts[0] === 'right') {
+      // Left/right: 5 sub-positions along height
+      primary = parts[0];
+      var lrMap = { top: 1/6, upper: 2/6, middle: 0.5, lower: 4/6, bottom: 5/6 };
+      fraction = lrMap[parts[1]] !== undefined ? lrMap[parts[1]] : 0.5;
+    } else {
+      // Top/bottom: 3 sub-positions along width
+      primary = parts[0];
+      var tbMap = { left: 0.25, right: 0.75 };
+      fraction = tbMap[parts[1]] !== undefined ? tbMap[parts[1]] : 0.5;
+    }
+
+    switch (primary) {
+      case 'left':   return { x: pos.x,     y: pos.y + h * fraction };
+      case 'right':  return { x: pos.x + w, y: pos.y + h * fraction };
+      case 'top':    return { x: pos.x + w * fraction, y: pos.y };
+      case 'bottom': return { x: pos.x + w * fraction, y: pos.y + h };
       default:       return { x: pos.x + w / 2, y: pos.y + h / 2 };
     }
   }
 
-  function getSideMidpoints(screenId) {
-    var el = state.screenEls[screenId];
-    if (!el) return {};
-    var pos = state.positions[screenId];
-    var w = el.offsetWidth;
-    var h = el.offsetHeight;
-    return {
-      top:    { x: pos.x + w / 2, y: pos.y },
-      bottom: { x: pos.x + w / 2, y: pos.y + h },
-      left:   { x: pos.x,          y: pos.y + h / 2 },
-      right:  { x: pos.x + w,      y: pos.y + h / 2 }
-    };
+  function getPrimarySide(side) {
+    return side ? side.split('-')[0] : 'right';
   }
 
-  function drawArrows() {
+  // Compute bezier control points with cross-axis blend so the tangent
+  // (and arrowhead orientation) follows the actual angle between screens.
+  function computeControlPoints(start, end, fromSide, toSide) {
+    var fromPrimary = getPrimarySide(fromSide);
+    var toPrimary = getPrimarySide(toSide);
+    var dx = end.x - start.x;
+    var dy = end.y - start.y;
+
+    var cp1 = { x: start.x, y: start.y };
+    var cp2 = { x: end.x, y: end.y };
+
+    switch (fromPrimary) {
+      case 'right':  cp1.x += ARROW_OFFSET; cp1.y += dy * ARROW_BLEND; break;
+      case 'left':   cp1.x -= ARROW_OFFSET; cp1.y += dy * ARROW_BLEND; break;
+      case 'bottom': cp1.y += ARROW_OFFSET; cp1.x += dx * ARROW_BLEND; break;
+      case 'top':    cp1.y -= ARROW_OFFSET; cp1.x += dx * ARROW_BLEND; break;
+    }
+    switch (toPrimary) {
+      case 'right':  cp2.x += ARROW_OFFSET; cp2.y -= dy * ARROW_BLEND; break;
+      case 'left':   cp2.x -= ARROW_OFFSET; cp2.y -= dy * ARROW_BLEND; break;
+      case 'bottom': cp2.y += ARROW_OFFSET; cp2.x -= dx * ARROW_BLEND; break;
+      case 'top':    cp2.y -= ARROW_OFFSET; cp2.x -= dx * ARROW_BLEND; break;
+    }
+
+    return { cp1: cp1, cp2: cp2 };
+  }
+
+  function getAllAnchorPoints(screenId) {
+    var names = [
+      'left-top', 'left-upper', 'left-middle', 'left-lower', 'left-bottom',
+      'right-top', 'right-upper', 'right-middle', 'right-lower', 'right-bottom',
+      'top-left', 'top', 'top-right',
+      'bottom-left', 'bottom', 'bottom-right'
+    ];
+    var points = [];
+    for (var i = 0; i < names.length; i++) {
+      var pt = getAnchor(screenId, names[i]);
+      points.push({ name: names[i], x: pt.x, y: pt.y });
+    }
+    return points;
+  }
+
+  // Build auto-spread map: when multiple arrows connect the same pair of
+  // screens (in either direction) and have no manual override, distribute
+  // them across sub-positions so they don't overlap visually.
+  function buildSpreadMap() {
+    var arrows = state.project ? (state.project.arrows || []) : [];
+
+    // First pass: group ALL visible arrows by screen pair (including overridden)
+    var pairGroups = {};
+    arrows.forEach(function (arrow, idx) {
+      var fromScreen = getScreen(arrow.from);
+      var toScreen = getScreen(arrow.to);
+      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
+      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
+
+      var ids = [arrow.from, arrow.to].sort();
+      var pairKey = ids[0] + '|' + ids[1];
+      if (!pairGroups[pairKey]) pairGroups[pairKey] = [];
+      pairGroups[pairKey].push(idx);
+    });
+
+    // Second pass: assign spread positions to non-overridden arrows,
+    // using total group size so slots stay stable when siblings get overrides
+    var spreadMap = {};
+
+    Object.keys(pairGroups).forEach(function (pairKey) {
+      var group = pairGroups[pairKey];
+      if (group.length <= 1) return;
+
+      group.forEach(function (arrowIdx, posInGroup) {
+        var arrow = arrows[arrowIdx];
+        var overrideKey = arrow.from + '->' + arrow.to;
+        if (state.arrowOverrides[overrideKey]) return;
+
+        var fromEl = state.screenEls[arrow.from];
+        var toEl = state.screenEls[arrow.to];
+        if (!fromEl || !toEl) return;
+
+        var baseSides = getBestSides(fromEl, toEl);
+        var isHorizontal = (baseSides.from === 'right' || baseSides.from === 'left');
+
+        var suffixes;
+        if (group.length === 2) {
+          suffixes = isHorizontal ? ['-upper', '-lower'] : ['-left', '-right'];
+        } else if (group.length === 3) {
+          suffixes = isHorizontal ? ['-upper', '-middle', '-lower'] : ['-left', '', '-right'];
+        } else if (group.length === 4) {
+          suffixes = isHorizontal
+            ? ['-top', '-upper', '-lower', '-bottom']
+            : ['-left', '', '-right'];
+        } else {
+          suffixes = isHorizontal
+            ? ['-top', '-upper', '-middle', '-lower', '-bottom']
+            : ['-left', '', '-right'];
+        }
+
+        var suffix = suffixes[Math.min(posInGroup, suffixes.length - 1)];
+        spreadMap[overrideKey] = {
+          from: baseSides.from + suffix,
+          to: baseSides.to + suffix
+        };
+      });
+    });
+
+    return spreadMap;
+  }
+
+  function drawArrows(skipHandles) {
     if (!state.svgEl || !state.project) return;
 
     var arrows = state.project.arrows || [];
     var ns = 'http://www.w3.org/2000/svg';
+    var spreadMap = buildSpreadMap();
     state.svgEl.innerHTML = '';
 
-    // Remove old HTML handle divs
-    state.handleEls.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
-    state.handleEls = [];
-
-    // Arrow marker
+    // Arrow marker — equilateral shape, fixed size, auto-orient follows curve angle
     var defs = document.createElementNS(ns, 'defs');
     var marker = document.createElementNS(ns, 'marker');
     marker.setAttribute('id', 'fb-arrowhead');
-    marker.setAttribute('markerWidth', '10');
-    marker.setAttribute('markerHeight', '7');
-    marker.setAttribute('refX', '10');
-    marker.setAttribute('refY', '3.5');
+    marker.setAttribute('markerUnits', 'userSpaceOnUse');
+    marker.setAttribute('markerWidth', '14');
+    marker.setAttribute('markerHeight', '14');
+    marker.setAttribute('refX', '14');
+    marker.setAttribute('refY', '7');
     marker.setAttribute('orient', 'auto');
     var polygon = document.createElementNS(ns, 'polygon');
-    polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
+    polygon.setAttribute('points', '0 0, 14 7, 0 14');
     polygon.setAttribute('fill', '#888');
     marker.appendChild(polygon);
     defs.appendChild(marker);
@@ -672,12 +857,14 @@
       if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
       if (toScreen && state.hiddenEpics[toScreen.epic]) return;
 
-      // Determine sides: user override or auto-detect
+      // Determine sides: user override → auto-spread → auto-detect
       var overrideKey = arrow.from + '->' + arrow.to;
       var override = state.arrowOverrides[overrideKey];
       var sides;
       if (override) {
         sides = { from: override.fromSide, to: override.toSide };
+      } else if (spreadMap[overrideKey]) {
+        sides = spreadMap[overrideKey];
       } else {
         sides = getBestSides(fromEl, toEl);
       }
@@ -685,29 +872,16 @@
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
 
-      // Bezier control points
-      var cp1 = { x: start.x, y: start.y };
-      var cp2 = { x: end.x, y: end.y };
-
-      switch (sides.from) {
-        case 'right':  cp1.x += ARROW_OFFSET; break;
-        case 'left':   cp1.x -= ARROW_OFFSET; break;
-        case 'bottom': cp1.y += ARROW_OFFSET; break;
-        case 'top':    cp1.y -= ARROW_OFFSET; break;
-      }
-      switch (sides.to) {
-        case 'right':  cp2.x += ARROW_OFFSET; break;
-        case 'left':   cp2.x -= ARROW_OFFSET; break;
-        case 'bottom': cp2.y += ARROW_OFFSET; break;
-        case 'top':    cp2.y -= ARROW_OFFSET; break;
-      }
+      var cps = computeControlPoints(start, end, sides.from, sides.to);
+      var cp1 = cps.cp1;
+      var cp2 = cps.cp2;
 
       var d = 'M' + start.x + ',' + start.y +
               ' C' + cp1.x + ',' + cp1.y +
               ' ' + cp2.x + ',' + cp2.y +
               ' ' + end.x + ',' + end.y;
 
-      // Group for arrow path + handles
+      // Group for arrow path
       var g = document.createElementNS(ns, 'g');
       g.setAttribute('class', 'fb-arrow-group');
 
@@ -735,25 +909,6 @@
       g.appendChild(hitPath);
 
       state.svgEl.appendChild(g);
-
-      // Draggable handles as HTML divs (above screens in z-index)
-      var hFrom = document.createElement('div');
-      hFrom.className = 'fb-arrow-handle';
-      hFrom.style.left = (start.x - 8) + 'px';
-      hFrom.style.top = (start.y - 8) + 'px';
-      hFrom.dataset.arrowKey = overrideKey;
-      hFrom.dataset.end = 'from';
-      state.canvasEl.appendChild(hFrom);
-      state.handleEls.push(hFrom);
-
-      var hTo = document.createElement('div');
-      hTo.className = 'fb-arrow-handle';
-      hTo.style.left = (end.x - 8) + 'px';
-      hTo.style.top = (end.y - 8) + 'px';
-      hTo.dataset.arrowKey = overrideKey;
-      hTo.dataset.end = 'to';
-      state.canvasEl.appendChild(hTo);
-      state.handleEls.push(hTo);
 
       // Label
       if (arrow.label) {
@@ -790,84 +945,65 @@
         state.svgEl.insertBefore(bgRect, text);
       }
     });
+
+    if (!skipHandles) {
+      updateHandles();
+    }
   }
 
-  // -- Arrow handle drag --
-  function initArrowDrag() {
-    state.canvasEl.addEventListener('mousedown', function (e) {
-      var handle = e.target;
-      if (!handle.classList || !handle.classList.contains('fb-arrow-handle')) return;
+  function updateHandles() {
+    // Remove old handle divs
+    state.handleEls.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+    state.handleEls = [];
 
-      e.stopPropagation();
-      e.preventDefault();
+    if (!state.project) return;
 
-      var arrowKey = handle.dataset.arrowKey;
-      var end = handle.dataset.end; // 'from' or 'to'
-      var parts = arrowKey.split('->');
+    var arrows = state.project.arrows || [];
+    var spreadMap = buildSpreadMap();
 
-      state.dragHandle = {
-        arrowKey: arrowKey,
-        end: end,
-        screenId: end === 'from' ? parts[0] : parts[1]
-      };
-      state.wrapperEl.classList.add('fb-dragging-handle');
-    });
+    arrows.forEach(function (arrow) {
+      var fromEl = state.screenEls[arrow.from];
+      var toEl = state.screenEls[arrow.to];
+      if (!fromEl || !toEl) return;
 
-    document.addEventListener('mousemove', function (e) {
-      if (!state.dragHandle) return;
+      // Skip arrows if either endpoint's epic is hidden
+      var fromScreen = getScreen(arrow.from);
+      var toScreen = getScreen(arrow.to);
+      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
+      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
 
-      // Convert mouse to canvas coords
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var canvasX = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
-      var canvasY = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
-
-      // Find nearest side midpoint of the connected screen
-      var midpoints = getSideMidpoints(state.dragHandle.screenId);
-      var bestSide = null;
-      var bestDist = Infinity;
-      var sideNames = ['top', 'bottom', 'left', 'right'];
-      for (var i = 0; i < sideNames.length; i++) {
-        var s = sideNames[i];
-        var mp = midpoints[s];
-        var dist = Math.sqrt(Math.pow(canvasX - mp.x, 2) + Math.pow(canvasY - mp.y, 2));
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestSide = s;
-        }
-      }
-
-      // Update override
-      var key = state.dragHandle.arrowKey;
-      if (!state.arrowOverrides[key]) {
-        // Initialize from current sides
-        var parts = key.split('->');
-        var fromEl = state.screenEls[parts[0]];
-        var toEl = state.screenEls[parts[1]];
-        if (fromEl && toEl) {
-          var currentSides = getBestSides(fromEl, toEl);
-          state.arrowOverrides[key] = { fromSide: currentSides.from, toSide: currentSides.to };
-        } else {
-          state.arrowOverrides[key] = { fromSide: 'right', toSide: 'left' };
-        }
-      }
-
-      if (state.dragHandle.end === 'from') {
-        state.arrowOverrides[key].fromSide = bestSide;
+      var overrideKey = arrow.from + '->' + arrow.to;
+      var override = state.arrowOverrides[overrideKey];
+      var sides;
+      if (override) {
+        sides = { from: override.fromSide, to: override.toSide };
+      } else if (spreadMap[overrideKey]) {
+        sides = spreadMap[overrideKey];
       } else {
-        state.arrowOverrides[key].toSide = bestSide;
+        sides = getBestSides(fromEl, toEl);
       }
 
-      drawArrows();
-    });
+      var start = getAnchor(arrow.from, sides.from);
+      var end = getAnchor(arrow.to, sides.to);
 
-    document.addEventListener('mouseup', function () {
-      if (state.dragHandle) {
-        state.dragHandle = null;
-        state.wrapperEl.classList.remove('fb-dragging-handle');
-        saveArrowOverrides();
-      }
+      [
+        { pt: start, end: 'from', screenId: arrow.from },
+        { pt: end,   end: 'to',   screenId: arrow.to }
+      ].forEach(function (cfg) {
+        var h = document.createElement('div');
+        h.className = 'fb-arrow-handle';
+        h.style.left = (cfg.pt.x - 8) + 'px';
+        h.style.top = (cfg.pt.y - 8) + 'px';
+        h.dataset.arrowKey = overrideKey;
+        h.dataset.arrowEnd = cfg.end;
+        h.dataset.screenId = cfg.screenId;
+
+        state.canvasEl.appendChild(h);
+        state.handleEls.push(h);
+      });
     });
   }
+
 
   // -- Export PNG (html2canvas, lazy-loaded) --
 
@@ -889,6 +1025,7 @@
   function collectExportBounds() {
     var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
     var arrows = state.project.arrows || [];
+    var spreadMap = buildSpreadMap();
 
     state.project.screens.forEach(function (s) {
       if (state.hiddenEpics[s.epic]) return;
@@ -914,25 +1051,21 @@
 
       var overrideKey = arrow.from + '->' + arrow.to;
       var override = state.arrowOverrides[overrideKey];
-      var sides = override ? { from: override.fromSide, to: override.toSide } : getBestSides(fromEl, toEl);
+      var sides;
+      if (override) {
+        sides = { from: override.fromSide, to: override.toSide };
+      } else if (spreadMap[overrideKey]) {
+        sides = spreadMap[overrideKey];
+      } else {
+        sides = getBestSides(fromEl, toEl);
+      }
 
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
 
-      var cp1 = { x: start.x, y: start.y };
-      var cp2 = { x: end.x, y: end.y };
-      switch (sides.from) {
-        case 'right': cp1.x += ARROW_OFFSET; break;
-        case 'left': cp1.x -= ARROW_OFFSET; break;
-        case 'bottom': cp1.y += ARROW_OFFSET; break;
-        case 'top': cp1.y -= ARROW_OFFSET; break;
-      }
-      switch (sides.to) {
-        case 'right': cp2.x += ARROW_OFFSET; break;
-        case 'left': cp2.x -= ARROW_OFFSET; break;
-        case 'bottom': cp2.y += ARROW_OFFSET; break;
-        case 'top': cp2.y -= ARROW_OFFSET; break;
-      }
+      var cps = computeControlPoints(start, end, sides.from, sides.to);
+      var cp1 = cps.cp1;
+      var cp2 = cps.cp2;
 
       [start, end, cp1, cp2].forEach(function (p) {
         minX = Math.min(minX, p.x);
@@ -1124,7 +1257,6 @@
     state.showNotes = true;
     state.hiddenEpics = {};
     state.arrowOverrides = {};
-    state.dragHandle = null;
 
     // Resolve container
     var containerEl;
