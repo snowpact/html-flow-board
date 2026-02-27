@@ -2,8 +2,8 @@
   'use strict';
 
   // -- Constants --
-  var CANVAS_W = 6000;
-  var CANVAS_H = 4000;
+  var CANVAS_W = 10000;
+  var CANVAS_H = 8000;
   var ZOOM_MIN = 0.2;
   var ZOOM_MAX = 2;
   var ZOOM_STEP = 0.1;
@@ -126,28 +126,41 @@
       columns[c].push(s);
     });
 
-    // Compute positions
+    // Compute positions (first pass: relative to 0,0)
     var positions = {};
     var colKeys = Object.keys(columns).map(Number).sort(function (a, b) { return a - b; });
-    var offsetX = 80;
+    var offsetX = 0;
+    var totalW = 0;
+    var totalH = 0;
 
     colKeys.forEach(function (c) {
       var colScreens = columns[c];
-      // Find max width for this column
       var maxW = 0;
       colScreens.forEach(function (s) {
         var w = SIZES[s.size || 'md'] || SIZES.md;
         if (w > maxW) maxW = w;
       });
 
-      var offsetY = 80;
+      var offsetY = 0;
       colScreens.forEach(function (s) {
         positions[s.id] = { x: offsetX, y: offsetY };
         var h = (heights && heights[s.id]) ? heights[s.id] : 200;
         offsetY += h + GAP_Y;
       });
 
+      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
       offsetX += maxW + GAP_X;
+    });
+    totalW = offsetX - GAP_X;
+
+    // Center in canvas
+    var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
+    var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
+    screens.forEach(function (s) {
+      if (positions[s.id]) {
+        positions[s.id].x += cx;
+        positions[s.id].y += cy;
+      }
     });
 
     return positions;
@@ -1011,22 +1024,22 @@
     img.onload = function () {
       URL.revokeObjectURL(url);
 
-      // Draw arrows onto a canvas element
+      // Draw arrows onto a canvas element (2x resolution)
       var ac = document.createElement('canvas');
-      ac.width = vw;
-      ac.height = vh;
+      ac.width = vw * 2;
+      ac.height = vh * 2;
       ac.style.cssText = 'position:absolute;top:0;left:0;width:' + vw + 'px;height:' + vh + 'px;pointer-events:none;';
-      ac.getContext('2d').drawImage(img, 0, 0, vw, vh);
+      ac.getContext('2d').drawImage(img, 0, 0, vw * 2, vh * 2);
       tmp.appendChild(ac);
 
       document.body.appendChild(tmp);
 
-      // Capture the small temp container
+      // Capture the small temp container at 2x
       loadHtml2Canvas().then(function (html2canvas) {
         return html2canvas(tmp, {
           width: vw,
           height: vh,
-          scale: 1,
+          scale: 2,
           backgroundColor: '#f0f2f5',
           useCORS: true
         });

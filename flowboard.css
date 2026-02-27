@@ -179,6 +179,7 @@
   overflow: hidden;
   position: relative;
   cursor: default;
+  background: #e4e6e9;
 }
 
 .fb-canvas-wrapper.fb-dragging-screen {
@@ -194,9 +195,10 @@
 
 .fb-canvas {
   position: relative;
-  width: 6000px;
-  height: 4000px;
-  border: 2px dashed #d0d0d0;
+  width: 10000px;
+  height: 8000px;
+  background: #f0f2f5;
+  border: 2px dashed #ccc;
 }
 
 /* --- Arrows SVG Layer --- */
