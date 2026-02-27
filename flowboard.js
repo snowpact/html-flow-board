@@ -7,7 +7,7 @@
   var ZOOM_MIN = 0.2;
   var ZOOM_MAX = 2;
   var ZOOM_STEP = 0.1;
-  var SIZES = { sm: 240, md: 320, lg: 400 };
+  var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
   var GAP_X = 100;
   var GAP_Y = 40;
   var ARROW_OFFSET = 60;
@@ -31,11 +31,11 @@
     positions: {},
     showNotes: true,
     hiddenEpics: {},
-    arrowOverrides: {},
     handleEls: [],
     draggingHandle: null,
     hiddenScreens: {},
-    layoutIndex: 0
+    layoutIndex: 0,
+    screenPopup: null
   };
 
   // -- Storage helpers --
@@ -71,19 +71,6 @@
     } catch (e) { return null; }
   }
 
-  function saveArrowOverrides() {
-    try {
-      localStorage.setItem(storageKey() + '-arrows', JSON.stringify(state.arrowOverrides));
-    } catch (e) { /* quota */ }
-  }
-
-  function loadArrowOverrides() {
-    try {
-      var raw = localStorage.getItem(storageKey() + '-arrows');
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) { return null; }
-  }
-
   function saveHiddenScreens() {
     try {
       localStorage.setItem(storageKey() + '-hidden', JSON.stringify(state.hiddenScreens));
@@ -93,6 +80,19 @@
   function loadHiddenScreens() {
     try {
       var raw = localStorage.getItem(storageKey() + '-hidden');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  function saveArrowMutations() {
+    try {
+      localStorage.setItem(storageKey() + '-arrowmods', JSON.stringify(state.project.arrows));
+    } catch (e) { /* quota */ }
+  }
+
+  function loadArrowMutations() {
+    try {
+      var raw = localStorage.getItem(storageKey() + '-arrowmods');
       return raw ? JSON.parse(raw) : null;
     } catch (e) { return null; }
   }
@@ -341,6 +341,7 @@
       cb.type = 'checkbox';
       cb.checked = !state.hiddenEpics[epic.id];
       cb.className = 'fb-legend-checkbox';
+      cb.style.accentColor = epic.color;
       cb.dataset.epicId = epic.id;
       cb.addEventListener('change', function () {
         toggleEpic(epic.id);
@@ -425,6 +426,27 @@
     exportBtn.title = 'Export as PNG';
     exportBtn.addEventListener('click', doExport);
     right.appendChild(exportBtn);
+
+    // Export Config
+    var exportConfigBtn = document.createElement('button');
+    exportConfigBtn.className = 'fb-action-btn';
+    exportConfigBtn.textContent = 'Export Init';
+    exportConfigBtn.title = 'Exporter l\'état en JSON (collable dans config.state)';
+    exportConfigBtn.addEventListener('click', doExportConfig);
+    right.appendChild(exportConfigBtn);
+
+    // Separator
+    var sep4 = document.createElement('div');
+    sep4.className = 'fb-header-separator';
+    right.appendChild(sep4);
+
+    // Reset
+    var resetBtn = document.createElement('button');
+    resetBtn.className = 'fb-action-btn';
+    resetBtn.textContent = 'Reset';
+    resetBtn.title = 'Remettre la disposition par défaut';
+    resetBtn.addEventListener('click', doReset);
+    right.appendChild(resetBtn);
 
     header.appendChild(right);
     return header;
@@ -561,6 +583,26 @@
       el.classList.add('fb-screen-dimmed');
     }
 
+    // Context menu (right-click)
+    el.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showScreenPopup(e, screenData.id);
+    });
+
+    // Anchor dots on hover
+    el.addEventListener('mouseenter', function () {
+      if (!state.creatingArrow && !state.dragTarget) {
+        cancelHideAnchors();
+        showAnchorDots(screenData.id);
+      }
+    });
+    el.addEventListener('mouseleave', function () {
+      if (!state.creatingArrow) {
+        scheduleHideAnchors();
+      }
+    });
+
     state.screenEls[screenData.id] = el;
     return el;
   }
@@ -652,6 +694,8 @@
 
     // Wheel: Ctrl/Meta = zoom toward cursor, otherwise = pan
     wrapper.addEventListener('wheel', function (e) {
+      closeArrowPopup();
+      closeScreenPopup();
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         var wrapperRect = wrapper.getBoundingClientRect();
@@ -683,6 +727,9 @@
   // -- Drag screens --
   function initDrag() {
     state.canvasEl.addEventListener('mousedown', function (e) {
+      closeArrowPopup();
+      closeScreenPopup();
+      if (state.creatingArrow) return;
       var screenEl = e.target.closest('.fb-screen');
       if (!screenEl) return;
 
@@ -691,6 +738,9 @@
 
       e.stopPropagation();
       e.preventDefault();
+
+      // Hide anchor dots when starting drag
+      hideAnchorDots();
 
       state.dragTarget = screenEl;
       var rect = screenEl.getBoundingClientRect();
@@ -724,13 +774,21 @@
       drawArrows(!!state.draggingHandle);
     });
 
-    document.addEventListener('mouseup', function () {
+    document.addEventListener('mouseup', function (e) {
       if (state.dragTarget) {
+        var draggedId = state.dragTarget.dataset.screenId;
         state.dragTarget.classList.remove('fb-dragging');
         state.dragTarget = null;
         state.dragOffset = null;
         state.wrapperEl.classList.remove('fb-dragging-screen');
         savePositions();
+
+        // Re-show anchor dots if cursor is still over the card
+        var elUnder = document.elementFromPoint(e.clientX, e.clientY);
+        var screenUnder = elUnder && elUnder.closest('.fb-screen');
+        if (screenUnder && screenUnder.dataset.screenId === draggedId) {
+          showAnchorDots(draggedId);
+        }
       }
     });
   }
@@ -739,35 +797,41 @@
   function initArrowDrag() {
     // Mousedown: event delegation on canvas for .fb-arrow-handle
     state.canvasEl.addEventListener('mousedown', function (e) {
+      if (state.creatingArrow) return;
       var handle = e.target.closest('.fb-arrow-handle');
       if (!handle) return;
 
+      closeArrowPopup();
+      closeScreenPopup();
       e.stopPropagation();
       e.preventDefault();
 
-      var key = handle.dataset.arrowKey;
+      var arrowIdx = parseInt(handle.dataset.arrowIndex, 10);
+      var arrow = state.project.arrows[arrowIdx];
       var end = handle.dataset.arrowEnd;
       var screenId = handle.dataset.screenId;
 
-      // Init override from spread or auto-detected sides if needed
-      if (!state.arrowOverrides[key]) {
+      // Init fromSide/toSide on the arrow if not already set
+      if (!arrow.fromSide || !arrow.toSide) {
         var spread = buildSpreadMap();
-        if (spread[key]) {
-          state.arrowOverrides[key] = { fromSide: spread[key].from, toSide: spread[key].to };
+        if (spread[arrowIdx]) {
+          arrow.fromSide = spread[arrowIdx].from;
+          arrow.toSide = spread[arrowIdx].to;
         } else {
-          var parts = key.split('->');
-          var fe = state.screenEls[parts[0]];
-          var te = state.screenEls[parts[1]];
+          var fe = state.screenEls[arrow.from];
+          var te = state.screenEls[arrow.to];
           if (fe && te) {
             var auto = getBestSides(fe, te);
-            state.arrowOverrides[key] = { fromSide: auto.from, toSide: auto.to };
+            arrow.fromSide = auto.from;
+            arrow.toSide = auto.to;
           } else {
-            state.arrowOverrides[key] = { fromSide: 'right', toSide: 'left' };
+            arrow.fromSide = 'right';
+            arrow.toSide = 'left';
           }
         }
       }
 
-      state.draggingHandle = { key: key, end: end, el: handle, screenId: screenId };
+      state.draggingHandle = { arrowIdx: arrowIdx, end: end, el: handle, screenId: screenId };
       state.wrapperEl.classList.add('fb-dragging-handle');
     });
 
@@ -799,9 +863,10 @@
       state.draggingHandle.el.style.left = (bestAnchor.x - 8) + 'px';
       state.draggingHandle.el.style.top = (bestAnchor.y - 8) + 'px';
 
-      // Update override
+      // Update side directly on the arrow object
+      var arrow = state.project.arrows[state.draggingHandle.arrowIdx];
       var prop = state.draggingHandle.end === 'from' ? 'fromSide' : 'toSide';
-      state.arrowOverrides[state.draggingHandle.key][prop] = bestAnchor.name;
+      arrow[prop] = bestAnchor.name;
 
       // Redraw SVG only (skip handles — we're moving one manually)
       drawArrows(true);
@@ -811,7 +876,7 @@
     document.addEventListener('mouseup', function () {
       if (!state.draggingHandle) return;
 
-      saveArrowOverrides();
+      saveArrowMutations();
       updateHandles();
       state.draggingHandle = null;
       state.wrapperEl.classList.remove('fb-dragging-handle');
@@ -911,15 +976,13 @@
     return { cp1: cp1, cp2: cp2 };
   }
 
-  // Resolve the sides for a given arrow: manual override → auto-spread → auto-detect.
-  function resolveArrowSides(arrow, spreadMap) {
-    var overrideKey = arrow.from + '->' + arrow.to;
-    var override = state.arrowOverrides[overrideKey];
-    if (override) {
-      return { from: override.fromSide, to: override.toSide };
+  // Resolve the sides for a given arrow: arrow props → auto-spread → auto-detect.
+  function resolveArrowSides(arrow, idx, spreadMap) {
+    if (arrow.fromSide && arrow.toSide) {
+      return { from: arrow.fromSide, to: arrow.toSide };
     }
-    if (spreadMap && spreadMap[overrideKey]) {
-      return spreadMap[overrideKey];
+    if (spreadMap && spreadMap[idx] !== undefined) {
+      return spreadMap[idx];
     }
     var fromEl = state.screenEls[arrow.from];
     var toEl = state.screenEls[arrow.to];
@@ -944,13 +1007,13 @@
     return points;
   }
 
-  // Build auto-spread map: when multiple arrows connect the same pair of
-  // screens (in either direction) and have no manual override, distribute
+  // Build auto-spread map (index-based): when multiple arrows connect the
+  // same pair of screens and don't have explicit fromSide/toSide, distribute
   // them across sub-positions so they don't overlap visually.
   function buildSpreadMap() {
     var arrows = state.project ? (state.project.arrows || []) : [];
 
-    // First pass: group ALL visible arrows by screen pair (including overridden)
+    // First pass: group ALL visible arrows by screen pair
     var pairGroups = {};
     arrows.forEach(function (arrow, idx) {
       if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
@@ -961,8 +1024,7 @@
       pairGroups[pairKey].push(idx);
     });
 
-    // Second pass: assign spread positions to non-overridden arrows,
-    // using total group size so slots stay stable when siblings get overrides
+    // Second pass: assign spread positions to arrows without explicit sides
     var spreadMap = {};
 
     Object.keys(pairGroups).forEach(function (pairKey) {
@@ -971,8 +1033,8 @@
 
       group.forEach(function (arrowIdx, posInGroup) {
         var arrow = arrows[arrowIdx];
-        var overrideKey = arrow.from + '->' + arrow.to;
-        if (state.arrowOverrides[overrideKey]) return;
+        // Skip arrows that already have explicit sides
+        if (arrow.fromSide && arrow.toSide) return;
 
         var fromEl = state.screenEls[arrow.from];
         var toEl = state.screenEls[arrow.to];
@@ -997,7 +1059,7 @@
         }
 
         var suffix = suffixes[Math.min(posInGroup, suffixes.length - 1)];
-        spreadMap[overrideKey] = {
+        spreadMap[arrowIdx] = {
           from: baseSides.from + suffix,
           to: baseSides.to + suffix
         };
@@ -1005,6 +1067,19 @@
     });
 
     return spreadMap;
+  }
+
+  // Freeze spread-computed sides onto arrow objects so they never shift
+  // when arrows are added/removed later. Called once at init and on reset.
+  function freezeArrowSides() {
+    var arrows = state.project ? (state.project.arrows || []) : [];
+    var spreadMap = buildSpreadMap();
+    arrows.forEach(function (arrow, idx) {
+      if (arrow.fromSide && arrow.toSide) return;
+      var sides = resolveArrowSides(arrow, idx, spreadMap);
+      arrow.fromSide = sides.from;
+      arrow.toSide = sides.to;
+    });
   }
 
   function drawArrows(skipHandles) {
@@ -1032,13 +1107,12 @@
     defs.appendChild(marker);
     state.svgEl.appendChild(defs);
 
-    arrows.forEach(function (arrow) {
+    arrows.forEach(function (arrow, idx) {
       var fromEl = state.screenEls[arrow.from];
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
 
-      var overrideKey = arrow.from + '->' + arrow.to;
-      var sides = resolveArrowSides(arrow, spreadMap);
+      var sides = resolveArrowSides(arrow, idx, spreadMap);
 
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -1072,7 +1146,7 @@
       path.setAttribute('marker-end', 'url(#fb-arrowhead)');
       g.appendChild(path);
 
-      // Wider invisible hit area for hover
+      // Wider invisible hit area for hover + click
       var hitPath = document.createElementNS(ns, 'path');
       hitPath.setAttribute('d', d);
       hitPath.setAttribute('class', 'fb-arrow-hit');
@@ -1080,6 +1154,13 @@
       hitPath.setAttribute('stroke', 'transparent');
       hitPath.setAttribute('stroke-width', '16');
       hitPath.setAttribute('pointer-events', 'stroke');
+      hitPath.style.cursor = 'pointer';
+      (function (arrowIdx) {
+        hitPath.addEventListener('click', function (e) {
+          e.stopPropagation();
+          showArrowPopup(e, arrowIdx);
+        });
+      })(idx);
       g.appendChild(hitPath);
 
       state.svgEl.appendChild(g);
@@ -1140,7 +1221,7 @@
     var arrows = state.project.arrows || [];
     var spreadMap = buildSpreadMap();
 
-    arrows.forEach(function (arrow) {
+    arrows.forEach(function (arrow, idx) {
       var fromEl = state.screenEls[arrow.from];
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
@@ -1148,8 +1229,7 @@
       // Skip handles for arrows connected to a dimmed screen
       if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
 
-      var overrideKey = arrow.from + '->' + arrow.to;
-      var sides = resolveArrowSides(arrow, spreadMap);
+      var sides = resolveArrowSides(arrow, idx, spreadMap);
 
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -1162,7 +1242,7 @@
         h.className = 'fb-arrow-handle';
         h.style.left = (cfg.pt.x - 8) + 'px';
         h.style.top = (cfg.pt.y - 8) + 'px';
-        h.dataset.arrowKey = overrideKey;
+        h.dataset.arrowIndex = idx;
         h.dataset.arrowEnd = cfg.end;
         h.dataset.screenId = cfg.screenId;
 
@@ -1172,6 +1252,548 @@
     });
   }
 
+
+  // -- Arrow contextual popup --
+
+  function handlePopupOutsideClick(e) {
+    if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target)) {
+      closeArrowPopup();
+    }
+  }
+
+  function closeArrowPopup() {
+    if (state.arrowPopup && state.arrowPopup.el) {
+      if (state.arrowPopup.el.parentNode) {
+        state.arrowPopup.el.parentNode.removeChild(state.arrowPopup.el);
+      }
+      state.arrowPopup = null;
+    }
+    document.removeEventListener('mousedown', handlePopupOutsideClick);
+  }
+
+  function showArrowPopup(e, arrowIndex) {
+    closeArrowPopup();
+
+    var arrow = state.project.arrows[arrowIndex];
+    if (!arrow) return;
+
+    var popup = document.createElement('div');
+    popup.className = 'fb-arrow-popup';
+
+    // Label input
+    var labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'fb-arrow-popup-input';
+    labelInput.placeholder = 'Label...';
+    labelInput.value = arrow.label || '';
+    labelInput.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+    labelInput.addEventListener('keydown', function (ev) {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') {
+        arrow.label = labelInput.value.trim() || undefined;
+        saveArrowMutations();
+        drawArrows();
+        closeArrowPopup();
+      }
+      if (ev.key === 'Escape') {
+        closeArrowPopup();
+      }
+    });
+    labelInput.addEventListener('blur', function () {
+      var newLabel = labelInput.value.trim() || undefined;
+      if (newLabel !== (arrow.label || undefined)) {
+        arrow.label = newLabel;
+        saveArrowMutations();
+        drawArrows();
+      }
+    });
+    popup.appendChild(labelInput);
+
+    // Separator
+    var popupSep = document.createElement('div');
+    popupSep.className = 'fb-arrow-popup-sep';
+    popup.appendChild(popupSep);
+
+    // Swap direction
+    var swapBtn = document.createElement('button');
+    swapBtn.className = 'fb-arrow-popup-btn';
+    swapBtn.title = 'Inverser la direction';
+    swapBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+    swapBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      swapArrowDirection(arrowIndex);
+      closeArrowPopup();
+    });
+    popup.appendChild(swapBtn);
+
+    // Toggle dashed/solid
+    var styleBtn = document.createElement('button');
+    styleBtn.className = 'fb-arrow-popup-btn';
+    styleBtn.title = arrow.dashed ? 'Trait plein' : 'Trait pointillé';
+    if (arrow.dashed) {
+      styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
+    } else {
+      styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
+    }
+    styleBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      toggleArrowStyle(arrowIndex);
+      closeArrowPopup();
+    });
+    popup.appendChild(styleBtn);
+
+    // Delete
+    var deleteBtn = document.createElement('button');
+    deleteBtn.className = 'fb-arrow-popup-btn fb-arrow-popup-delete';
+    deleteBtn.title = 'Supprimer la flèche';
+    deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    deleteBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      deleteArrow(arrowIndex);
+      closeArrowPopup();
+    });
+    popup.appendChild(deleteBtn);
+
+    // Position near click in wrapper coordinates
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var popupX = e.clientX - wrapperRect.left + 8;
+    var popupY = e.clientY - wrapperRect.top - 16;
+
+    popup.style.left = popupX + 'px';
+    popup.style.top = popupY + 'px';
+    state.wrapperEl.appendChild(popup);
+
+    // Clamp to wrapper edges after measuring
+    var popupRect = popup.getBoundingClientRect();
+    if (popupRect.right > wrapperRect.right) {
+      popup.style.left = (popupX - popupRect.width - 16) + 'px';
+    }
+    if (popupRect.bottom > wrapperRect.bottom) {
+      popup.style.top = (popupY - popupRect.height) + 'px';
+    }
+
+    state.arrowPopup = { el: popup, arrowIndex: arrowIndex };
+
+    // Focus label input and select text
+    labelInput.focus();
+    labelInput.select();
+
+    setTimeout(function () {
+      document.addEventListener('mousedown', handlePopupOutsideClick);
+    }, 0);
+  }
+
+  function swapArrowDirection(arrowIndex) {
+    var arrow = state.project.arrows[arrowIndex];
+    if (!arrow) return;
+
+    // Swap from/to
+    var tmp = arrow.from;
+    arrow.from = arrow.to;
+    arrow.to = tmp;
+
+    // Swap fromSide/toSide if they exist
+    if (arrow.fromSide || arrow.toSide) {
+      var tmpSide = arrow.fromSide;
+      arrow.fromSide = arrow.toSide;
+      arrow.toSide = tmpSide;
+    }
+
+    saveArrowMutations();
+    drawArrows();
+  }
+
+  function toggleArrowStyle(arrowIndex) {
+    var arrow = state.project.arrows[arrowIndex];
+    if (!arrow) return;
+    arrow.dashed = !arrow.dashed;
+    saveArrowMutations();
+    drawArrows();
+  }
+
+  function deleteArrow(arrowIndex) {
+    var arrow = state.project.arrows[arrowIndex];
+    if (!arrow) return;
+
+    state.project.arrows.splice(arrowIndex, 1);
+    saveArrowMutations();
+    drawArrows();
+  }
+
+  // -- Screen contextual popup (right-click) --
+
+  function handleScreenPopupOutsideClick(e) {
+    if (state.screenPopup && state.screenPopup.el && !state.screenPopup.el.contains(e.target)) {
+      closeScreenPopup();
+    }
+  }
+
+  function closeScreenPopup() {
+    if (state.screenPopup && state.screenPopup.el) {
+      if (state.screenPopup.el.parentNode) {
+        state.screenPopup.el.parentNode.removeChild(state.screenPopup.el);
+      }
+      state.screenPopup = null;
+    }
+    document.removeEventListener('mousedown', handleScreenPopupOutsideClick);
+  }
+
+  function showScreenPopup(e, screenId) {
+    closeArrowPopup();
+    closeScreenPopup();
+
+    var screenData = null;
+    var screens = state.project.screens || [];
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) { screenData = screens[i]; break; }
+    }
+    if (!screenData) return;
+
+    var el = state.screenEls[screenId];
+    if (!el) return;
+
+    var popup = document.createElement('div');
+    popup.className = 'fb-screen-popup';
+
+    // -- Resize section --
+    var sizeLabel = document.createElement('div');
+    sizeLabel.className = 'fb-screen-popup-label';
+    sizeLabel.textContent = 'Taille';
+    popup.appendChild(sizeLabel);
+
+    var sizesRow = document.createElement('div');
+    sizesRow.className = 'fb-screen-popup-sizes';
+    var currentSize = screenData.size || 'md';
+
+    ['sm', 'md', 'lg', 'xl'].forEach(function (sz) {
+      var btn = document.createElement('button');
+      btn.className = 'fb-screen-popup-size' + (sz === currentSize ? ' active' : '');
+      btn.textContent = sz.toUpperCase();
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        screenData.size = sz;
+        // Update DOM classes
+        el.className = el.className.replace(/fb-size-\w+/, 'fb-size-' + sz);
+        saveArrowMutations();
+        drawArrows();
+        closeScreenPopup();
+      });
+      sizesRow.appendChild(btn);
+    });
+    popup.appendChild(sizesRow);
+
+    // -- Separator --
+    var sep1 = document.createElement('div');
+    sep1.className = 'fb-screen-popup-sep';
+    popup.appendChild(sep1);
+
+    // -- Title input --
+    var titleLabel = document.createElement('div');
+    titleLabel.className = 'fb-screen-popup-label';
+    titleLabel.textContent = 'Titre';
+    popup.appendChild(titleLabel);
+
+    var titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'fb-screen-popup-input';
+    titleInput.value = screenData.title || '';
+    titleInput.addEventListener('mousedown', function (ev) { ev.stopPropagation(); });
+    titleInput.addEventListener('keydown', function (ev) {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') {
+        var val = titleInput.value.trim();
+        if (val && val !== screenData.title) {
+          screenData.title = val;
+          var hdrSpan = el.querySelector('.fb-screen-header span');
+          if (hdrSpan) hdrSpan.textContent = val;
+          saveArrowMutations();
+        }
+        closeScreenPopup();
+      }
+      if (ev.key === 'Escape') {
+        closeScreenPopup();
+      }
+    });
+    titleInput.addEventListener('blur', function () {
+      var val = titleInput.value.trim();
+      if (val && val !== screenData.title) {
+        screenData.title = val;
+        var hdrSpan = el.querySelector('.fb-screen-header span');
+        if (hdrSpan) hdrSpan.textContent = val;
+        saveArrowMutations();
+      }
+    });
+    popup.appendChild(titleInput);
+
+    // -- Separator --
+    var sep2 = document.createElement('div');
+    sep2.className = 'fb-screen-popup-sep';
+    popup.appendChild(sep2);
+
+    // -- Hide button --
+    var hideBtn = document.createElement('button');
+    hideBtn.className = 'fb-screen-popup-btn';
+    hideBtn.textContent = state.hiddenScreens[screenId] ? 'Afficher' : 'Masquer';
+    hideBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      toggleScreen(screenId);
+      closeScreenPopup();
+    });
+    popup.appendChild(hideBtn);
+
+    // Position near right-click in wrapper coordinates
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var popupX = e.clientX - wrapperRect.left + 4;
+    var popupY = e.clientY - wrapperRect.top + 4;
+
+    popup.style.left = popupX + 'px';
+    popup.style.top = popupY + 'px';
+    state.wrapperEl.appendChild(popup);
+
+    // Clamp to wrapper edges after measuring
+    var popupRect = popup.getBoundingClientRect();
+    if (popupRect.right > wrapperRect.right) {
+      popup.style.left = (popupX - popupRect.width - 8) + 'px';
+    }
+    if (popupRect.bottom > wrapperRect.bottom) {
+      popup.style.top = (popupY - popupRect.height) + 'px';
+    }
+
+    state.screenPopup = { el: popup, screenId: screenId };
+
+    setTimeout(function () {
+      document.addEventListener('mousedown', handleScreenPopupOutsideClick);
+    }, 0);
+  }
+
+  // -- Anchor dots + Arrow creation --
+
+  var hoverHideTimeout = null;
+
+  function scheduleHideAnchors() {
+    if (state.creatingArrow) return;
+    hoverHideTimeout = setTimeout(function () {
+      hideAnchorDots();
+      hoverHideTimeout = null;
+    }, 150);
+  }
+
+  function cancelHideAnchors() {
+    if (hoverHideTimeout) {
+      clearTimeout(hoverHideTimeout);
+      hoverHideTimeout = null;
+    }
+  }
+
+  function showAnchorDots(screenId) {
+    hideAnchorDots();
+    if (state.hiddenScreens[screenId]) return;
+
+    var anchors = getAllAnchorPoints(screenId);
+    anchors.forEach(function (anchor) {
+      var dot = document.createElement('div');
+      dot.className = 'fb-anchor-dot';
+      dot.style.left = (anchor.x - 6) + 'px';
+      dot.style.top = (anchor.y - 6) + 'px';
+      dot.dataset.screenId = screenId;
+      dot.dataset.anchorName = anchor.name;
+
+      dot.addEventListener('mouseenter', function () {
+        cancelHideAnchors();
+        dot.classList.add('fb-anchor-dot-hover');
+      });
+      dot.addEventListener('mouseleave', function () {
+        dot.classList.remove('fb-anchor-dot-hover');
+        scheduleHideAnchors();
+      });
+      dot.addEventListener('mousedown', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        startArrowCreation(screenId, anchor.name);
+      });
+
+      state.canvasEl.appendChild(dot);
+      state.anchorDotsEls.push(dot);
+    });
+  }
+
+  function hideAnchorDots() {
+    state.anchorDotsEls.forEach(function (el) {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    });
+    state.anchorDotsEls = [];
+  }
+
+  function showAllAnchorDots() {
+    hideAnchorDots();
+    var screens = state.project.screens || [];
+    screens.forEach(function (s) {
+      if (state.hiddenScreens[s.id]) return;
+      var anchors = getAllAnchorPoints(s.id);
+      anchors.forEach(function (anchor) {
+        var dot = document.createElement('div');
+        dot.className = 'fb-anchor-dot';
+        dot.style.left = (anchor.x - 6) + 'px';
+        dot.style.top = (anchor.y - 6) + 'px';
+        dot.dataset.screenId = s.id;
+        dot.dataset.anchorName = anchor.name;
+
+        dot.addEventListener('mouseenter', function () {
+          dot.classList.add('fb-anchor-dot-hover');
+        });
+        dot.addEventListener('mouseleave', function () {
+          dot.classList.remove('fb-anchor-dot-hover');
+        });
+        dot.addEventListener('mousedown', function (e) {
+          e.stopPropagation();
+          e.preventDefault();
+          if (state.creatingArrow && s.id !== state.creatingArrow.fromScreenId) {
+            completeArrowCreation(s.id, anchor.name);
+          }
+        });
+
+        state.canvasEl.appendChild(dot);
+        state.anchorDotsEls.push(dot);
+      });
+    });
+
+    // Highlight source dot
+    if (state.creatingArrow) {
+      state.anchorDotsEls.forEach(function (dot) {
+        if (dot.dataset.screenId === state.creatingArrow.fromScreenId &&
+            dot.dataset.anchorName === state.creatingArrow.fromSide) {
+          dot.classList.add('fb-anchor-dot-source');
+        }
+      });
+    }
+  }
+
+  function startArrowCreation(fromScreenId, fromSide) {
+    state.creatingArrow = {
+      fromScreenId: fromScreenId,
+      fromSide: fromSide,
+      tempLine: null
+    };
+
+    showAllAnchorDots();
+
+    // Create temporary SVG path
+    var ns = 'http://www.w3.org/2000/svg';
+
+    // Add temp arrowhead marker if not present
+    var defs = state.svgEl.querySelector('defs');
+    if (defs && !state.svgEl.querySelector('#fb-arrowhead-temp')) {
+      var marker = document.createElementNS(ns, 'marker');
+      marker.setAttribute('id', 'fb-arrowhead-temp');
+      marker.setAttribute('markerUnits', 'userSpaceOnUse');
+      marker.setAttribute('markerWidth', '14');
+      marker.setAttribute('markerHeight', '14');
+      marker.setAttribute('refX', '14');
+      marker.setAttribute('refY', '7');
+      marker.setAttribute('orient', 'auto');
+      var polygon = document.createElementNS(ns, 'polygon');
+      polygon.setAttribute('points', '0 0, 14 7, 0 14');
+      polygon.setAttribute('fill', '#2A9D8F');
+      marker.appendChild(polygon);
+      defs.appendChild(marker);
+    }
+
+    var tempPath = document.createElementNS(ns, 'path');
+    tempPath.setAttribute('class', 'fb-arrow-temp');
+    tempPath.setAttribute('fill', 'none');
+    tempPath.setAttribute('stroke', '#2A9D8F');
+    tempPath.setAttribute('stroke-width', '2');
+    tempPath.setAttribute('stroke-dasharray', '8 4');
+    tempPath.setAttribute('marker-end', 'url(#fb-arrowhead-temp)');
+    state.svgEl.appendChild(tempPath);
+    state.creatingArrow.tempLine = tempPath;
+
+    state.wrapperEl.classList.add('fb-creating-arrow');
+
+    document.addEventListener('mousemove', handleArrowCreationMove);
+    document.addEventListener('keydown', handleArrowCreationKeydown);
+    state.wrapperEl.addEventListener('mousedown', handleArrowCreationCancel);
+  }
+
+  function handleArrowCreationMove(e) {
+    if (!state.creatingArrow || !state.creatingArrow.tempLine) return;
+
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var canvasX = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
+    var canvasY = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
+
+    var start = getAnchor(state.creatingArrow.fromScreenId, state.creatingArrow.fromSide);
+
+    var dx = canvasX - start.x;
+    var dy = canvasY - start.y;
+    var toSide;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      toSide = dx > 0 ? 'left' : 'right';
+    } else {
+      toSide = dy > 0 ? 'top' : 'bottom';
+    }
+
+    var cps = computeControlPoints(start, { x: canvasX, y: canvasY }, state.creatingArrow.fromSide, toSide);
+
+    var d = 'M' + start.x + ',' + start.y +
+            ' C' + cps.cp1.x + ',' + cps.cp1.y +
+            ' ' + cps.cp2.x + ',' + cps.cp2.y +
+            ' ' + canvasX + ',' + canvasY;
+
+    state.creatingArrow.tempLine.setAttribute('d', d);
+  }
+
+  function handleArrowCreationKeydown(e) {
+    if (e.key === 'Escape') {
+      cancelArrowCreation();
+    }
+  }
+
+  function handleArrowCreationCancel(e) {
+    if (e.target.classList.contains('fb-anchor-dot')) return;
+    if (e.target.closest('.fb-screen')) return;
+    cancelArrowCreation();
+  }
+
+  function cancelArrowCreation() {
+    if (!state.creatingArrow) return;
+
+    if (state.creatingArrow.tempLine && state.creatingArrow.tempLine.parentNode) {
+      state.creatingArrow.tempLine.parentNode.removeChild(state.creatingArrow.tempLine);
+    }
+
+    var tempMarker = state.svgEl.querySelector('#fb-arrowhead-temp');
+    if (tempMarker && tempMarker.parentNode) {
+      tempMarker.parentNode.removeChild(tempMarker);
+    }
+
+    state.creatingArrow = null;
+    state.wrapperEl.classList.remove('fb-creating-arrow');
+    hideAnchorDots();
+
+    document.removeEventListener('mousemove', handleArrowCreationMove);
+    document.removeEventListener('keydown', handleArrowCreationKeydown);
+    state.wrapperEl.removeEventListener('mousedown', handleArrowCreationCancel);
+  }
+
+  function completeArrowCreation(toScreenId, toSide) {
+    if (!state.creatingArrow) return;
+
+    var fromScreenId = state.creatingArrow.fromScreenId;
+    var fromSide = state.creatingArrow.fromSide;
+
+    if (fromScreenId === toScreenId) {
+      cancelArrowCreation();
+      return;
+    }
+
+    var newArrow = { from: fromScreenId, to: toScreenId, fromSide: fromSide, toSide: toSide };
+    state.project.arrows.push(newArrow);
+    saveArrowMutations();
+
+    cancelArrowCreation();
+    drawArrows();
+  }
 
   // -- Export PNG (html2canvas, lazy-loaded) --
 
@@ -1207,14 +1829,14 @@
     });
 
     // Include arrow control points so arrows aren't clipped
-    arrows.forEach(function (arrow) {
+    arrows.forEach(function (arrow, idx) {
       if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
 
       var fromEl = state.screenEls[arrow.from];
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
 
-      var sides = resolveArrowSides(arrow, spreadMap);
+      var sides = resolveArrowSides(arrow, idx, spreadMap);
 
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -1322,6 +1944,138 @@
     img.src = url;
   }
 
+  // -- Reset all customizations --
+  function doReset() {
+    if (!confirm('Remettre la disposition par défaut ?')) return;
+
+    var key = storageKey();
+    try {
+      localStorage.removeItem(key + '-pos');
+      localStorage.removeItem(key + '-zoom');
+      localStorage.removeItem(key + '-arrows');  // legacy cleanup
+      localStorage.removeItem(key + '-hidden');
+      localStorage.removeItem(key + '-arrowmods');
+    } catch (e) { /* ignore */ }
+
+    // Restore original arrows from init config
+    if (state._originalArrows) {
+      state.project.arrows = JSON.parse(JSON.stringify(state._originalArrows));
+    }
+
+    state.hiddenScreens = {};
+    state.hiddenEpics = {};
+    state.layoutIndex = 0;
+
+    var screens = state.project.screens || [];
+    var arrows = state.project.arrows || [];
+    var heights = {};
+    screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      if (el) heights[s.id] = el.offsetHeight;
+    });
+    state.positions = autoLayout(screens, arrows, heights);
+    state.defaultPositions = JSON.parse(JSON.stringify(state.positions));
+
+    screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (el && pos) {
+        el.style.left = pos.x + 'px';
+        el.style.top = pos.y + 'px';
+        el.classList.remove('fb-screen-dimmed');
+      }
+    });
+
+    var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
+    for (var i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].checked = true;
+      var item = checkboxes[i].closest('.fb-legend-item');
+      if (item) item.classList.remove('fb-dimmed');
+    }
+
+    updateLayoutButton();
+    drawArrows();
+    freezeArrowSides();
+    fitToContent();
+  }
+
+  // -- Export full init config as JS --
+  function doExportConfig() {
+    // Build a clean copy of the project with current arrow mutations
+    var projectCopy = {
+      name: state.project.name,
+      epics: JSON.parse(JSON.stringify(state.project.epics || [])),
+      screens: (state.project.screens || []).map(function (s) {
+        var clean = {
+          id: s.id,
+          title: s.title,
+          epic: s.epic,
+          size: s.size
+        };
+        if (s.label) clean.label = s.label;
+        if (s.notes) clean.notes = s.notes;
+        if (s.content) clean.content = s.content;
+        return clean;
+      }),
+      arrows: JSON.parse(JSON.stringify(state.project.arrows))
+    };
+
+    var stateCopy = {
+      positions: JSON.parse(JSON.stringify(state.positions)),
+      zoom: state.zoom,
+      panX: state.panX,
+      panY: state.panY,
+      hiddenScreens: JSON.parse(JSON.stringify(state.hiddenScreens))
+    };
+
+    // Build JS output with template literals for content fields
+    var screenStrs = projectCopy.screens.map(function (s) {
+      var lines = [];
+      lines.push('      {');
+      lines.push('        id: ' + JSON.stringify(s.id) + ',');
+      lines.push('        title: ' + JSON.stringify(s.title) + ',');
+      lines.push('        epic: ' + JSON.stringify(s.epic) + ',');
+      lines.push('        size: ' + JSON.stringify(s.size) + ',');
+      if (s.label) lines.push('        label: ' + JSON.stringify(s.label) + ',');
+      if (s.notes) lines.push('        notes: ' + JSON.stringify(s.notes) + ',');
+      if (s.content) {
+        lines.push('        content: `');
+        lines.push(s.content.replace(/`/g, '\\`'));
+        lines.push('        `');
+      }
+      lines.push('      }');
+      return lines.join('\n');
+    });
+
+    var arrowStrs = projectCopy.arrows.map(function (a) {
+      var parts = ['from: ' + JSON.stringify(a.from), 'to: ' + JSON.stringify(a.to)];
+      if (a.label) parts.push('label: ' + JSON.stringify(a.label));
+      if (a.dashed) parts.push('dashed: true');
+      if (a.fromSide) parts.push('fromSide: ' + JSON.stringify(a.fromSide));
+      if (a.toSide) parts.push('toSide: ' + JSON.stringify(a.toSide));
+      return '      { ' + parts.join(', ') + ' }';
+    });
+
+    var js = 'FlowBoard.init({\n';
+    js += '  container: \'#app\',\n';
+    js += '  project: {\n';
+    js += '    name: ' + JSON.stringify(projectCopy.name) + ',\n';
+    js += '    epics: ' + JSON.stringify(projectCopy.epics, null, 6).replace(/\n/g, '\n    ') + ',\n';
+    js += '    screens: [\n' + screenStrs.join(',\n') + '\n    ],\n';
+    js += '    arrows: [\n' + arrowStrs.join(',\n') + '\n    ]\n';
+    js += '  },\n';
+    js += '  state: ' + JSON.stringify(stateCopy, null, 4).replace(/\n/g, '\n  ') + '\n';
+    js += '});\n';
+
+    var blob = new Blob([js], { type: 'text/javascript' });
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.download = (state.project.name || 'flowboard') + '-init.js';
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   // -- Init --
   function init(config) {
     if (!config || !config.project) {
@@ -1333,13 +2087,33 @@
     state.showNotes = true;
     state.hiddenScreens = {};
     state.hiddenEpics = {};
-    state.arrowOverrides = {};
+    state.arrowPopup = null;
+    state.creatingArrow = null;
+    state.anchorDotsEls = [];
     state.layoutIndex = 0;
 
+    // Keep original arrows for reset
+    state._originalArrows = JSON.parse(JSON.stringify(state.project.arrows || []));
+
+    // config.state takes priority over everything
+    var configState = config.state || null;
+
+    // Load arrow mutations from localStorage (or config.state)
+    if (configState && configState.arrows) {
+      state.project.arrows = JSON.parse(JSON.stringify(configState.arrows));
+    } else {
+      var savedArrowMods = loadArrowMutations();
+      if (savedArrowMods) state.project.arrows = savedArrowMods;
+    }
+
     // Load hidden screens early (before toolbar, so legend checkboxes are correct)
-    var savedHidden = loadHiddenScreens();
-    if (savedHidden) {
-      state.hiddenScreens = savedHidden;
+    if (configState && configState.hiddenScreens) {
+      state.hiddenScreens = JSON.parse(JSON.stringify(configState.hiddenScreens));
+    } else {
+      var savedHidden = loadHiddenScreens();
+      if (savedHidden) {
+        state.hiddenScreens = savedHidden;
+      }
     }
 
     // Derive hiddenEpics from hiddenScreens: an epic is "hidden" if all its screens are hidden
@@ -1409,35 +2183,41 @@
     state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
 
     // Load saved positions (override auto-layout)
-    var savedPos = loadPositions();
     var hasSavedPositions = false;
-    if (savedPos) {
+    if (configState && configState.positions) {
       hasSavedPositions = true;
-      screens.forEach(function (s) {
-        if (savedPos[s.id]) state.positions[s.id] = savedPos[s.id];
-      });
+      state.positions = JSON.parse(JSON.stringify(configState.positions));
+    } else {
+      var savedPos = loadPositions();
+      if (savedPos) {
+        hasSavedPositions = true;
+        screens.forEach(function (s) {
+          if (savedPos[s.id]) state.positions[s.id] = savedPos[s.id];
+        });
+      }
     }
 
     // Load saved zoom/pan
-    var savedZoom = loadZoom();
     var hasSavedZoom = false;
-    if (savedZoom) {
+    if (configState && configState.zoom !== undefined) {
       hasSavedZoom = true;
-      state.zoom = savedZoom.zoom || 1;
-      state.panX = savedZoom.panX || 0;
-      state.panY = savedZoom.panY || 0;
+      state.zoom = configState.zoom;
+      state.panX = configState.panX || 0;
+      state.panY = configState.panY || 0;
+    } else {
+      var savedZoom = loadZoom();
+      if (savedZoom) {
+        hasSavedZoom = true;
+        state.zoom = savedZoom.zoom || 1;
+        state.panX = savedZoom.panX || 0;
+        state.panY = savedZoom.panY || 0;
+      }
     }
 
     // Update zoom label if saved zoom was loaded
     if (hasSavedZoom) {
       var zl = document.getElementById('fb-zoom-label');
       if (zl) zl.textContent = Math.round(state.zoom * 100) + '%';
-    }
-
-    // Load saved arrow overrides
-    var savedArrows = loadArrowOverrides();
-    if (savedArrows) {
-      state.arrowOverrides = savedArrows;
     }
 
     // Render screens
@@ -1484,6 +2264,7 @@
       }
 
       drawArrows();
+      freezeArrowSides();
     });
   }
 

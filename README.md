@@ -89,7 +89,7 @@ FlowBoard.init({
 | `id` | `string` | Unique identifier |
 | `title` | `string` | Title displayed in the header |
 | `epic` | `string` | Epic ID (determines the color) |
-| `size` | `"sm" \| "md" \| "lg"` | Width: 240px / 320px / 400px (default: `"md"`) |
+| `size` | `"sm" \| "md" \| "lg" \| "xl"` | Width: 240 / 320 / 400 / 520px (default: `"md"`) |
 | `notes` | `string` | Annotation displayed in footer (togglable) |
 | `content` | `string` | HTML injected into the card body |
 
@@ -101,6 +101,20 @@ FlowBoard.init({
 | `to` | `string` | Destination screen ID |
 | `label` | `string` | Text on the arrow |
 | `dashed` | `boolean` | Dashed arrow (default: `false`) |
+| `fromSide` | `string` | Anchor point on source (e.g. `"right-upper"`) |
+| `toSide` | `string` | Anchor point on destination (e.g. `"left-lower"`) |
+
+### `config.state` (optional)
+
+Restore a previously exported state. Exported via the "Export Init" toolbar button.
+
+| Field | Type | Description |
+|---|---|---|
+| `positions` | `object` | Screen positions `{ screenId: { x, y } }` |
+| `zoom` | `number` | Zoom level |
+| `panX` | `number` | Pan offset X |
+| `panY` | `number` | Pan offset Y |
+| `hiddenScreens` | `object` | Hidden screens `{ screenId: true }` |
 
 ## Features
 
@@ -111,10 +125,14 @@ FlowBoard.init({
 - **Draggable arrow anchors** — drag arrow endpoints to any of 16 anchor points (5 per side on left/right, 3 per side on top/bottom), persisted in localStorage
 - **Auto-spread** — when multiple arrows connect the same pair of screens, they are automatically distributed across sub-positions to avoid visual overlap
 - **Auto-sides** — automatic best-side calculation for arrows (default when no manual override)
+- **Arrow popup** — click an arrow handle to swap direction, toggle dashed style, edit label, or delete
+- **Screen context menu** — right-click a screen to resize (sm/md/lg/xl), edit its title, or hide it
+- **Anchor dots** — hover a screen to see anchor points, click-drag to create new arrows
 - **Zoom** — buttons + Ctrl+scroll wheel, persisted in localStorage
 - **Toggle notes** — show/hide annotations
 - **Export PNG** — native browser rendering, zero dependencies
-- **Auto-Layout cycling** — click the toolbar button to cycle between Flow, Epics, and Grid layouts
+- **Export Init** — export a full JS file with `FlowBoard.init({...})` preserving all state
+- **Reset** — restore default layout and arrows
 
 ## Arrow Anchor Points
 
@@ -193,12 +211,21 @@ These classes are used inside screen `content` to build wireframes:
 | `.fb-gap-4` / `.fb-gap-8` | Gap 4px / 8px |
 | `.fb-mt-4` / `.fb-mt-8` | Margin-top 4px / 8px |
 
+## Development
+
+```bash
+npm run dev       # local dev server
+npm test          # run 77 unit tests (vitest + jsdom)
+npm run test:watch # run tests in watch mode
+```
+
 ## Files
 
 | File | Description |
 |---|---|
 | `flowboard.js` | JS logic (IIFE, zero dependencies) |
 | `flowboard.css` | Library styles |
+| `flowboard.test.js` | Unit tests (77 tests) |
 | `index.html` | GitHub Pages demo page |
 
 ## License
