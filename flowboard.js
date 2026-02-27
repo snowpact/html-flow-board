@@ -414,9 +414,9 @@
     layoutBtn.className = 'fb-action-btn';
     layoutBtn.id = 'fb-layout-btn';
     layoutBtn.title = 'Changer la disposition';
+    layoutBtn.textContent = 'Auto-Layout (' + LAYOUT_STRATEGIES[state.layoutIndex].name + ')';
     layoutBtn.addEventListener('click', cycleLayout);
     right.appendChild(layoutBtn);
-    updateLayoutButton();
 
     // Export PNG
     var exportBtn = document.createElement('button');
