@@ -1,8 +1,0 @@
-.npmrc
-.gitignore
-.claude
-src/
-scripts/
-*.config.*
-tsconfig.json
-demo
