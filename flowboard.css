@@ -196,6 +196,7 @@
   position: relative;
   width: 6000px;
   height: 4000px;
+  border: 2px dashed #d0d0d0;
 }
 
 /* --- Arrows SVG Layer --- */
@@ -249,20 +250,20 @@
 }
 
 .fb-arrow-handle {
-  fill: #888;
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #888;
   opacity: 0;
   cursor: grab;
-  pointer-events: all;
+  z-index: 15;
   transition: opacity 0.15s;
 }
 
 .fb-arrow-handle:hover {
   opacity: 1;
-  fill: #555;
-}
-
-.fb-arrow-group:hover .fb-arrow-handle {
-  opacity: 0.8;
+  background: #555;
 }
 
 .fb-canvas-wrapper.fb-dragging-handle {

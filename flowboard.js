@@ -31,7 +31,8 @@
     showNotes: true,
     hiddenEpics: {},
     arrowOverrides: {},
-    dragHandle: null
+    dragHandle: null,
+    handleEls: []
   };
 
   // -- Storage helpers --
@@ -539,7 +540,7 @@
       var newY = (e.clientY - wrapperRect.top - state.panY) / state.zoom - state.dragOffset.y / state.zoom;
 
       // Clamp to canvas
-      newX = Math.max(0, Math.min(CANVAS_W - 100, newX));
+      newX = Math.max(0, Math.min(CANVAS_W - 50, newX));
       newY = Math.max(0, Math.min(CANVAS_H - 50, newY));
 
       state.dragTarget.style.left = newX + 'px';
@@ -626,6 +627,10 @@
     var arrows = state.project.arrows || [];
     var ns = 'http://www.w3.org/2000/svg';
     state.svgEl.innerHTML = '';
+
+    // Remove old HTML handle divs
+    state.handleEls.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+    state.handleEls = [];
 
     // Arrow marker
     var defs = document.createElementNS(ns, 'defs');
@@ -716,32 +721,26 @@
       hitPath.setAttribute('pointer-events', 'stroke');
       g.appendChild(hitPath);
 
-      // Draggable handles at start/end — hidden by default
-      var handleFrom = document.createElementNS(ns, 'circle');
-      handleFrom.setAttribute('cx', start.x);
-      handleFrom.setAttribute('cy', start.y);
-      handleFrom.setAttribute('r', '6');
-      handleFrom.setAttribute('class', 'fb-arrow-handle');
-      handleFrom.setAttribute('fill', '#888');
-      handleFrom.setAttribute('opacity', '0');
-      handleFrom.setAttribute('pointer-events', 'all');
-      handleFrom.dataset.arrowKey = overrideKey;
-      handleFrom.dataset.end = 'from';
-      g.appendChild(handleFrom);
-
-      var handleTo = document.createElementNS(ns, 'circle');
-      handleTo.setAttribute('cx', end.x);
-      handleTo.setAttribute('cy', end.y);
-      handleTo.setAttribute('r', '6');
-      handleTo.setAttribute('class', 'fb-arrow-handle');
-      handleTo.setAttribute('fill', '#888');
-      handleTo.setAttribute('opacity', '0');
-      handleTo.setAttribute('pointer-events', 'all');
-      handleTo.dataset.arrowKey = overrideKey;
-      handleTo.dataset.end = 'to';
-      g.appendChild(handleTo);
-
       state.svgEl.appendChild(g);
+
+      // Draggable handles as HTML divs (above screens in z-index)
+      var hFrom = document.createElement('div');
+      hFrom.className = 'fb-arrow-handle';
+      hFrom.style.left = (start.x - 8) + 'px';
+      hFrom.style.top = (start.y - 8) + 'px';
+      hFrom.dataset.arrowKey = overrideKey;
+      hFrom.dataset.end = 'from';
+      state.canvasEl.appendChild(hFrom);
+      state.handleEls.push(hFrom);
+
+      var hTo = document.createElement('div');
+      hTo.className = 'fb-arrow-handle';
+      hTo.style.left = (end.x - 8) + 'px';
+      hTo.style.top = (end.y - 8) + 'px';
+      hTo.dataset.arrowKey = overrideKey;
+      hTo.dataset.end = 'to';
+      state.canvasEl.appendChild(hTo);
+      state.handleEls.push(hTo);
 
       // Label
       if (arrow.label) {
@@ -782,11 +781,9 @@
 
   // -- Arrow handle drag --
   function initArrowDrag() {
-    var svg = state.svgEl;
-
-    svg.addEventListener('mousedown', function (e) {
-      var handle = e.target.closest('.fb-arrow-handle');
-      if (!handle) return;
+    state.canvasEl.addEventListener('mousedown', function (e) {
+      var handle = e.target;
+      if (!handle.classList || !handle.classList.contains('fb-arrow-handle')) return;
 
       e.stopPropagation();
       e.preventDefault();
