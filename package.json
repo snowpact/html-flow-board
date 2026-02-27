@@ -4,20 +4,26 @@
   "description": "Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows",
   "main": "flowboard.js",
   "browser": "flowboard.js",
-  "jsdelivr": "flowboard.js",
-  "unpkg": "flowboard.js",
+  "jsdelivr": "flowboard.min.js",
+  "unpkg": "flowboard.min.js",
   "style": "flowboard.css",
   "files": [
     "flowboard.js",
+    "flowboard.min.js",
     "flowboard.css",
+    "flowboard.min.css",
     "README.md",
     "LICENSE"
   ],
   "sideEffects": [
-    "flowboard.css"
+    "flowboard.css",
+    "flowboard.min.css"
   ],
   "scripts": {
-    "dev": "npx serve ."
+    "build": "esbuild flowboard.js --bundle --minify --outfile=flowboard.min.js && esbuild flowboard.css --bundle --minify --outfile=flowboard.min.css",
+    "dev": "npx serve .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "storyboard",
@@ -34,5 +40,10 @@
   "bugs": {
     "url": "https://github.com/snowpact/html-flow-board/issues"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "jsdom": "^28.1.0",
+    "vitest": "^4.0.18"
+  }
 }

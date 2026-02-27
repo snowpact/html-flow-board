@@ -740,6 +740,24 @@
     return { cp1: cp1, cp2: cp2 };
   }
 
+  // Resolve the sides for a given arrow: manual override → auto-spread → auto-detect.
+  function resolveArrowSides(arrow, spreadMap) {
+    var overrideKey = arrow.from + '->' + arrow.to;
+    var override = state.arrowOverrides[overrideKey];
+    if (override) {
+      return { from: override.fromSide, to: override.toSide };
+    }
+    if (spreadMap && spreadMap[overrideKey]) {
+      return spreadMap[overrideKey];
+    }
+    var fromEl = state.screenEls[arrow.from];
+    var toEl = state.screenEls[arrow.to];
+    if (fromEl && toEl) {
+      return getBestSides(fromEl, toEl);
+    }
+    return { from: 'right', to: 'left' };
+  }
+
   function getAllAnchorPoints(screenId) {
     var names = [
       'left-top', 'left-upper', 'left-middle', 'left-lower', 'left-bottom',
@@ -857,17 +875,8 @@
       if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
       if (toScreen && state.hiddenEpics[toScreen.epic]) return;
 
-      // Determine sides: user override → auto-spread → auto-detect
       var overrideKey = arrow.from + '->' + arrow.to;
-      var override = state.arrowOverrides[overrideKey];
-      var sides;
-      if (override) {
-        sides = { from: override.fromSide, to: override.toSide };
-      } else if (spreadMap[overrideKey]) {
-        sides = spreadMap[overrideKey];
-      } else {
-        sides = getBestSides(fromEl, toEl);
-      }
+      var sides = resolveArrowSides(arrow, spreadMap);
 
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -973,15 +982,7 @@
       if (toScreen && state.hiddenEpics[toScreen.epic]) return;
 
       var overrideKey = arrow.from + '->' + arrow.to;
-      var override = state.arrowOverrides[overrideKey];
-      var sides;
-      if (override) {
-        sides = { from: override.fromSide, to: override.toSide };
-      } else if (spreadMap[overrideKey]) {
-        sides = spreadMap[overrideKey];
-      } else {
-        sides = getBestSides(fromEl, toEl);
-      }
+      var sides = resolveArrowSides(arrow, spreadMap);
 
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -1049,16 +1050,7 @@
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
 
-      var overrideKey = arrow.from + '->' + arrow.to;
-      var override = state.arrowOverrides[overrideKey];
-      var sides;
-      if (override) {
-        sides = { from: override.fromSide, to: override.toSide };
-      } else if (spreadMap[overrideKey]) {
-        sides = spreadMap[overrideKey];
-      } else {
-        sides = getBestSides(fromEl, toEl);
-      }
+      var sides = resolveArrowSides(arrow, spreadMap);
 
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -1076,41 +1068,6 @@
     });
 
     return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
-  }
-
-  // Rasterize SVG arrows to a temporary <canvas> element, swap it in,
-  // let html2canvas capture everything, then swap SVG back.
-  function rasterizeSvgToCanvas(svgEl, callback) {
-    var w = svgEl.getAttribute('width');
-    var h = svgEl.getAttribute('height');
-    var clone = svgEl.cloneNode(true);
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    var str = new XMLSerializer().serializeToString(clone);
-    var blob = new Blob([str], { type: 'image/svg+xml;charset=utf-8' });
-    var url = URL.createObjectURL(blob);
-    var img = new Image();
-    img.onload = function () {
-      URL.revokeObjectURL(url);
-      var c = document.createElement('canvas');
-      c.width = w;
-      c.height = h;
-      c.style.cssText = svgEl.style.cssText;
-      c.className = 'fb-arrows-layer';
-      c.style.position = 'absolute';
-      c.style.top = '0';
-      c.style.left = '0';
-      c.style.width = w + 'px';
-      c.style.height = h + 'px';
-      c.style.pointerEvents = 'none';
-      c.style.zIndex = '1';
-      c.getContext('2d').drawImage(img, 0, 0, Number(w), Number(h));
-      callback(c);
-    };
-    img.onerror = function () {
-      URL.revokeObjectURL(url);
-      callback(null);
-    };
-    img.src = url;
   }
 
   function doExport() {
@@ -1395,5 +1352,18 @@
   }
 
   // -- Expose API --
-  window.FlowBoard = { init: init };
+  window.FlowBoard = {
+    init: init,
+    _internal: {
+      state: state,
+      autoLayout: autoLayout,
+      getAnchor: getAnchor,
+      getPrimarySide: getPrimarySide,
+      computeControlPoints: computeControlPoints,
+      getAllAnchorPoints: getAllAnchorPoints,
+      getBestSides: getBestSides,
+      buildSpreadMap: buildSpreadMap,
+      resolveArrowSides: resolveArrowSides
+    }
+  };
 })();

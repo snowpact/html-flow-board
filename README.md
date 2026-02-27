@@ -8,20 +8,20 @@ Standalone JS+CSS library to create interactive storyboards with screens connect
 
 **jsDelivr (from npm):**
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/html-flow-board@0.2.0/flowboard.css">
-<script src="https://cdn.jsdelivr.net/npm/html-flow-board@0.2.0/flowboard.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/html-flow-board@latest/flowboard.min.css">
+<script src="https://cdn.jsdelivr.net/npm/html-flow-board@latest/flowboard.min.js"></script>
 ```
 
 **unpkg:**
 ```html
-<link rel="stylesheet" href="https://unpkg.com/html-flow-board@0.2.0/flowboard.css">
-<script src="https://unpkg.com/html-flow-board@0.2.0/flowboard.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/html-flow-board@latest/flowboard.min.css">
+<script src="https://unpkg.com/html-flow-board@latest/flowboard.min.js"></script>
 ```
 
 **jsDelivr (from GitHub):**
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.2.0/flowboard.css">
-<script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.2.0/flowboard.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.min.css">
+<script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.min.js"></script>
 ```
 
 ### npm
@@ -54,7 +54,6 @@ FlowBoard.init({
       {
         id: "login", title: "Login", epic: "auth",
         size: "sm",
-        label: "Login page",
         notes: "US-1.1",
         content: `
           <div class="fb-input">Email</div>
@@ -215,8 +214,10 @@ These classes are used inside screen `content` to build wireframes:
 
 | File | Description |
 |---|---|
-| `flowboard.css` | Library styles |
 | `flowboard.js` | JS logic (IIFE, zero dependencies) |
+| `flowboard.css` | Library styles |
+| `flowboard.min.js` | Minified JS |
+| `flowboard.min.css` | Minified CSS |
 | `index.html` | GitHub Pages demo page |
 
 ## License
