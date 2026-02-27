@@ -1,6 +1,6 @@
 {
   "name": "html-flow-board",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows",
   "main": "flowboard.js",
   "browser": "flowboard.js",

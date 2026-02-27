@@ -8,20 +8,20 @@ Standalone JS+CSS library to create interactive storyboards with screens connect
 
 **jsDelivr (from npm):**
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/html-flow-board@0.1.0/flowboard.css">
-<script src="https://cdn.jsdelivr.net/npm/html-flow-board@0.1.0/flowboard.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/html-flow-board@0.2.0/flowboard.css">
+<script src="https://cdn.jsdelivr.net/npm/html-flow-board@0.2.0/flowboard.js"></script>
 ```
 
 **unpkg:**
 ```html
-<link rel="stylesheet" href="https://unpkg.com/html-flow-board@0.1.0/flowboard.css">
-<script src="https://unpkg.com/html-flow-board@0.1.0/flowboard.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/html-flow-board@0.2.0/flowboard.css">
+<script src="https://unpkg.com/html-flow-board@0.2.0/flowboard.js"></script>
 ```
 
 **jsDelivr (from GitHub):**
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.1.0/flowboard.css">
-<script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.1.0/flowboard.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.2.0/flowboard.css">
+<script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.2.0/flowboard.js"></script>
 ```
 
 ### npm
