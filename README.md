@@ -82,7 +82,6 @@ FlowBoard.init({
 |---|---|---|
 | `config.container` | `string \| HTMLElement` | CSS selector or DOM element |
 | `config.project` | `object` | Storyboard configuration |
-| `config.html2canvasUrl` | `string` | Override CDN URL for html2canvas (for self-hosting or version pinning) |
 
 ### Project
 
@@ -121,19 +120,17 @@ FlowBoard.init({
 | `to` | `string` | Destination screen ID |
 | `label` | `string` | Text on the arrow |
 | `dashed` | `boolean` | Dashed arrow (default: `false`) |
-| `fromSide` | `"top" \| "right" \| "bottom" \| "left"` | Departure side (auto if omitted) |
-| `toSide` | `"top" \| "right" \| "bottom" \| "left"` | Arrival side (auto if omitted) |
 
 ## Features
 
-- **Pannable canvas** — drag the background to navigate
+- **Pannable canvas** — scroll wheel to navigate
 - **Draggable screens** — free repositioning, persisted in localStorage
 - **SVG Bezier arrows** — redrawn in real time on drag
 - **Auto-layout** — automatic left-to-right placement based on the navigation graph
 - **Auto-sides** — automatic best-side calculation for arrows
 - **Zoom** — buttons + Ctrl+scroll wheel, persisted in localStorage
 - **Toggle notes** — show/hide annotations
-- **Export PNG** — via html2canvas (lazy-loaded from CDN on first use, ~40KB). Override URL with `config.html2canvasUrl`
+- **Export PNG** — native browser rendering, zero dependencies
 - **Reset** — restore original positions
 
 ## Wireframe classes `fb-*`
@@ -210,7 +207,6 @@ These classes are used inside screen `content` to build wireframes:
 | `flowboard.css` | Library styles |
 | `flowboard.js` | JS logic (IIFE, zero dependencies) |
 | `index.html` | GitHub Pages demo page |
-| `examples/test.html` | Minimal import test |
 
 ## License
 

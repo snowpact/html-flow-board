@@ -17,8 +17,6 @@
     zoom: 1,
     panX: 0,
     panY: 0,
-    isPanning: false,
-    panStart: null,
     dragTarget: null,
     dragOffset: null,
     project: null,
@@ -31,7 +29,9 @@
     defaultPositions: {},
     positions: {},
     showNotes: true,
-    html2canvasUrl: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
+    hiddenEpics: {},
+    arrowOverrides: {},
+    dragHandle: null
   };
 
   // -- Storage helpers --
@@ -67,8 +67,21 @@
     } catch (e) { return null; }
   }
 
+  function saveArrowOverrides() {
+    try {
+      localStorage.setItem(storageKey() + '-arrows', JSON.stringify(state.arrowOverrides));
+    } catch (e) { /* quota */ }
+  }
+
+  function loadArrowOverrides() {
+    try {
+      var raw = localStorage.getItem(storageKey() + '-arrows');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
   // -- Auto layout --
-  function autoLayout(screens, arrows) {
+  function autoLayout(screens, arrows, heights) {
     // Build adjacency: screen -> children
     var children = {};
     var hasParent = {};
@@ -129,8 +142,8 @@
       var offsetY = 80;
       colScreens.forEach(function (s) {
         positions[s.id] = { x: offsetX, y: offsetY };
-        // Estimate height: header(36) + body(~100) + footer(~30) = ~166 min
-        offsetY += 200 + GAP_Y;
+        var h = (heights && heights[s.id]) ? heights[s.id] : 200;
+        offsetY += h + GAP_Y;
       });
 
       offsetX += maxW + GAP_X;
@@ -144,6 +157,15 @@
     if (!state.project || !state.project.epics) return null;
     for (var i = 0; i < state.project.epics.length; i++) {
       if (state.project.epics[i].id === epicId) return state.project.epics[i];
+    }
+    return null;
+  }
+
+  // -- Get screen data by id --
+  function getScreen(screenId) {
+    if (!state.project || !state.project.screens) return null;
+    for (var i = 0; i < state.project.screens.length; i++) {
+      if (state.project.screens[i].id === screenId) return state.project.screens[i];
     }
     return null;
   }
@@ -167,18 +189,29 @@
     sep1.className = 'fb-header-separator';
     left.appendChild(sep1);
 
-    // Legend
+    // Legend with checkboxes
     var legend = document.createElement('div');
     legend.className = 'fb-legend';
     (state.project.epics || []).forEach(function (epic) {
-      var item = document.createElement('span');
-      item.className = 'fb-legend-item';
+      var label = document.createElement('label');
+      label.className = 'fb-legend-item';
+
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !state.hiddenEpics[epic.id];
+      cb.className = 'fb-legend-checkbox';
+      cb.dataset.epicId = epic.id;
+      cb.addEventListener('change', function () {
+        toggleEpic(epic.id);
+      });
+      label.appendChild(cb);
+
       var dot = document.createElement('span');
       dot.className = 'fb-legend-dot';
       dot.style.background = epic.color;
-      item.appendChild(dot);
-      item.appendChild(document.createTextNode(epic.label));
-      legend.appendChild(item);
+      label.appendChild(dot);
+      label.appendChild(document.createTextNode(epic.label));
+      legend.appendChild(label);
     });
     left.appendChild(legend);
 
@@ -248,7 +281,7 @@
     exportBtn.className = 'fb-action-btn';
     exportBtn.textContent = 'Export PNG';
     exportBtn.title = 'Export as PNG';
-    exportBtn.addEventListener('click', exportPNG);
+    exportBtn.addEventListener('click', doExport);
     right.appendChild(exportBtn);
 
     header.appendChild(right);
@@ -265,6 +298,43 @@
         notes[i].classList.add('fb-hidden');
       }
     }
+  }
+
+  // -- Toggle epic visibility --
+  function toggleEpic(epicId) {
+    if (state.hiddenEpics[epicId]) {
+      delete state.hiddenEpics[epicId];
+    } else {
+      state.hiddenEpics[epicId] = true;
+    }
+
+    // Update legend item dimming
+    var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
+    for (var i = 0; i < checkboxes.length; i++) {
+      var cb = checkboxes[i];
+      var item = cb.closest('.fb-legend-item');
+      if (cb.dataset.epicId === epicId) {
+        cb.checked = !state.hiddenEpics[epicId];
+        if (state.hiddenEpics[epicId]) {
+          item.classList.add('fb-dimmed');
+        } else {
+          item.classList.remove('fb-dimmed');
+        }
+      }
+    }
+
+    // Show/hide screens
+    state.project.screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      if (!el) return;
+      if (state.hiddenEpics[s.epic]) {
+        el.classList.add('fb-hidden');
+      } else {
+        el.classList.remove('fb-hidden');
+      }
+    });
+
+    drawArrows();
   }
 
   // -- Render a single screen --
@@ -317,6 +387,11 @@
       el.appendChild(footer);
     }
 
+    // Apply hidden state if epic is hidden
+    if (state.hiddenEpics[screenData.epic]) {
+      el.classList.add('fb-hidden');
+    }
+
     state.screenEls[screenData.id] = el;
     return el;
   }
@@ -329,7 +404,18 @@
 
   // -- Zoom --
   function setZoom(z) {
-    state.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
+    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
+    // Zoom toward center of viewport
+    if (state.wrapperEl) {
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var mx = wrapperRect.width / 2;
+      var my = wrapperRect.height / 2;
+      var cx = (mx - state.panX) / state.zoom;
+      var cy = (my - state.panY) / state.zoom;
+      state.panX = mx - cx * newZoom;
+      state.panY = my - cy * newZoom;
+    }
+    state.zoom = newZoom;
     applyTransform();
     var label = document.getElementById('fb-zoom-label');
     if (label) label.textContent = Math.round(state.zoom * 100) + '%';
@@ -342,44 +428,85 @@
     }
   }
 
-  // -- Pan --
+  // -- Fit to content --
+  function fitToContent() {
+    if (!state.wrapperEl || !state.project) return;
+
+    var screens = state.project.screens || [];
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var hasVisible = false;
+
+    screens.forEach(function (s) {
+      if (state.hiddenEpics[s.epic]) return;
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el || !pos) return;
+      hasVisible = true;
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + el.offsetWidth);
+      maxY = Math.max(maxY, pos.y + el.offsetHeight);
+    });
+
+    if (!hasVisible) return;
+
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var viewW = wrapperRect.width;
+    var viewH = wrapperRect.height;
+
+    var contentW = maxX - minX;
+    var contentH = maxY - minY;
+
+    var padding = 60;
+    var zoomX = (viewW - padding * 2) / contentW;
+    var zoomY = (viewH - padding * 2) / contentH;
+    var zoom = Math.min(zoomX, zoomY, 1.0);
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
+
+    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
+    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
+
+    state.zoom = zoom;
+    state.panX = panX;
+    state.panY = panY;
+    applyTransform();
+
+    var label = document.getElementById('fb-zoom-label');
+    if (label) label.textContent = Math.round(state.zoom * 100) + '%';
+
+    saveZoom();
+  }
+
+  // -- Pan (wheel only, no grab) --
   function initPan() {
     var wrapper = state.wrapperEl;
 
-    wrapper.addEventListener('mousedown', function (e) {
-      // Only start pan if clicking on the canvas background (not a screen)
-      if (e.target === wrapper || e.target === state.canvasEl || e.target === state.sizerEl ||
-          e.target.classList.contains('fb-canvas') || e.target.classList.contains('fb-canvas-sizer')) {
-        state.isPanning = true;
-        state.panStart = { x: e.clientX - state.panX, y: e.clientY - state.panY };
-        wrapper.classList.add('fb-panning');
-        e.preventDefault();
-      }
-    });
-
-    document.addEventListener('mousemove', function (e) {
-      if (state.isPanning && state.panStart) {
-        state.panX = e.clientX - state.panStart.x;
-        state.panY = e.clientY - state.panStart.y;
-        applyTransform();
-      }
-    });
-
-    document.addEventListener('mouseup', function () {
-      if (state.isPanning) {
-        state.isPanning = false;
-        state.panStart = null;
-        wrapper.classList.remove('fb-panning');
-        saveZoom();
-      }
-    });
-
-    // Ctrl+wheel zoom
+    // Wheel: Ctrl/Meta = zoom toward cursor, otherwise = pan
     wrapper.addEventListener('wheel', function (e) {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
+        var wrapperRect = wrapper.getBoundingClientRect();
+        var mx = e.clientX - wrapperRect.left;
+        var my = e.clientY - wrapperRect.top;
+        // Canvas point under cursor
+        var cx = (mx - state.panX) / state.zoom;
+        var cy = (my - state.panY) / state.zoom;
         var delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-        setZoom(state.zoom + delta);
+        var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((state.zoom + delta) * 100) / 100));
+        // Adjust pan so the same canvas point stays under cursor
+        state.panX = mx - cx * newZoom;
+        state.panY = my - cy * newZoom;
+        state.zoom = newZoom;
+        applyTransform();
+        var label = document.getElementById('fb-zoom-label');
+        if (label) label.textContent = Math.round(state.zoom * 100) + '%';
+        saveZoom();
+      } else {
+        e.preventDefault();
+        state.panX -= e.deltaX;
+        state.panY -= e.deltaY;
+        applyTransform();
+        saveZoom();
       }
     }, { passive: false });
   }
@@ -438,10 +565,6 @@
 
   // -- Arrows --
   function getBestSides(fromEl, toEl) {
-    var fr = fromEl.getBoundingClientRect();
-    var tr = toEl.getBoundingClientRect();
-
-    // Use center points relative to canvas (use style left/top for accuracy)
     var fromId = fromEl.dataset.screenId;
     var toId = toEl.dataset.screenId;
     var fp = state.positions[fromId];
@@ -483,6 +606,20 @@
     }
   }
 
+  function getSideMidpoints(screenId) {
+    var el = state.screenEls[screenId];
+    if (!el) return {};
+    var pos = state.positions[screenId];
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+    return {
+      top:    { x: pos.x + w / 2, y: pos.y },
+      bottom: { x: pos.x + w / 2, y: pos.y + h },
+      left:   { x: pos.x,          y: pos.y + h / 2 },
+      right:  { x: pos.x + w,      y: pos.y + h / 2 }
+    };
+  }
+
   function drawArrows() {
     if (!state.svgEl || !state.project) return;
 
@@ -501,7 +638,7 @@
     marker.setAttribute('orient', 'auto');
     var polygon = document.createElementNS(ns, 'polygon');
     polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
-    polygon.setAttribute('class', 'fb-arrow-head');
+    polygon.setAttribute('fill', '#888');
     marker.appendChild(polygon);
     defs.appendChild(marker);
     state.svgEl.appendChild(defs);
@@ -511,10 +648,18 @@
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
 
-      // Determine sides
+      // Skip arrows if either endpoint's epic is hidden
+      var fromScreen = getScreen(arrow.from);
+      var toScreen = getScreen(arrow.to);
+      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
+      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
+
+      // Determine sides: user override or auto-detect
+      var overrideKey = arrow.from + '->' + arrow.to;
+      var override = state.arrowOverrides[overrideKey];
       var sides;
-      if (arrow.fromSide && arrow.toSide) {
-        sides = { from: arrow.fromSide, to: arrow.toSide };
+      if (override) {
+        sides = { from: override.fromSide, to: override.toSide };
       } else {
         sides = getBestSides(fromEl, toEl);
       }
@@ -544,22 +689,74 @@
               ' ' + cp2.x + ',' + cp2.y +
               ' ' + end.x + ',' + end.y;
 
+      // Group for arrow path + handles
+      var g = document.createElementNS(ns, 'g');
+      g.setAttribute('class', 'fb-arrow-group');
+
+      // Main visible path
       var path = document.createElementNS(ns, 'path');
       path.setAttribute('d', d);
       path.setAttribute('class', 'fb-arrow-path' + (arrow.dashed ? ' fb-dashed' : ''));
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#888');
+      path.setAttribute('stroke-width', '2');
+      if (arrow.dashed) {
+        path.setAttribute('stroke-dasharray', '6 4');
+      }
       path.setAttribute('marker-end', 'url(#fb-arrowhead)');
-      state.svgEl.appendChild(path);
+      g.appendChild(path);
+
+      // Wider invisible hit area for hover
+      var hitPath = document.createElementNS(ns, 'path');
+      hitPath.setAttribute('d', d);
+      hitPath.setAttribute('class', 'fb-arrow-hit');
+      hitPath.setAttribute('fill', 'none');
+      hitPath.setAttribute('stroke', 'transparent');
+      hitPath.setAttribute('stroke-width', '16');
+      hitPath.setAttribute('pointer-events', 'stroke');
+      g.appendChild(hitPath);
+
+      // Draggable handles at start/end — hidden by default
+      var handleFrom = document.createElementNS(ns, 'circle');
+      handleFrom.setAttribute('cx', start.x);
+      handleFrom.setAttribute('cy', start.y);
+      handleFrom.setAttribute('r', '6');
+      handleFrom.setAttribute('class', 'fb-arrow-handle');
+      handleFrom.setAttribute('fill', '#888');
+      handleFrom.setAttribute('opacity', '0');
+      handleFrom.setAttribute('pointer-events', 'all');
+      handleFrom.dataset.arrowKey = overrideKey;
+      handleFrom.dataset.end = 'from';
+      g.appendChild(handleFrom);
+
+      var handleTo = document.createElementNS(ns, 'circle');
+      handleTo.setAttribute('cx', end.x);
+      handleTo.setAttribute('cy', end.y);
+      handleTo.setAttribute('r', '6');
+      handleTo.setAttribute('class', 'fb-arrow-handle');
+      handleTo.setAttribute('fill', '#888');
+      handleTo.setAttribute('opacity', '0');
+      handleTo.setAttribute('pointer-events', 'all');
+      handleTo.dataset.arrowKey = overrideKey;
+      handleTo.dataset.end = 'to';
+      g.appendChild(handleTo);
+
+      state.svgEl.appendChild(g);
 
       // Label
       if (arrow.label) {
         var midX = (start.x + end.x + cp1.x + cp2.x) / 4;
         var midY = (start.y + end.y + cp1.y + cp2.y) / 4;
 
-        // Background rect for label (appended after text for size measurement)
         var text = document.createElementNS(ns, 'text');
         text.setAttribute('x', midX);
         text.setAttribute('y', midY);
         text.setAttribute('class', 'fb-arrow-label');
+        text.setAttribute('fill', '#555');
+        text.setAttribute('font-size', '11');
+        text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'central');
         text.textContent = arrow.label;
 
         // Temporarily add text to measure
@@ -573,6 +770,9 @@
         bgRect.setAttribute('width', bbox.width + 8);
         bgRect.setAttribute('height', bbox.height + 4);
         bgRect.setAttribute('class', 'fb-arrow-label-bg');
+        bgRect.setAttribute('fill', '#f0f2f5');
+        bgRect.setAttribute('rx', '3');
+        bgRect.setAttribute('ry', '3');
 
         // Insert bg before text
         state.svgEl.insertBefore(bgRect, text);
@@ -580,45 +780,108 @@
     });
   }
 
-  // -- Export PNG --
-  function exportPNG() {
-    var btn = state.container ? state.container.querySelector('.fb-action-btn[title="Export as PNG"]') : null;
+  // -- Arrow handle drag --
+  function initArrowDrag() {
+    var svg = state.svgEl;
 
-    if (window.html2canvas) {
-      doExport();
-      return;
-    }
+    svg.addEventListener('mousedown', function (e) {
+      var handle = e.target.closest('.fb-arrow-handle');
+      if (!handle) return;
 
-    // Show loading state
-    var originalText;
-    if (btn) {
-      originalText = btn.textContent;
-      btn.textContent = 'Loading\u2026';
-      btn.disabled = true;
-    }
+      e.stopPropagation();
+      e.preventDefault();
 
-    function restore() {
-      if (btn) {
-        btn.textContent = originalText;
-        btn.disabled = false;
+      var arrowKey = handle.dataset.arrowKey;
+      var end = handle.dataset.end; // 'from' or 'to'
+      var parts = arrowKey.split('->');
+
+      state.dragHandle = {
+        arrowKey: arrowKey,
+        end: end,
+        screenId: end === 'from' ? parts[0] : parts[1]
+      };
+      state.wrapperEl.classList.add('fb-dragging-handle');
+    });
+
+    document.addEventListener('mousemove', function (e) {
+      if (!state.dragHandle) return;
+
+      // Convert mouse to canvas coords
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var canvasX = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
+      var canvasY = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
+
+      // Find nearest side midpoint of the connected screen
+      var midpoints = getSideMidpoints(state.dragHandle.screenId);
+      var bestSide = null;
+      var bestDist = Infinity;
+      var sideNames = ['top', 'bottom', 'left', 'right'];
+      for (var i = 0; i < sideNames.length; i++) {
+        var s = sideNames[i];
+        var mp = midpoints[s];
+        var dist = Math.sqrt(Math.pow(canvasX - mp.x, 2) + Math.pow(canvasY - mp.y, 2));
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestSide = s;
+        }
       }
-    }
 
-    // Lazy load html2canvas
-    var s = document.createElement('script');
-    s.src = state.html2canvasUrl;
-    s.onload = function () { restore(); doExport(); };
-    s.onerror = function () { restore(); alert('Failed to load html2canvas. Please check your internet connection.'); };
-    document.head.appendChild(s);
+      // Update override
+      var key = state.dragHandle.arrowKey;
+      if (!state.arrowOverrides[key]) {
+        // Initialize from current sides
+        var parts = key.split('->');
+        var fromEl = state.screenEls[parts[0]];
+        var toEl = state.screenEls[parts[1]];
+        if (fromEl && toEl) {
+          var currentSides = getBestSides(fromEl, toEl);
+          state.arrowOverrides[key] = { fromSide: currentSides.from, toSide: currentSides.to };
+        } else {
+          state.arrowOverrides[key] = { fromSide: 'right', toSide: 'left' };
+        }
+      }
+
+      if (state.dragHandle.end === 'from') {
+        state.arrowOverrides[key].fromSide = bestSide;
+      } else {
+        state.arrowOverrides[key].toSide = bestSide;
+      }
+
+      drawArrows();
+    });
+
+    document.addEventListener('mouseup', function () {
+      if (state.dragHandle) {
+        state.dragHandle = null;
+        state.wrapperEl.classList.remove('fb-dragging-handle');
+        saveArrowOverrides();
+      }
+    });
   }
 
-  function doExport() {
-    var canvas = state.canvasEl;
-    if (!canvas || !window.html2canvas) return;
+  // -- Export PNG (html2canvas, lazy-loaded) --
 
-    // Find bounding box of all screens to crop export
+  var html2canvasLoaded = null; // cached Promise
+
+  function loadHtml2Canvas() {
+    if (html2canvasLoaded) return html2canvasLoaded;
+    html2canvasLoaded = new Promise(function (resolve, reject) {
+      if (window.html2canvas) { resolve(window.html2canvas); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      s.onload = function () { resolve(window.html2canvas); };
+      s.onerror = function () { html2canvasLoaded = null; reject(new Error('Failed to load html2canvas')); };
+      document.head.appendChild(s);
+    });
+    return html2canvasLoaded;
+  }
+
+  function collectExportBounds() {
     var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var arrows = state.project.arrows || [];
+
     state.project.screens.forEach(function (s) {
+      if (state.hiddenEpics[s.epic]) return;
       var el = state.screenEls[s.id];
       var pos = state.positions[s.id];
       if (!el || !pos) return;
@@ -628,31 +891,184 @@
       maxY = Math.max(maxY, pos.y + el.offsetHeight);
     });
 
-    var padding = 40;
-    minX = Math.max(0, minX - padding);
-    minY = Math.max(0, minY - padding);
+    // Include arrow control points so arrows aren't clipped
+    arrows.forEach(function (arrow) {
+      var fromScreen = getScreen(arrow.from);
+      var toScreen = getScreen(arrow.to);
+      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
+      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
 
-    window.html2canvas(canvas, {
-      x: minX,
-      y: minY,
-      width: maxX - minX + padding * 2,
-      height: maxY - minY + padding * 2,
-      backgroundColor: '#f0f2f5',
-      scale: 2
-    }).then(function (c) {
-      var link = document.createElement('a');
-      link.download = (state.project.name || 'flowboard') + '.png';
-      link.href = c.toDataURL();
-      link.click();
+      var fromEl = state.screenEls[arrow.from];
+      var toEl = state.screenEls[arrow.to];
+      if (!fromEl || !toEl) return;
+
+      var overrideKey = arrow.from + '->' + arrow.to;
+      var override = state.arrowOverrides[overrideKey];
+      var sides = override ? { from: override.fromSide, to: override.toSide } : getBestSides(fromEl, toEl);
+
+      var start = getAnchor(arrow.from, sides.from);
+      var end = getAnchor(arrow.to, sides.to);
+
+      var cp1 = { x: start.x, y: start.y };
+      var cp2 = { x: end.x, y: end.y };
+      switch (sides.from) {
+        case 'right': cp1.x += ARROW_OFFSET; break;
+        case 'left': cp1.x -= ARROW_OFFSET; break;
+        case 'bottom': cp1.y += ARROW_OFFSET; break;
+        case 'top': cp1.y -= ARROW_OFFSET; break;
+      }
+      switch (sides.to) {
+        case 'right': cp2.x += ARROW_OFFSET; break;
+        case 'left': cp2.x -= ARROW_OFFSET; break;
+        case 'bottom': cp2.y += ARROW_OFFSET; break;
+        case 'top': cp2.y -= ARROW_OFFSET; break;
+      }
+
+      [start, end, cp1, cp2].forEach(function (p) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
     });
+
+    return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
+  }
+
+  // Rasterize SVG arrows to a temporary <canvas> element, swap it in,
+  // let html2canvas capture everything, then swap SVG back.
+  function rasterizeSvgToCanvas(svgEl, callback) {
+    var w = svgEl.getAttribute('width');
+    var h = svgEl.getAttribute('height');
+    var clone = svgEl.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var str = new XMLSerializer().serializeToString(clone);
+    var blob = new Blob([str], { type: 'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function () {
+      URL.revokeObjectURL(url);
+      var c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      c.style.cssText = svgEl.style.cssText;
+      c.className = 'fb-arrows-layer';
+      c.style.position = 'absolute';
+      c.style.top = '0';
+      c.style.left = '0';
+      c.style.width = w + 'px';
+      c.style.height = h + 'px';
+      c.style.pointerEvents = 'none';
+      c.style.zIndex = '1';
+      c.getContext('2d').drawImage(img, 0, 0, Number(w), Number(h));
+      callback(c);
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      callback(null);
+    };
+    img.src = url;
+  }
+
+  function doExport() {
+    if (!state.canvasEl || !state.project) return;
+
+    var bounds = collectExportBounds();
+    if (bounds.minX === Infinity) return;
+
+    var padding = 40;
+    var vx = Math.max(0, bounds.minX - padding);
+    var vy = Math.max(0, bounds.minY - padding);
+    var vw = bounds.maxX - bounds.minX + padding * 2;
+    var vh = bounds.maxY - bounds.minY + padding * 2;
+
+    // Build a small, clean temporary container (no transform, exact size)
+    var tmp = document.createElement('div');
+    tmp.className = 'fb-container';
+    tmp.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + vw + 'px;height:' + vh + 'px;overflow:visible;background:transparent;';
+
+    // Clone visible screens, offset to crop origin
+    state.project.screens.forEach(function (s) {
+      if (state.hiddenEpics[s.epic]) return;
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el || !pos) return;
+      var clone = el.cloneNode(true);
+      clone.style.left = (pos.x - vx) + 'px';
+      clone.style.top = (pos.y - vy) + 'px';
+      tmp.appendChild(clone);
+    });
+
+    // Rasterize SVG arrows (cropped via viewBox)
+    var svgClone = state.svgEl.cloneNode(true);
+    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svgClone.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
+    svgClone.setAttribute('width', vw);
+    svgClone.setAttribute('height', vh);
+
+    var svgStr = new XMLSerializer().serializeToString(svgClone);
+    var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+
+    img.onload = function () {
+      URL.revokeObjectURL(url);
+
+      // Draw arrows onto a canvas element
+      var ac = document.createElement('canvas');
+      ac.width = vw;
+      ac.height = vh;
+      ac.style.cssText = 'position:absolute;top:0;left:0;width:' + vw + 'px;height:' + vh + 'px;pointer-events:none;';
+      ac.getContext('2d').drawImage(img, 0, 0, vw, vh);
+      tmp.appendChild(ac);
+
+      document.body.appendChild(tmp);
+
+      // Capture the small temp container
+      loadHtml2Canvas().then(function (html2canvas) {
+        return html2canvas(tmp, {
+          width: vw,
+          height: vh,
+          scale: 1,
+          backgroundColor: '#f0f2f5',
+          useCORS: true
+        });
+      }).then(function (resultCanvas) {
+        document.body.removeChild(tmp);
+        var link = document.createElement('a');
+        link.download = (state.project.name || 'flowboard') + '.png';
+        link.href = resultCanvas.toDataURL('image/png');
+        link.click();
+      }).catch(function (err) {
+        if (tmp.parentNode) document.body.removeChild(tmp);
+        console.error('Export failed:', err);
+      });
+    };
+
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      console.error('Arrow rasterization failed');
+    };
+
+    img.src = url;
   }
 
   // -- Reset positions --
   function resetPositions() {
+    // Measure current screen heights
+    var heights = {};
+    state.project.screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      if (el) heights[s.id] = el.offsetHeight;
+    });
+
+    var screens = state.project.screens || [];
+    var arrows = state.project.arrows || [];
+    state.defaultPositions = autoLayout(screens, arrows, heights);
     state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
 
     // Apply positions to DOM
-    state.project.screens.forEach(function (s) {
+    screens.forEach(function (s) {
       var el = state.screenEls[s.id];
       var pos = state.positions[s.id];
       if (el && pos) {
@@ -661,18 +1077,30 @@
       }
     });
 
-    // Reset zoom and pan
-    state.zoom = 1;
-    state.panX = 0;
-    state.panY = 0;
-    applyTransform();
+    // Clear hidden epics
+    state.hiddenEpics = {};
+    var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
+    for (var i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].checked = true;
+      var item = checkboxes[i].closest('.fb-legend-item');
+      if (item) item.classList.remove('fb-dimmed');
+    }
 
-    var label = document.getElementById('fb-zoom-label');
-    if (label) label.textContent = '100%';
+    // Show all screens
+    screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      if (el) el.classList.remove('fb-hidden');
+    });
+
+    // Clear arrow overrides
+    state.arrowOverrides = {};
+    try {
+      localStorage.removeItem(storageKey() + '-arrows');
+    } catch (e) { /* ignore */ }
 
     savePositions();
-    saveZoom();
     drawArrows();
+    fitToContent();
   }
 
   // -- Init --
@@ -684,7 +1112,9 @@
 
     state.project = config.project;
     state.showNotes = true;
-    if (config.html2canvasUrl) state.html2canvasUrl = config.html2canvasUrl;
+    state.hiddenEpics = {};
+    state.arrowOverrides = {};
+    state.dragHandle = null;
 
     // Resolve container
     var containerEl;
@@ -737,7 +1167,7 @@
     state.svgEl = svg;
     state.screenEls = {};
 
-    // Auto-layout
+    // Auto-layout (first pass with estimated heights)
     var screens = state.project.screens || [];
     var arrows = state.project.arrows || [];
     state.defaultPositions = autoLayout(screens, arrows);
@@ -745,7 +1175,9 @@
 
     // Load saved positions (override auto-layout)
     var savedPos = loadPositions();
+    var hasSavedPositions = false;
     if (savedPos) {
+      hasSavedPositions = true;
       screens.forEach(function (s) {
         if (savedPos[s.id]) state.positions[s.id] = savedPos[s.id];
       });
@@ -753,10 +1185,24 @@
 
     // Load saved zoom/pan
     var savedZoom = loadZoom();
+    var hasSavedZoom = false;
     if (savedZoom) {
+      hasSavedZoom = true;
       state.zoom = savedZoom.zoom || 1;
       state.panX = savedZoom.panX || 0;
       state.panY = savedZoom.panY || 0;
+    }
+
+    // Update zoom label if saved zoom was loaded
+    if (hasSavedZoom) {
+      var zl = document.getElementById('fb-zoom-label');
+      if (zl) zl.textContent = Math.round(state.zoom * 100) + '%';
+    }
+
+    // Load saved arrow overrides
+    var savedArrows = loadArrowOverrides();
+    if (savedArrows) {
+      state.arrowOverrides = savedArrows;
     }
 
     // Render screens
@@ -771,9 +1217,37 @@
     // Init interactions
     initPan();
     initDrag();
+    initArrowDrag();
 
-    // Draw arrows (after a tick so DOM layout is computed)
+    // After DOM layout: measure heights, recompute layout, draw arrows
     requestAnimationFrame(function () {
+      // Measure actual screen heights
+      var heights = {};
+      screens.forEach(function (s) {
+        var el = state.screenEls[s.id];
+        if (el) heights[s.id] = el.offsetHeight;
+      });
+
+      // Recompute layout with measured heights
+      state.defaultPositions = autoLayout(screens, arrows, heights);
+
+      if (!hasSavedPositions) {
+        state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
+        // Apply corrected positions to DOM
+        screens.forEach(function (s) {
+          var el = state.screenEls[s.id];
+          var pos = state.positions[s.id];
+          if (el && pos) {
+            el.style.left = pos.x + 'px';
+            el.style.top = pos.y + 'px';
+          }
+        });
+      }
+
+      if (!hasSavedZoom) {
+        fitToContent();
+      }
+
       drawArrows();
     });
   }

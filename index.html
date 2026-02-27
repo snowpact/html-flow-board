@@ -17,11 +17,11 @@
     FlowBoard.init({
       container: '#app',
       project: {
-        name: "OndeMARitime — Storyboard",
+        name: "FlowBoard — Demo",
         epics: [
           { id: "auth", label: "Authentication", color: "#d97706" },
           { id: "dashboard", label: "Dashboard", color: "#264653" },
-          { id: "producers", label: "Producers", color: "#E76F51" },
+          { id: "team", label: "Team", color: "#E76F51" },
           { id: "content", label: "Content", color: "#2A9D8F" }
         ],
         screens: [
@@ -59,8 +59,8 @@
               </div>
               <div class="fb-row">
                 <div class="fb-stat-card">
-                  <div class="fb-stat-value">128</div>
-                  <div class="fb-stat-label">Producers</div>
+                  <div class="fb-stat-value">24</div>
+                  <div class="fb-stat-label">Members</div>
                 </div>
                 <div class="fb-stat-card">
                   <div class="fb-stat-value">47</div>
@@ -75,32 +75,32 @@
               <div class="fb-list">
                 <div class="fb-list-item">
                   <div class="fb-avatar sm"></div>
-                  <span>Pierre published "Oyster Farming"</span>
+                  <span>Alice published "Design System"</span>
                   <span class="fb-badge green">Published</span>
                 </div>
                 <div class="fb-list-item">
                   <div class="fb-avatar sm"></div>
-                  <span>Marie — new producer</span>
+                  <span>Bob — new member</span>
                   <span class="fb-badge blue">New</span>
                 </div>
                 <div class="fb-list-item">
                   <div class="fb-avatar sm"></div>
-                  <span>Jean submitted content</span>
+                  <span>Carol submitted content</span>
                   <span class="fb-badge orange">Pending</span>
                 </div>
               </div>
             `
           },
           {
-            id: "producers-list",
-            title: "Producers List",
-            epic: "producers",
+            id: "team-list",
+            title: "Team List",
+            epic: "team",
             size: "lg",
-            label: "Paginated list of producers",
+            label: "Paginated list of members",
             notes: "US-3.1 — Search + filters + pagination",
             content: `
               <div class="fb-bar">
-                <span>Producers</span>
+                <span>Team</span>
                 <span style="flex:1"></span>
                 <div class="fb-btn small">+ Add</div>
               </div>
@@ -110,30 +110,30 @@
               </div>
               <table class="fb-table">
                 <thead>
-                  <tr><th>Name</th><th>Type</th><th>Status</th></tr>
+                  <tr><th>Name</th><th>Role</th><th>Status</th></tr>
                 </thead>
                 <tbody>
-                  <tr><td>Pierre Martin</td><td>Oyster farmer</td><td><span class="fb-badge green">Active</span></td></tr>
-                  <tr><td>Marie Duval</td><td>Fisher</td><td><span class="fb-badge green">Active</span></td></tr>
-                  <tr><td>Jean Petit</td><td>Mussel farmer</td><td><span class="fb-badge orange">Pending</span></td></tr>
+                  <tr><td>Alice Martin</td><td>Designer</td><td><span class="fb-badge green">Active</span></td></tr>
+                  <tr><td>Bob Duval</td><td>Developer</td><td><span class="fb-badge green">Active</span></td></tr>
+                  <tr><td>Carol Petit</td><td>PM</td><td><span class="fb-badge orange">Pending</span></td></tr>
                 </tbody>
               </table>
               <div class="fb-text small muted" style="text-align:center;margin-top:4px">Page 1 / 5</div>
             `
           },
           {
-            id: "producer-detail",
-            title: "Producer Detail",
-            epic: "producers",
+            id: "member-detail",
+            title: "Member Detail",
+            epic: "team",
             size: "md",
-            label: "Producer profile",
+            label: "Member profile",
             notes: "US-3.2 — Full profile + associated content",
             content: `
               <div class="fb-row">
                 <div class="fb-avatar"></div>
                 <div>
-                  <div class="fb-text subtitle">Pierre Martin</div>
-                  <div class="fb-text small muted">Oyster farmer — Marennes-Oléron</div>
+                  <div class="fb-text subtitle">Alice Martin</div>
+                  <div class="fb-text small muted">Designer</div>
                 </div>
               </div>
               <div class="fb-tabs">
@@ -142,9 +142,9 @@
                 <div class="fb-tab">Stats</div>
               </div>
               <div class="fb-input">Full name</div>
-              <div class="fb-input">Specialty</div>
-              <div class="fb-input">Location</div>
-              <div class="fb-richtext">Producer biography...</div>
+              <div class="fb-input">Role</div>
+              <div class="fb-input">Email</div>
+              <div class="fb-richtext">Member biography...</div>
               <div class="fb-row spread">
                 <div class="fb-btn small danger">Delete</div>
                 <div class="fb-btn small">Save</div>
@@ -188,13 +188,13 @@
               <div class="fb-input">Title</div>
               <div class="fb-input">Description</div>
               <div class="fb-row wrap fb-gap-4">
-                <div class="fb-chip">Tide</div>
-                <div class="fb-chip">Oyster farming</div>
+                <div class="fb-chip">Design</div>
+                <div class="fb-chip">Brand</div>
                 <div class="fb-chip">+ Tag</div>
               </div>
               <div class="fb-row">
-                <div class="fb-text small">Producer:</div>
-                <div class="fb-badge blue">Pierre Martin</div>
+                <div class="fb-text small">Author:</div>
+                <div class="fb-badge blue">Alice Martin</div>
               </div>
               <div class="fb-sep"></div>
               <div class="fb-row spread">
@@ -206,11 +206,11 @@
         ],
         arrows: [
           { from: "login", to: "dashboard", label: "Login OK" },
-          { from: "dashboard", to: "producers-list", label: "Producers menu" },
+          { from: "dashboard", to: "team-list", label: "Team menu" },
           { from: "dashboard", to: "content-list", label: "Content menu" },
-          { from: "producers-list", to: "producer-detail", label: "Click producer" },
+          { from: "team-list", to: "member-detail", label: "Click member" },
           { from: "content-list", to: "content-edit", label: "Edit" },
-          { from: "producer-detail", to: "content-list", label: "View content", dashed: true },
+          { from: "member-detail", to: "content-list", label: "View content", dashed: true },
           { from: "content-edit", to: "content-list", label: "Save", dashed: true }
         ]
       }
