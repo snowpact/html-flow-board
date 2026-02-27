@@ -308,7 +308,8 @@
 
 /* Screen Header */
 .fb-screen-header {
-  padding: 8px 12px;
+  position: relative;
+  padding: 8px 30px 8px 12px;
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -347,10 +348,6 @@
 }
 
 .fb-screen-footer.fb-hidden {
-  display: none;
-}
-
-.fb-screen.fb-hidden {
   display: none;
 }
 
@@ -682,6 +679,60 @@
   font-size: 11px;
   background: #e5e7eb;
   color: #555;
+}
+
+/* --- Screen Toggle (hide/show) --- */
+.fb-screen-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: rgba(255,255,255,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fb-screen-header:hover .fb-screen-toggle {
+  opacity: 1;
+}
+
+.fb-screen-toggle:hover {
+  color: #fff;
+}
+
+/* Screen dimmed (individually hidden) */
+.fb-screen-dimmed {
+  opacity: 0.25;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.fb-screen-dimmed .fb-screen-body,
+.fb-screen-dimmed .fb-screen-footer {
+  pointer-events: none;
+}
+
+.fb-screen-dimmed .fb-screen-toggle {
+  pointer-events: auto;
+}
+
+.fb-screen-dimmed .fb-screen-header:hover .fb-screen-toggle,
+.fb-screen-dimmed:hover .fb-screen-toggle {
+  opacity: 1;
+}
+
+/* Arrows connected to a dimmed screen */
+.fb-arrow-dimmed {
+  opacity: 0.15;
 }
 
 /* Flex helpers */

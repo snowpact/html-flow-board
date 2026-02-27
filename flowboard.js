@@ -33,7 +33,9 @@
     hiddenEpics: {},
     arrowOverrides: {},
     handleEls: [],
-    draggingHandle: null
+    draggingHandle: null,
+    hiddenScreens: {},
+    layoutIndex: 0
   };
 
   // -- Storage helpers --
@@ -82,9 +84,21 @@
     } catch (e) { return null; }
   }
 
-  // -- Auto layout --
-  function autoLayout(screens, arrows, heights) {
-    // Build adjacency: screen -> children
+  function saveHiddenScreens() {
+    try {
+      localStorage.setItem(storageKey() + '-hidden', JSON.stringify(state.hiddenScreens));
+    } catch (e) { /* quota */ }
+  }
+
+  function loadHiddenScreens() {
+    try {
+      var raw = localStorage.getItem(storageKey() + '-hidden');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+
+  // -- Layout helpers --
+  function bfsDepth(screens, arrows) {
     var children = {};
     var hasParent = {};
     screens.forEach(function (s) { children[s.id] = []; });
@@ -92,17 +106,13 @@
       if (children[a.from]) children[a.from].push(a.to);
       hasParent[a.to] = true;
     });
-
-    // Find roots (no incoming arrow)
     var roots = screens.filter(function (s) { return !hasParent[s.id]; }).map(function (s) { return s.id; });
     if (roots.length === 0 && screens.length > 0) roots = [screens[0].id];
 
-    // BFS to assign columns
     var col = {};
     var visited = {};
     var queue = [];
     roots.forEach(function (r) { queue.push(r); col[r] = 0; visited[r] = true; });
-
     while (queue.length > 0) {
       var cur = queue.shift();
       (children[cur] || []).forEach(function (child) {
@@ -113,11 +123,24 @@
         }
       });
     }
+    screens.forEach(function (s) { if (col[s.id] === undefined) col[s.id] = 0; });
+    return col;
+  }
 
-    // Assign unvisited screens to column 0
+  function centerPositions(positions, screens, totalW, totalH) {
+    var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
+    var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
     screens.forEach(function (s) {
-      if (col[s.id] === undefined) col[s.id] = 0;
+      if (positions[s.id]) {
+        positions[s.id].x += cx;
+        positions[s.id].y += cy;
+      }
     });
+  }
+
+  // -- Auto layout (Flow) --
+  function autoLayout(screens, arrows, heights) {
+    var col = bfsDepth(screens, arrows);
 
     // Group by column
     var columns = {};
@@ -131,7 +154,6 @@
     var positions = {};
     var colKeys = Object.keys(columns).map(Number).sort(function (a, b) { return a - b; });
     var offsetX = 0;
-    var totalW = 0;
     var totalH = 0;
 
     colKeys.forEach(function (c) {
@@ -152,19 +174,123 @@
       if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
       offsetX += maxW + GAP_X;
     });
-    totalW = offsetX - GAP_X;
+    var totalW = offsetX - GAP_X;
 
-    // Center in canvas
-    var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
-    var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
+    centerPositions(positions, screens, totalW, totalH);
+    return positions;
+  }
+
+  // -- Layout by Epics --
+  function layoutByEpics(screens, arrows, heights) {
+    var epicGroups = {};
+    var epicOrder = [];
     screens.forEach(function (s) {
-      if (positions[s.id]) {
-        positions[s.id].x += cx;
-        positions[s.id].y += cy;
+      var eid = s.epic || '_none';
+      if (!epicGroups[eid]) { epicGroups[eid] = []; epicOrder.push(eid); }
+      epicGroups[eid].push(s);
+    });
+
+    var col = bfsDepth(screens, arrows);
+
+    var positions = {};
+    var offsetX = 0;
+    var totalH = 0;
+
+    epicOrder.forEach(function (eid) {
+      var group = epicGroups[eid];
+      group.sort(function (a, b) { return (col[a.id] || 0) - (col[b.id] || 0); });
+
+      var maxW = 0;
+      group.forEach(function (s) {
+        var w = SIZES[s.size || 'md'] || SIZES.md;
+        if (w > maxW) maxW = w;
+      });
+
+      var offsetY = 0;
+      group.forEach(function (s) {
+        positions[s.id] = { x: offsetX, y: offsetY };
+        var h = (heights && heights[s.id]) ? heights[s.id] : 200;
+        offsetY += h + GAP_Y;
+      });
+      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
+      offsetX += maxW + GAP_X;
+    });
+
+    centerPositions(positions, screens, offsetX - GAP_X, totalH);
+    return positions;
+  }
+
+  // -- Layout Grid --
+  function layoutGrid(screens, arrows, heights) {
+    var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
+    var positions = {};
+    var offsetX = 0, offsetY = 0;
+    var rowMaxH = 0;
+    var totalW = 0, totalH = 0;
+
+    screens.forEach(function (s, i) {
+      var colIdx = i % cols;
+      if (colIdx === 0 && i > 0) {
+        offsetY += rowMaxH + GAP_Y;
+        offsetX = 0;
+        rowMaxH = 0;
+      }
+      positions[s.id] = { x: offsetX, y: offsetY };
+      var w = SIZES[s.size || 'md'] || SIZES.md;
+      var h = (heights && heights[s.id]) ? heights[s.id] : 200;
+      if (h > rowMaxH) rowMaxH = h;
+      offsetX += w + GAP_X;
+      if (offsetX > totalW) totalW = offsetX;
+    });
+    totalH = offsetY + rowMaxH;
+
+    centerPositions(positions, screens, totalW - GAP_X, totalH);
+    return positions;
+  }
+
+  // -- Layout strategies --
+  var LAYOUT_STRATEGIES = [
+    { name: 'Flow', fn: autoLayout },
+    { name: 'Epics', fn: layoutByEpics },
+    { name: 'Grid', fn: layoutGrid }
+  ];
+
+  // -- Cycle layout --
+  function cycleLayout() {
+    state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
+
+    var heights = {};
+    var screens = state.project.screens || [];
+    var arrows = state.project.arrows || [];
+    screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      if (el) heights[s.id] = el.offsetHeight;
+    });
+
+    var layoutFn = LAYOUT_STRATEGIES[state.layoutIndex].fn;
+    state.positions = layoutFn(screens, arrows, heights);
+
+    screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (el && pos) {
+        el.style.left = pos.x + 'px';
+        el.style.top = pos.y + 'px';
       }
     });
 
-    return positions;
+    updateLayoutButton();
+    savePositions();
+    drawArrows();
+    fitToContent();
+  }
+
+  function updateLayoutButton() {
+    var btn = document.getElementById('fb-layout-btn');
+    if (btn) {
+      var name = LAYOUT_STRATEGIES[state.layoutIndex].name;
+      btn.textContent = 'Auto-Layout (' + name + ')';
+    }
   }
 
   // -- Get epic by id --
@@ -283,13 +409,14 @@
     sep3.className = 'fb-header-separator';
     right.appendChild(sep3);
 
-    // Reset positions
-    var resetBtn = document.createElement('button');
-    resetBtn.className = 'fb-action-btn';
-    resetBtn.textContent = 'Reset';
-    resetBtn.title = 'Reset positions';
-    resetBtn.addEventListener('click', resetPositions);
-    right.appendChild(resetBtn);
+    // Auto-Layout (cycle)
+    var layoutBtn = document.createElement('button');
+    layoutBtn.className = 'fb-action-btn';
+    layoutBtn.id = 'fb-layout-btn';
+    layoutBtn.title = 'Changer la disposition';
+    layoutBtn.addEventListener('click', cycleLayout);
+    right.appendChild(layoutBtn);
+    updateLayoutButton();
 
     // Export PNG
     var exportBtn = document.createElement('button');
@@ -315,12 +442,19 @@
     }
   }
 
-  // -- Toggle epic visibility --
+  // -- Toggle epic visibility (shortcut: hides/shows each screen individually) --
   function toggleEpic(epicId) {
-    if (state.hiddenEpics[epicId]) {
-      delete state.hiddenEpics[epicId];
-    } else {
+    // If any screen of this epic is visible → hide all; otherwise show all
+    var hasVisible = false;
+    state.project.screens.forEach(function (s) {
+      if (s.epic === epicId && !state.hiddenScreens[s.id]) hasVisible = true;
+    });
+    var isHiding = hasVisible;
+
+    if (isHiding) {
       state.hiddenEpics[epicId] = true;
+    } else {
+      delete state.hiddenEpics[epicId];
     }
 
     // Update legend item dimming
@@ -329,8 +463,8 @@
       var cb = checkboxes[i];
       var item = cb.closest('.fb-legend-item');
       if (cb.dataset.epicId === epicId) {
-        cb.checked = !state.hiddenEpics[epicId];
-        if (state.hiddenEpics[epicId]) {
+        cb.checked = !isHiding;
+        if (isHiding) {
           item.classList.add('fb-dimmed');
         } else {
           item.classList.remove('fb-dimmed');
@@ -338,18 +472,41 @@
       }
     }
 
-    // Show/hide screens
+    // Toggle each screen of this epic individually
     state.project.screens.forEach(function (s) {
-      var el = state.screenEls[s.id];
-      if (!el) return;
-      if (state.hiddenEpics[s.epic]) {
-        el.classList.add('fb-hidden');
+      if (s.epic !== epicId) return;
+      if (isHiding) {
+        state.hiddenScreens[s.id] = true;
       } else {
-        el.classList.remove('fb-hidden');
+        delete state.hiddenScreens[s.id];
       }
+      applyScreenVisibility(s.id);
     });
 
+    saveHiddenScreens();
     drawArrows();
+  }
+
+  // -- Toggle individual screen visibility --
+  function toggleScreen(screenId) {
+    if (state.hiddenScreens[screenId]) {
+      delete state.hiddenScreens[screenId];
+    } else {
+      state.hiddenScreens[screenId] = true;
+    }
+    applyScreenVisibility(screenId);
+    saveHiddenScreens();
+    drawArrows();
+  }
+
+  function applyScreenVisibility(screenId) {
+    var el = state.screenEls[screenId];
+    if (!el) return;
+    if (state.hiddenScreens[screenId]) {
+      el.classList.add('fb-screen-dimmed');
+    } else {
+      el.classList.remove('fb-screen-dimmed');
+    }
   }
 
   // -- Render a single screen --
@@ -372,6 +529,17 @@
     hdr.className = 'fb-screen-header';
     hdr.style.background = color;
     hdr.innerHTML = '<span>' + escapeHtml(screenData.title) + '</span>';
+
+    var toggleBtn = document.createElement('button');
+    toggleBtn.className = 'fb-screen-toggle';
+    toggleBtn.title = 'Masquer cet écran';
+    toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    toggleBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleScreen(screenData.id);
+    });
+    hdr.appendChild(toggleBtn);
+
     el.appendChild(hdr);
 
     // Body
@@ -388,9 +556,9 @@
       el.appendChild(footer);
     }
 
-    // Apply hidden state if epic is hidden
-    if (state.hiddenEpics[screenData.epic]) {
-      el.classList.add('fb-hidden');
+    // Apply dimmed state if screen is individually hidden
+    if (state.hiddenScreens[screenData.id]) {
+      el.classList.add('fb-screen-dimmed');
     }
 
     state.screenEls[screenData.id] = el;
@@ -438,7 +606,7 @@
     var hasVisible = false;
 
     screens.forEach(function (s) {
-      if (state.hiddenEpics[s.epic]) return;
+      if (state.hiddenScreens[s.id]) return;
       var el = state.screenEls[s.id];
       var pos = state.positions[s.id];
       if (!el || !pos) return;
@@ -517,6 +685,9 @@
     state.canvasEl.addEventListener('mousedown', function (e) {
       var screenEl = e.target.closest('.fb-screen');
       if (!screenEl) return;
+
+      // Block drag on dimmed screens
+      if (state.hiddenScreens[screenEl.dataset.screenId]) return;
 
       e.stopPropagation();
       e.preventDefault();
@@ -782,10 +953,7 @@
     // First pass: group ALL visible arrows by screen pair (including overridden)
     var pairGroups = {};
     arrows.forEach(function (arrow, idx) {
-      var fromScreen = getScreen(arrow.from);
-      var toScreen = getScreen(arrow.to);
-      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
-      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
+      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
 
       var ids = [arrow.from, arrow.to].sort();
       var pairKey = ids[0] + '|' + ids[1];
@@ -869,12 +1037,6 @@
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
 
-      // Skip arrows if either endpoint's epic is hidden
-      var fromScreen = getScreen(arrow.from);
-      var toScreen = getScreen(arrow.to);
-      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
-      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
-
       var overrideKey = arrow.from + '->' + arrow.to;
       var sides = resolveArrowSides(arrow, spreadMap);
 
@@ -890,9 +1052,12 @@
               ' ' + cp2.x + ',' + cp2.y +
               ' ' + end.x + ',' + end.y;
 
+      // Check if either endpoint screen is individually hidden
+      var isDimmed = state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to];
+
       // Group for arrow path
       var g = document.createElementNS(ns, 'g');
-      g.setAttribute('class', 'fb-arrow-group');
+      g.setAttribute('class', 'fb-arrow-group' + (isDimmed ? ' fb-arrow-dimmed' : ''));
 
       // Main visible path
       var path = document.createElementNS(ns, 'path');
@@ -924,6 +1089,9 @@
         var midX = (start.x + end.x + cp1.x + cp2.x) / 4;
         var midY = (start.y + end.y + cp1.y + cp2.y) / 4;
 
+        var labelGroup = document.createElementNS(ns, 'g');
+        if (isDimmed) labelGroup.setAttribute('class', 'fb-arrow-dimmed');
+
         var text = document.createElementNS(ns, 'text');
         text.setAttribute('x', midX);
         text.setAttribute('y', midY);
@@ -939,6 +1107,7 @@
         state.svgEl.appendChild(text);
         var bbox;
         try { bbox = text.getBBox(); } catch (e) { bbox = { x: midX - 20, y: midY - 8, width: 40, height: 16 }; }
+        state.svgEl.removeChild(text);
 
         var bgRect = document.createElementNS(ns, 'rect');
         bgRect.setAttribute('x', bbox.x - 4);
@@ -950,8 +1119,9 @@
         bgRect.setAttribute('rx', '3');
         bgRect.setAttribute('ry', '3');
 
-        // Insert bg before text
-        state.svgEl.insertBefore(bgRect, text);
+        labelGroup.appendChild(bgRect);
+        labelGroup.appendChild(text);
+        state.svgEl.appendChild(labelGroup);
       }
     });
 
@@ -975,11 +1145,8 @@
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
 
-      // Skip arrows if either endpoint's epic is hidden
-      var fromScreen = getScreen(arrow.from);
-      var toScreen = getScreen(arrow.to);
-      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
-      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
+      // Skip handles for arrows connected to a dimmed screen
+      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
 
       var overrideKey = arrow.from + '->' + arrow.to;
       var sides = resolveArrowSides(arrow, spreadMap);
@@ -1029,7 +1196,7 @@
     var spreadMap = buildSpreadMap();
 
     state.project.screens.forEach(function (s) {
-      if (state.hiddenEpics[s.epic]) return;
+      if (state.hiddenScreens[s.id]) return;
       var el = state.screenEls[s.id];
       var pos = state.positions[s.id];
       if (!el || !pos) return;
@@ -1041,10 +1208,7 @@
 
     // Include arrow control points so arrows aren't clipped
     arrows.forEach(function (arrow) {
-      var fromScreen = getScreen(arrow.from);
-      var toScreen = getScreen(arrow.to);
-      if (fromScreen && state.hiddenEpics[fromScreen.epic]) return;
-      if (toScreen && state.hiddenEpics[toScreen.epic]) return;
+      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
 
       var fromEl = state.screenEls[arrow.from];
       var toEl = state.screenEls[arrow.to];
@@ -1089,7 +1253,7 @@
 
     // Clone visible screens, offset to crop origin
     state.project.screens.forEach(function (s) {
-      if (state.hiddenEpics[s.epic]) return;
+      if (state.hiddenScreens[s.id]) return;
       var el = state.screenEls[s.id];
       var pos = state.positions[s.id];
       if (!el || !pos) return;
@@ -1101,6 +1265,11 @@
 
     // Rasterize SVG arrows (cropped via viewBox)
     var svgClone = state.svgEl.cloneNode(true);
+    // Remove dimmed arrows from export
+    var dimmedEls = svgClone.querySelectorAll('.fb-arrow-dimmed');
+    for (var di = 0; di < dimmedEls.length; di++) {
+      dimmedEls[di].parentNode.removeChild(dimmedEls[di]);
+    }
     svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     svgClone.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
     svgClone.setAttribute('width', vw);
@@ -1153,56 +1322,6 @@
     img.src = url;
   }
 
-  // -- Reset positions --
-  function resetPositions() {
-    // Measure current screen heights
-    var heights = {};
-    state.project.screens.forEach(function (s) {
-      var el = state.screenEls[s.id];
-      if (el) heights[s.id] = el.offsetHeight;
-    });
-
-    var screens = state.project.screens || [];
-    var arrows = state.project.arrows || [];
-    state.defaultPositions = autoLayout(screens, arrows, heights);
-    state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
-
-    // Apply positions to DOM
-    screens.forEach(function (s) {
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (el && pos) {
-        el.style.left = pos.x + 'px';
-        el.style.top = pos.y + 'px';
-      }
-    });
-
-    // Clear hidden epics
-    state.hiddenEpics = {};
-    var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
-    for (var i = 0; i < checkboxes.length; i++) {
-      checkboxes[i].checked = true;
-      var item = checkboxes[i].closest('.fb-legend-item');
-      if (item) item.classList.remove('fb-dimmed');
-    }
-
-    // Show all screens
-    screens.forEach(function (s) {
-      var el = state.screenEls[s.id];
-      if (el) el.classList.remove('fb-hidden');
-    });
-
-    // Clear arrow overrides
-    state.arrowOverrides = {};
-    try {
-      localStorage.removeItem(storageKey() + '-arrows');
-    } catch (e) { /* ignore */ }
-
-    savePositions();
-    drawArrows();
-    fitToContent();
-  }
-
   // -- Init --
   function init(config) {
     if (!config || !config.project) {
@@ -1212,8 +1331,25 @@
 
     state.project = config.project;
     state.showNotes = true;
+    state.hiddenScreens = {};
     state.hiddenEpics = {};
     state.arrowOverrides = {};
+    state.layoutIndex = 0;
+
+    // Load hidden screens early (before toolbar, so legend checkboxes are correct)
+    var savedHidden = loadHiddenScreens();
+    if (savedHidden) {
+      state.hiddenScreens = savedHidden;
+    }
+
+    // Derive hiddenEpics from hiddenScreens: an epic is "hidden" if all its screens are hidden
+    var allScreens = config.project.screens || [];
+    (config.project.epics || []).forEach(function (epic) {
+      var epicScreens = allScreens.filter(function (s) { return s.epic === epic.id; });
+      if (epicScreens.length > 0 && epicScreens.every(function (s) { return state.hiddenScreens[s.id]; })) {
+        state.hiddenEpics[epic.id] = true;
+      }
+    });
 
     // Resolve container
     var containerEl;
@@ -1357,6 +1493,10 @@
     _internal: {
       state: state,
       autoLayout: autoLayout,
+      bfsDepth: bfsDepth,
+      centerPositions: centerPositions,
+      layoutByEpics: layoutByEpics,
+      layoutGrid: layoutGrid,
       getAnchor: getAnchor,
       getPrimarySide: getPrimarySide,
       computeControlPoints: computeControlPoints,

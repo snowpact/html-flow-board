@@ -2,6 +2,8 @@
 
 Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows. Zero dependencies, importable via CDN.
 
+**[Live Demo](https://snowpact.github.io/html-flow-board/)**
+
 ## Installation
 
 ### CDN (recommended)
@@ -105,14 +107,14 @@ FlowBoard.init({
 - **Pannable canvas** — scroll wheel to navigate
 - **Draggable screens** — free repositioning, persisted in localStorage
 - **SVG Bezier arrows** — redrawn in real time on drag
-- **Auto-layout** — automatic left-to-right placement based on the navigation graph
+- **Auto-layout** — cycle between 3 layout strategies: Flow (left-to-right by dependency depth), Epics (grouped by epic), Grid (compact grid)
 - **Draggable arrow anchors** — drag arrow endpoints to any of 16 anchor points (5 per side on left/right, 3 per side on top/bottom), persisted in localStorage
 - **Auto-spread** — when multiple arrows connect the same pair of screens, they are automatically distributed across sub-positions to avoid visual overlap
 - **Auto-sides** — automatic best-side calculation for arrows (default when no manual override)
 - **Zoom** — buttons + Ctrl+scroll wheel, persisted in localStorage
 - **Toggle notes** — show/hide annotations
 - **Export PNG** — native browser rendering, zero dependencies
-- **Reset** — restore original positions
+- **Auto-Layout cycling** — click the toolbar button to cycle between Flow, Epics, and Grid layouts
 
 ## Arrow Anchor Points
 

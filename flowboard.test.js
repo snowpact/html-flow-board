@@ -312,7 +312,7 @@ describe('buildSpreadMap', () => {
     expect(map['B->A'].from).toBe('left-lower');
   });
 
-  it('skips hidden epic arrows', () => {
+  it('skips hidden screen arrows', () => {
     setupState(fb,
       [
         { id: 'A', title: 'A', epic: 'e1' },
@@ -324,7 +324,7 @@ describe('buildSpreadMap', () => {
       ],
       { A: { x: 0, y: 0 }, B: { x: 500, y: 0 } }
     );
-    fb._internal.state.hiddenEpics.e1 = true;
+    fb._internal.state.hiddenScreens.A = true;
 
     expect(fb._internal.buildSpreadMap()).toEqual({});
   });
