@@ -30,7 +30,8 @@
     screenEls: {},
     defaultPositions: {},
     positions: {},
-    showNotes: true
+    showNotes: true,
+    html2canvasUrl: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
   };
 
   // -- Storage helpers --
@@ -581,17 +582,33 @@
 
   // -- Export PNG --
   function exportPNG() {
-    var script = document.querySelector('script[src*="html2canvas"]');
+    var btn = state.container ? state.container.querySelector('.fb-action-btn[title="Export as PNG"]') : null;
+
     if (window.html2canvas) {
       doExport();
       return;
     }
 
+    // Show loading state
+    var originalText;
+    if (btn) {
+      originalText = btn.textContent;
+      btn.textContent = 'Loading\u2026';
+      btn.disabled = true;
+    }
+
+    function restore() {
+      if (btn) {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
     // Lazy load html2canvas
     var s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-    s.onload = doExport;
-    s.onerror = function () { alert('Failed to load html2canvas. Please check your internet connection.'); };
+    s.src = state.html2canvasUrl;
+    s.onload = function () { restore(); doExport(); };
+    s.onerror = function () { restore(); alert('Failed to load html2canvas. Please check your internet connection.'); };
     document.head.appendChild(s);
   }
 
@@ -667,6 +684,7 @@
 
     state.project = config.project;
     state.showNotes = true;
+    if (config.html2canvasUrl) state.html2canvasUrl = config.html2canvasUrl;
 
     // Resolve container
     var containerEl;

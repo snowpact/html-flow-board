@@ -3,9 +3,17 @@
   "version": "0.1.0",
   "description": "Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows",
   "main": "flowboard.js",
+  "browser": "flowboard.js",
+  "jsdelivr": "flowboard.js",
+  "unpkg": "flowboard.js",
   "style": "flowboard.css",
   "files": [
     "flowboard.js",
+    "flowboard.css",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": [
     "flowboard.css"
   ],
   "scripts": {
@@ -18,5 +26,13 @@
     "svg",
     "drag-and-drop"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/snowpact/html-flow-board.git"
+  },
+  "homepage": "https://snowpact.github.io/html-flow-board",
+  "bugs": {
+    "url": "https://github.com/snowpact/html-flow-board/issues"
+  },
   "license": "MIT"
 }

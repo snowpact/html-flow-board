@@ -2,6 +2,38 @@
 
 Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows. Zero dependencies, importable via CDN.
 
+## Installation
+
+### CDN (recommended)
+
+**jsDelivr (from npm):**
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/html-flow-board@0.1.0/flowboard.css">
+<script src="https://cdn.jsdelivr.net/npm/html-flow-board@0.1.0/flowboard.js"></script>
+```
+
+**unpkg:**
+```html
+<link rel="stylesheet" href="https://unpkg.com/html-flow-board@0.1.0/flowboard.css">
+<script src="https://unpkg.com/html-flow-board@0.1.0/flowboard.js"></script>
+```
+
+**jsDelivr (from GitHub):**
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.1.0/flowboard.css">
+<script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@v0.1.0/flowboard.js"></script>
+```
+
+### npm
+
+```bash
+npm install html-flow-board
+```
+
+### Self-hosted
+
+Download `flowboard.js` and `flowboard.css` and include them in your project.
+
 ## Quick Start
 
 ```html
@@ -50,6 +82,7 @@ FlowBoard.init({
 |---|---|---|
 | `config.container` | `string \| HTMLElement` | CSS selector or DOM element |
 | `config.project` | `object` | Storyboard configuration |
+| `config.html2canvasUrl` | `string` | Override CDN URL for html2canvas (for self-hosting or version pinning) |
 
 ### Project
 
@@ -100,7 +133,7 @@ FlowBoard.init({
 - **Auto-sides** — automatic best-side calculation for arrows
 - **Zoom** — buttons + Ctrl+scroll wheel, persisted in localStorage
 - **Toggle notes** — show/hide annotations
-- **Export PNG** — via html2canvas (lazy-loaded from CDN)
+- **Export PNG** — via html2canvas (lazy-loaded from CDN on first use, ~40KB). Override URL with `config.html2canvasUrl`
 - **Reset** — restore original positions
 
 ## Wireframe classes `fb-*`
