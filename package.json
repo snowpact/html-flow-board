@@ -4,23 +4,22 @@
   "description": "Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows",
   "main": "flowboard.js",
   "browser": "flowboard.js",
-  "jsdelivr": "flowboard.min.js",
-  "unpkg": "flowboard.min.js",
+  "jsdelivr": "dist/flowboard.min.js",
+  "unpkg": "dist/flowboard.min.js",
   "style": "flowboard.css",
   "files": [
     "flowboard.js",
-    "flowboard.min.js",
     "flowboard.css",
-    "flowboard.min.css",
+    "dist/",
     "README.md",
     "LICENSE"
   ],
   "sideEffects": [
     "flowboard.css",
-    "flowboard.min.css"
+    "dist/flowboard.min.css"
   ],
   "scripts": {
-    "build": "esbuild flowboard.js --bundle --minify --outfile=flowboard.min.js && esbuild flowboard.css --bundle --minify --outfile=flowboard.min.css",
+    "build": "esbuild flowboard.js --bundle --minify --outfile=dist/flowboard.min.js && esbuild flowboard.css --bundle --minify --outfile=dist/flowboard.min.css",
     "dev": "npx serve .",
     "test": "vitest run",
     "test:watch": "vitest"
