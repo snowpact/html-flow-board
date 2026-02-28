@@ -69,3 +69,8 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Purge jsDelivr cache
+        run: |
+          curl -s https://purge.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.js
+          curl -s https://purge.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.css
