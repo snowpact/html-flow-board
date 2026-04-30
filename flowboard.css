@@ -436,6 +436,96 @@
   background: #f0f0f0;
 }
 
+/* --- Export Popup --- */
+.fb-export-popup {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 101;
+}
+
+.fb-export-popup-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+}
+
+.fb-export-popup-formats {
+  display: flex;
+  gap: 4px;
+}
+
+.fb-export-popup-format {
+  flex: 1;
+  height: 28px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.fb-export-popup-format:hover {
+  background: #f0f0f0;
+}
+
+.fb-export-popup-format.active {
+  background: #2A9D8F;
+  color: #fff;
+  border-color: #2A9D8F;
+}
+
+.fb-export-popup-sep {
+  height: 1px;
+  background: #e0e0e0;
+}
+
+.fb-export-popup-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fb-export-popup-check-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+.fb-export-popup-check {
+  accent-color: #2A9D8F;
+}
+
+.fb-export-popup-action {
+  width: 100%;
+  height: 30px;
+  border: none;
+  border-radius: 5px;
+  background: #2A9D8F;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.fb-export-popup-action:hover {
+  background: #238a7e;
+}
+
 /* --- Anchor Dots --- */
 .fb-anchor-dot {
   position: absolute;
