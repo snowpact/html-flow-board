@@ -430,8 +430,8 @@
     // Export Config
     var exportConfigBtn = document.createElement('button');
     exportConfigBtn.className = 'fb-action-btn';
-    exportConfigBtn.textContent = 'Export Init';
-    exportConfigBtn.title = 'Exporter l\'état en JSON (collable dans config.state)';
+    exportConfigBtn.textContent = 'Copy Init';
+    exportConfigBtn.title = 'Copier le code FlowBoard.init() dans le presse-papier';
     exportConfigBtn.addEventListener('click', doExportConfig);
     right.appendChild(exportConfigBtn);
 
@@ -2067,13 +2067,36 @@
     js += '  state: ' + JSON.stringify(stateCopy, null, 4).replace(/\n/g, '\n  ') + '\n';
     js += '});\n';
 
-    var blob = new Blob([js], { type: 'text/javascript' });
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.download = (state.project.name || 'flowboard') + '-init.js';
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
+    var btn = state.container.querySelector('.fb-action-btn[title*="presse-papier"]');
+
+    function showFeedback(success) {
+      if (!btn) return;
+      var original = btn.textContent;
+      btn.textContent = success ? 'Copied!' : 'Error!';
+      setTimeout(function () { btn.textContent = original; }, 2000);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(js).then(function () {
+        showFeedback(true);
+      }, function () {
+        showFeedback(false);
+      });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = js;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showFeedback(true);
+      } catch (e) {
+        showFeedback(false);
+      }
+      document.body.removeChild(ta);
+    }
   }
 
   // -- Init --
