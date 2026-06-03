@@ -35,7 +35,8 @@
     draggingHandle: null,
     hiddenScreens: {},
     layoutIndex: 0,
-    screenPopup: null
+    screenPopup: null,
+    exportPopup: null
   };
 
   // -- Storage helpers --
@@ -419,12 +420,15 @@
     layoutBtn.addEventListener('click', cycleLayout);
     right.appendChild(layoutBtn);
 
-    // Export PNG
+    // Export
     var exportBtn = document.createElement('button');
     exportBtn.className = 'fb-action-btn';
-    exportBtn.textContent = 'Export PNG';
-    exportBtn.title = 'Export as PNG';
-    exportBtn.addEventListener('click', doExport);
+    exportBtn.textContent = 'Export';
+    exportBtn.title = 'Exporter (JPG / PDF)';
+    exportBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      showExportPopup(exportBtn);
+    });
     right.appendChild(exportBtn);
 
     // Export Config
@@ -1795,9 +1799,147 @@
     drawArrows();
   }
 
-  // -- Export PNG (html2canvas, lazy-loaded) --
+  // -- Export popup --
 
-  var html2canvasLoaded = null; // cached Promise
+  function handleExportPopupOutsideClick(e) {
+    if (state.exportPopup && state.exportPopup.el && !state.exportPopup.el.contains(e.target) && !state.exportPopup.anchorBtn.contains(e.target)) {
+      closeExportPopup();
+    }
+  }
+
+  function closeExportPopup() {
+    if (state.exportPopup && state.exportPopup.el) {
+      if (state.exportPopup.el.parentNode) {
+        state.exportPopup.el.parentNode.removeChild(state.exportPopup.el);
+      }
+      state.exportPopup = null;
+    }
+    document.removeEventListener('mousedown', handleExportPopupOutsideClick);
+  }
+
+  function showExportPopup(anchorBtn) {
+    if (state.exportPopup) { closeExportPopup(); return; }
+    closeArrowPopup();
+    closeScreenPopup();
+
+    var currentFormat = 'jpg';
+
+    var popup = document.createElement('div');
+    popup.className = 'fb-export-popup';
+
+    // Format label
+    var formatLabel = document.createElement('div');
+    formatLabel.className = 'fb-export-popup-label';
+    formatLabel.textContent = 'Format';
+    popup.appendChild(formatLabel);
+
+    // Format toggle
+    var formatsRow = document.createElement('div');
+    formatsRow.className = 'fb-export-popup-formats';
+
+    var jpgBtn = document.createElement('button');
+    jpgBtn.className = 'fb-export-popup-format active';
+    jpgBtn.textContent = 'JPG';
+    jpgBtn.type = 'button';
+
+    var pdfBtn = document.createElement('button');
+    pdfBtn.className = 'fb-export-popup-format';
+    pdfBtn.textContent = 'PDF';
+    pdfBtn.type = 'button';
+
+    jpgBtn.addEventListener('click', function () {
+      currentFormat = 'jpg';
+      jpgBtn.classList.add('active');
+      pdfBtn.classList.remove('active');
+    });
+
+    pdfBtn.addEventListener('click', function () {
+      currentFormat = 'pdf';
+      pdfBtn.classList.add('active');
+      jpgBtn.classList.remove('active');
+    });
+
+    formatsRow.appendChild(jpgBtn);
+    formatsRow.appendChild(pdfBtn);
+    popup.appendChild(formatsRow);
+
+    // Separator
+    var sep1 = document.createElement('div');
+    sep1.className = 'fb-export-popup-sep';
+    popup.appendChild(sep1);
+
+    // Options label
+    var optLabel = document.createElement('div');
+    optLabel.className = 'fb-export-popup-label';
+    optLabel.textContent = 'Options';
+    popup.appendChild(optLabel);
+
+    // Options section
+    var optionsDiv = document.createElement('div');
+    optionsDiv.className = 'fb-export-popup-options';
+
+    var globalLabel = document.createElement('label');
+    globalLabel.className = 'fb-export-popup-check-label';
+    var globalCheck = document.createElement('input');
+    globalCheck.type = 'checkbox';
+    globalCheck.className = 'fb-export-popup-check';
+    globalCheck.checked = true;
+    globalLabel.appendChild(globalCheck);
+    globalLabel.appendChild(document.createTextNode('Vue globale'));
+    optionsDiv.appendChild(globalLabel);
+
+    var epicLabel = document.createElement('label');
+    epicLabel.className = 'fb-export-popup-check-label';
+    var epicCheck = document.createElement('input');
+    epicCheck.type = 'checkbox';
+    epicCheck.className = 'fb-export-popup-check';
+    epicCheck.checked = true;
+    epicLabel.appendChild(epicCheck);
+    epicLabel.appendChild(document.createTextNode('Par epic'));
+    optionsDiv.appendChild(epicLabel);
+
+    popup.appendChild(optionsDiv);
+
+    // Separator
+    var sep2 = document.createElement('div');
+    sep2.className = 'fb-export-popup-sep';
+    popup.appendChild(sep2);
+
+    // Export button
+    var actionBtn = document.createElement('button');
+    actionBtn.className = 'fb-export-popup-action';
+    actionBtn.textContent = 'Exporter';
+    actionBtn.type = 'button';
+    actionBtn.addEventListener('click', function () {
+      var doGlobal = globalCheck.checked;
+      var doPerEpic = epicCheck.checked;
+      if (!doGlobal && !doPerEpic) doGlobal = true;
+      closeExportPopup();
+      if (currentFormat === 'jpg') {
+        doExportJPG(doGlobal, doPerEpic);
+      } else {
+        doExportPDF(doGlobal, doPerEpic);
+      }
+    });
+    popup.appendChild(actionBtn);
+
+    // Position below the anchor button
+    var btnRect = anchorBtn.getBoundingClientRect();
+    var containerRect = state.container.getBoundingClientRect();
+    popup.style.top = (btnRect.bottom - containerRect.top + 4) + 'px';
+    popup.style.right = (containerRect.right - btnRect.right) + 'px';
+
+    state.container.appendChild(popup);
+    state.exportPopup = { el: popup, anchorBtn: anchorBtn };
+
+    setTimeout(function () {
+      document.addEventListener('mousedown', handleExportPopupOutsideClick);
+    }, 0);
+  }
+
+  // -- Export (html2canvas + jsPDF + JSZip, lazy-loaded) --
+
+  var html2canvasLoaded = null;
 
   function loadHtml2Canvas() {
     if (html2canvasLoaded) return html2canvasLoaded;
@@ -1812,15 +1954,44 @@
     return html2canvasLoaded;
   }
 
-  function collectExportBounds() {
+  var jsPDFLoaded = null;
+
+  function loadJsPDF() {
+    if (jsPDFLoaded) return jsPDFLoaded;
+    jsPDFLoaded = new Promise(function (resolve, reject) {
+      if (window.jspdf) { resolve(window.jspdf); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+      s.onload = function () { resolve(window.jspdf); };
+      s.onerror = function () { jsPDFLoaded = null; reject(new Error('Failed to load jsPDF')); };
+      document.head.appendChild(s);
+    });
+    return jsPDFLoaded;
+  }
+
+  var jsZipLoaded = null;
+
+  function loadJSZip() {
+    if (jsZipLoaded) return jsZipLoaded;
+    jsZipLoaded = new Promise(function (resolve, reject) {
+      if (window.JSZip) { resolve(window.JSZip); return; }
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      s.onload = function () { resolve(window.JSZip); };
+      s.onerror = function () { jsZipLoaded = null; reject(new Error('Failed to load JSZip')); };
+      document.head.appendChild(s);
+    });
+    return jsZipLoaded;
+  }
+
+  // Compute bounds for a given set of screens/positions/arrows
+  function computeExportBounds(screens, positions, arrows) {
     var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-    var arrows = state.project.arrows || [];
     var spreadMap = buildSpreadMap();
 
-    state.project.screens.forEach(function (s) {
-      if (state.hiddenScreens[s.id]) return;
+    screens.forEach(function (s) {
       var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
+      var pos = positions[s.id];
       if (!el || !pos) return;
       minX = Math.min(minX, pos.x);
       minY = Math.min(minY, pos.y);
@@ -1828,24 +1999,24 @@
       maxY = Math.max(maxY, pos.y + el.offsetHeight);
     });
 
-    // Include arrow control points so arrows aren't clipped
     arrows.forEach(function (arrow, idx) {
-      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
-
       var fromEl = state.screenEls[arrow.from];
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
 
-      var sides = resolveArrowSides(arrow, idx, spreadMap);
+      var allArrows = state.project.arrows || [];
+      var globalIdx = -1;
+      for (var i = 0; i < allArrows.length; i++) {
+        if (allArrows[i] === arrow) { globalIdx = i; break; }
+      }
+      if (globalIdx < 0) globalIdx = idx;
 
+      var sides = resolveArrowSides(arrow, globalIdx, spreadMap);
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
-
       var cps = computeControlPoints(start, end, sides.from, sides.to);
-      var cp1 = cps.cp1;
-      var cp2 = cps.cp2;
 
-      [start, end, cp1, cp2].forEach(function (p) {
+      [start, end, cps.cp1, cps.cp2].forEach(function (p) {
         minX = Math.min(minX, p.x);
         minY = Math.min(minY, p.y);
         maxX = Math.max(maxX, p.x);
@@ -1856,28 +2027,24 @@
     return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
   }
 
-  function doExport() {
-    if (!state.canvasEl || !state.project) return;
-
-    var bounds = collectExportBounds();
-    if (bounds.minX === Infinity) return;
+  // Render a set of screens+arrows to a canvas, returns Promise<Canvas>
+  function renderBoardToCanvas(screens, positions, arrows) {
+    var bounds = computeExportBounds(screens, positions, arrows);
+    if (bounds.minX === Infinity) return Promise.resolve(null);
 
     var padding = 40;
-    var vx = Math.max(0, bounds.minX - padding);
-    var vy = Math.max(0, bounds.minY - padding);
+    var vx = bounds.minX - padding;
+    var vy = bounds.minY - padding;
     var vw = bounds.maxX - bounds.minX + padding * 2;
     var vh = bounds.maxY - bounds.minY + padding * 2;
 
-    // Build a small, clean temporary container (no transform, exact size)
     var tmp = document.createElement('div');
     tmp.className = 'fb-container';
     tmp.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + vw + 'px;height:' + vh + 'px;overflow:visible;background:transparent;';
 
-    // Clone visible screens, offset to crop origin
-    state.project.screens.forEach(function (s) {
-      if (state.hiddenScreens[s.id]) return;
+    screens.forEach(function (s) {
       var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
+      var pos = positions[s.id];
       if (!el || !pos) return;
       var clone = el.cloneNode(true);
       clone.style.left = (pos.x - vx) + 'px';
@@ -1885,9 +2052,7 @@
       tmp.appendChild(clone);
     });
 
-    // Rasterize SVG arrows (cropped via viewBox)
     var svgClone = state.svgEl.cloneNode(true);
-    // Remove dimmed arrows from export
     var dimmedEls = svgClone.querySelectorAll('.fb-arrow-dimmed');
     for (var di = 0; di < dimmedEls.length; di++) {
       dimmedEls[di].parentNode.removeChild(dimmedEls[di]);
@@ -1900,48 +2065,243 @@
     var svgStr = new XMLSerializer().serializeToString(svgClone);
     var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
     var url = URL.createObjectURL(blob);
-    var img = new Image();
 
-    img.onload = function () {
-      URL.revokeObjectURL(url);
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
 
-      // Draw arrows onto a canvas element (2x resolution)
-      var ac = document.createElement('canvas');
-      ac.width = vw * 2;
-      ac.height = vh * 2;
-      ac.style.cssText = 'position:absolute;top:0;left:0;width:' + vw + 'px;height:' + vh + 'px;pointer-events:none;';
-      ac.getContext('2d').drawImage(img, 0, 0, vw * 2, vh * 2);
-      tmp.appendChild(ac);
+        var ac = document.createElement('canvas');
+        ac.width = vw * 3;
+        ac.height = vh * 3;
+        ac.style.cssText = 'position:absolute;top:0;left:0;width:' + vw + 'px;height:' + vh + 'px;pointer-events:none;';
+        ac.getContext('2d').drawImage(img, 0, 0, vw * 3, vh * 3);
+        tmp.appendChild(ac);
 
-      document.body.appendChild(tmp);
+        document.body.appendChild(tmp);
 
-      // Capture the small temp container at 2x
-      loadHtml2Canvas().then(function (html2canvas) {
-        return html2canvas(tmp, {
-          width: vw,
-          height: vh,
-          scale: 2,
-          backgroundColor: '#f0f2f5',
-          useCORS: true
+        loadHtml2Canvas().then(function (html2canvas) {
+          return html2canvas(tmp, {
+            width: vw,
+            height: vh,
+            scale: 3,
+            backgroundColor: '#f0f2f5',
+            useCORS: true
+          });
+        }).then(function (resultCanvas) {
+          document.body.removeChild(tmp);
+          resolve(resultCanvas);
+        }).catch(function (err) {
+          if (tmp.parentNode) document.body.removeChild(tmp);
+          reject(err);
         });
-      }).then(function (resultCanvas) {
-        document.body.removeChild(tmp);
-        var link = document.createElement('a');
-        link.download = (state.project.name || 'flowboard') + '.png';
-        link.href = resultCanvas.toDataURL('image/png');
-        link.click();
-      }).catch(function (err) {
-        if (tmp.parentNode) document.body.removeChild(tmp);
-        console.error('Export failed:', err);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('Arrow rasterization failed'));
+      };
+      img.src = url;
+    });
+  }
+
+  // Get visible screens and their arrows for global export
+  function getGlobalExportData() {
+    var screens = (state.project.screens || []).filter(function (s) {
+      return !state.hiddenScreens[s.id];
+    });
+    var screenSet = {};
+    screens.forEach(function (s) { screenSet[s.id] = true; });
+    var arrows = (state.project.arrows || []).filter(function (a) {
+      return screenSet[a.from] && screenSet[a.to];
+    });
+    return { screens: screens, positions: state.positions, arrows: arrows };
+  }
+
+  // Get screens/positions/arrows for a single epic
+  function getEpicExportData(epicId) {
+    var screens = (state.project.screens || []).filter(function (s) {
+      return (s.epic || '_none') === epicId && !state.hiddenScreens[s.id];
+    });
+    if (screens.length === 0) return null;
+
+    var screenSet = {};
+    screens.forEach(function (s) { screenSet[s.id] = true; });
+    var arrows = (state.project.arrows || []).filter(function (a) {
+      return screenSet[a.from] && screenSet[a.to];
+    });
+
+    var heights = {};
+    screens.forEach(function (s) {
+      var el = state.screenEls[s.id];
+      if (el) heights[s.id] = el.offsetHeight;
+    });
+
+    var positions = {};
+    var offsetY = 0;
+    screens.forEach(function (s) {
+      positions[s.id] = { x: 0, y: offsetY };
+      var h = heights[s.id] || 200;
+      offsetY += h + GAP_Y;
+    });
+
+    return { screens: screens, positions: positions, arrows: arrows };
+  }
+
+  // Download a blob as a file
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.download = filename;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Export JPG
+  function doExportJPG(includeGlobal, includePerEpic) {
+    if (!state.canvasEl || !state.project) return;
+    var projectName = state.project.name || 'flowboard';
+
+    if (includeGlobal && !includePerEpic) {
+      var data = getGlobalExportData();
+      renderBoardToCanvas(data.screens, data.positions, data.arrows).then(function (canvas) {
+        if (!canvas) return;
+        canvas.toBlob(function (blob) {
+          downloadBlob(blob, projectName + '.jpg');
+        }, 'image/jpeg', 0.98);
+      }).catch(function (err) { console.error('Export JPG failed:', err); });
+      return;
+    }
+
+    // Multiple images → zip
+    Promise.all([loadHtml2Canvas(), loadJSZip()]).then(function (results) {
+      var JSZip = results[1];
+      var zip = new JSZip();
+      var chain = Promise.resolve();
+
+      if (includeGlobal) {
+        chain = chain.then(function () {
+          var data = getGlobalExportData();
+          return renderBoardToCanvas(data.screens, data.positions, data.arrows).then(function (canvas) {
+            if (!canvas) return;
+            return new Promise(function (resolve) {
+              canvas.toBlob(function (blob) {
+                zip.file('vue-globale.jpg', blob);
+                resolve();
+              }, 'image/jpeg', 0.98);
+            });
+          });
+        });
+      }
+
+      if (includePerEpic) {
+        var epics = state.project.epics || [];
+        epics.forEach(function (epic) {
+          chain = chain.then(function () {
+            var data = getEpicExportData(epic.id);
+            if (!data) return;
+            return renderBoardToCanvas(data.screens, data.positions, data.arrows).then(function (canvas) {
+              if (!canvas) return;
+              return new Promise(function (resolve) {
+                canvas.toBlob(function (blob) {
+                  zip.file(epic.label + '.jpg', blob);
+                  resolve();
+                }, 'image/jpeg', 0.98);
+              });
+            });
+          });
+        });
+      }
+
+      chain.then(function () {
+        return zip.generateAsync({ type: 'blob' });
+      }).then(function (blob) {
+        downloadBlob(blob, projectName + '-export.zip');
       });
-    };
+    }).catch(function (err) { console.error('Export JPG failed:', err); });
+  }
 
-    img.onerror = function () {
-      URL.revokeObjectURL(url);
-      console.error('Arrow rasterization failed');
-    };
+  // Export PDF
+  function doExportPDF(includeGlobal, includePerEpic) {
+    if (!state.canvasEl || !state.project) return;
+    var projectName = state.project.name || 'flowboard';
 
-    img.src = url;
+    Promise.all([loadHtml2Canvas(), loadJsPDF()]).then(function (results) {
+      var jspdf = results[1];
+      var doc = null;
+      var pageIndex = 0;
+      var chain = Promise.resolve();
+
+      function addCanvasPage(canvas, label) {
+        if (!canvas) return;
+        var cw = canvas.width;
+        var ch = canvas.height;
+
+        if (pageIndex === 0) {
+          doc = new jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        } else {
+          doc.addPage('a4', 'landscape');
+        }
+
+        var pageW = doc.internal.pageSize.getWidth();
+        var pageH = doc.internal.pageSize.getHeight();
+
+        doc.setFillColor(240, 242, 245);
+        doc.rect(0, 0, pageW, pageH, 'F');
+
+        var margin = 10;
+        var topMargin = label ? 18 : margin;
+        var availW = pageW - 2 * margin;
+        var availH = pageH - topMargin - margin;
+        var imgRatio = cw / ch;
+        var fitW, fitH;
+        if (imgRatio > availW / availH) {
+          fitW = availW;
+          fitH = availW / imgRatio;
+        } else {
+          fitH = availH;
+          fitW = availH * imgRatio;
+        }
+        var offX = margin + (availW - fitW) / 2;
+        var offY = topMargin + (availH - fitH) / 2;
+
+        if (label) {
+          doc.setFontSize(14);
+          doc.setTextColor(80);
+          doc.text(label, pageW / 2, 12, { align: 'center' });
+        }
+
+        var imgData = canvas.toDataURL('image/jpeg', 0.98);
+        doc.addImage(imgData, 'JPEG', offX, offY, fitW, fitH);
+        pageIndex++;
+      }
+
+      if (includeGlobal) {
+        chain = chain.then(function () {
+          var data = getGlobalExportData();
+          return renderBoardToCanvas(data.screens, data.positions, data.arrows).then(function (canvas) {
+            addCanvasPage(canvas, null);
+          });
+        });
+      }
+
+      if (includePerEpic) {
+        var epics = state.project.epics || [];
+        epics.forEach(function (epic) {
+          chain = chain.then(function () {
+            var data = getEpicExportData(epic.id);
+            if (!data) return;
+            return renderBoardToCanvas(data.screens, data.positions, data.arrows).then(function (canvas) {
+              addCanvasPage(canvas, epic.label);
+            });
+          });
+        });
+      }
+
+      chain.then(function () {
+        if (doc) doc.save(projectName + '.pdf');
+      });
+    }).catch(function (err) { console.error('Export PDF failed:', err); });
   }
 
   // -- Reset all customizations --
