@@ -4,8 +4,8 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ES2019", "DOM"],
-    "strict": true,
     "noImplicitAny": true,
+    "noImplicitThis": true,
     "skipLibCheck": true,
     "noEmit": true
   },

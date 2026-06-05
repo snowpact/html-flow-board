@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { state } from './state';
 
 export function storageKey() {

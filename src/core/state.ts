@@ -1,6 +1,6 @@
-// @ts-nocheck
+import { Epic, FlowState } from './types';
 
-export var state = {
+export var state: FlowState = {
   zoom: 1,
   panX: 0,
   panY: 0,
@@ -29,13 +29,11 @@ export var state = {
   panDrag: null
 };
 
-// -- Storage helpers --
-export function getEpic(epicId) {
+// Epic data by id.
+export function getEpic(epicId: string): Epic | null {
   if (!state.project || !state.project.epics) return null;
   for (var i = 0; i < state.project.epics.length; i++) {
     if (state.project.epics[i].id === epicId) return state.project.epics[i];
   }
   return null;
 }
-
-// -- Get screen data by id --

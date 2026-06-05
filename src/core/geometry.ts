@@ -1,18 +1,19 @@
-// @ts-nocheck
+import { Rect, Side } from './types';
 
-export function escapeHtml(str) {
+// Escape a string for safe insertion as HTML text.
+export function escapeHtml(str: string): string {
   var div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
 }
 
-// -- Zoom --
-export function rectsIntersect(a, b) {
+// Axis-aligned rectangle overlap (selection hit-test).
+export function rectsIntersect(a: Rect, b: Rect): boolean {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
-// -- Add/remove a screen id from a selection map; returns the same map --
-export function toggleSelection(set, id) {
+// Add/remove a screen id from a selection map; returns the same map.
+export function toggleSelection(set: Record<string, boolean>, id: string): Record<string, boolean> {
   if (set[id]) {
     delete set[id];
   } else {
@@ -21,10 +22,7 @@ export function toggleSelection(set, id) {
   return set;
 }
 
-// -- Pan (wheel + click-drag background) --
-export function getPrimarySide(side) {
+// Primary side from a compound side name ('right-top' -> 'right').
+export function getPrimarySide(side: Side | null | undefined): string {
   return side ? side.split('-')[0] : 'right';
 }
-
-// Compute bezier control points with cross-axis blend so the tangent
-// (and arrowhead orientation) follows the actual angle between screens.

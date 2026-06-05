@@ -1,4 +1,3 @@
-"use strict";
 (() => {
   // src/core/constants.ts
   var CANVAS_W = 1e4;
