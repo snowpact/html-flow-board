@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 // -- Constants --
 export var CANVAS_W = 10000;
 export var CANVAS_H = 8000;

@@ -37,14 +37,3 @@ export function getEpic(epicId) {
   }
   return null;
 }
-
-// -- Get screen data by id --
-export function getScreen(screenId) {
-  if (!state.project || !state.project.screens) return null;
-  for (var i = 0; i < state.project.screens.length; i++) {
-    if (state.project.screens[i].id === screenId) return state.project.screens[i];
-  }
-  return null;
-}
-
-// -- Render toolbar --
