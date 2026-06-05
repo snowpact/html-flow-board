@@ -1,11 +1,9 @@
 import { buildSpreadMap, computeControlPoints, getAllAnchorPoints, getAnchor, getBestSides, resolveArrowSides } from './arrows';
 import { init } from './board';
-import { getPrimarySide, rectsIntersect, toggleSelection } from './geometry';
+import { getPrimarySide, rectsIntersect, toggleSelection } from './core/geometry';
+import { state } from './core/state';
 import { autoLayout, bfsDepth, centerPositions, layoutByEpics, layoutGrid } from './layout';
-import { state } from './state';
 
-// The runtime contract served on the CDN. Typed (no @ts-nocheck) so the
-// typecheck gate actually verifies init + the 15 _internal symbols resolve.
 declare global {
   interface Window {
     FlowBoard: { init: typeof init; _internal: Record<string, unknown> };
@@ -32,3 +30,4 @@ window.FlowBoard = {
     toggleSelection: toggleSelection
   }
 };
+

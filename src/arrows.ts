@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { ARROW_BLEND, ARROW_OFFSET } from './constants';
-import { getPrimarySide } from './geometry';
-import { showArrowPopup } from './popups';
-import { state } from './state';
+import { ARROW_BLEND, ARROW_OFFSET } from './core/constants';
+import { getPrimarySide } from './core/geometry';
+import { state } from './core/state';
+import { showArrowPopup } from './render/popups';
 
 export function getBestSides(fromEl, toEl) {
   var fromId = fromEl.dataset.screenId;

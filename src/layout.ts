@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y, SIZES } from './constants';
+import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y, SIZES } from './core/constants';
 
 export function bfsDepth(screens, arrows) {
   var children = {};

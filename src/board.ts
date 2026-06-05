@@ -1,11 +1,18 @@
 // @ts-nocheck
 import { drawArrows, freezeArrowSides } from './arrows';
-import { CANVAS_H, CANVAS_W } from './constants';
-import { applyTransform, fitToContent, initArrowDrag, initDrag, initModeKeys, initPan, initSelection, setMode } from './interactions';
+import { CANVAS_H, CANVAS_W } from './core/constants';
+import { state } from './core/state';
+import { loadArrowMutations, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
+import { initArrowDrag } from './interactions/arrow-drag';
+import { initDrag } from './interactions/drag';
+import { initModeKeys, setMode } from './interactions/mode';
+import { initPan } from './interactions/pan';
+import { initSelection } from './interactions/selection';
+import { applyTransform, fitToContent } from './interactions/transform';
 import { LAYOUT_STRATEGIES, autoLayout } from './layout';
-import { renderModeSwitch, renderScreen, renderToolbar, updateLayoutButton } from './render';
-import { state } from './state';
-import { loadArrowMutations, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './storage';
+import { renderModeSwitch } from './render/mode-switch';
+import { renderScreen } from './render/screen';
+import { renderToolbar, updateLayoutButton } from './render/toolbar';
 
 export function cycleLayout() {
   state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;

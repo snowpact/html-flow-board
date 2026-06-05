@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { computeControlPoints, drawArrows, getAllAnchorPoints, getAnchor } from './arrows';
-import { state } from './state';
-import { saveArrowMutations } from './storage';
+import { computeControlPoints, drawArrows, getAllAnchorPoints, getAnchor } from '../arrows';
+import { state } from '../core/state';
+import { saveArrowMutations } from '../core/storage';
 
 export var hoverHideTimeout = null;
 

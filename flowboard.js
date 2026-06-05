@@ -1,6 +1,6 @@
 "use strict";
 (() => {
-  // src/constants.ts
+  // src/core/constants.ts
   var CANVAS_W = 1e4;
   var CANVAS_H = 8e3;
   var ZOOM_MIN = 0.2;
@@ -18,7 +18,7 @@
   var ICON_CURSOR = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>';
   var ICON_HAND = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v5"/><path d="M14 10V4a2 2 0 0 0-4 0v6"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 0 1 4 0v6a8 8 0 0 1-8 8h-2a8 8 0 0 1-7.4-5L2.5 13a2 2 0 0 1 3.5-2l1 1.5"/></svg>';
 
-  // src/geometry.ts
+  // src/core/geometry.ts
   function escapeHtml(str) {
     var div = document.createElement("div");
     div.textContent = str;
@@ -39,7 +39,7 @@
     return side ? side.split("-")[0] : "right";
   }
 
-  // src/state.ts
+  // src/core/state.ts
   var state = {
     zoom: 1,
     panX: 0,
@@ -82,7 +82,7 @@
     return null;
   }
 
-  // src/storage.ts
+  // src/core/storage.ts
   function storageKey() {
     return "fb-" + (state.project ? state.project.name : "default");
   }
@@ -147,7 +147,7 @@
     }
   }
 
-  // src/anchors.ts
+  // src/render/anchors.ts
   var hoverHideTimeout = null;
   function scheduleHideAnchors() {
     if (state.creatingArrow) return;
@@ -331,1171 +331,7 @@
     drawArrows();
   }
 
-  // src/interactions.ts
-  function setZoom(z) {
-    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
-    if (state.wrapperEl) {
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var mx = wrapperRect.width / 2;
-      var my = wrapperRect.height / 2;
-      var cx = (mx - state.panX) / state.zoom;
-      var cy = (my - state.panY) / state.zoom;
-      state.panX = mx - cx * newZoom;
-      state.panY = my - cy * newZoom;
-    }
-    state.zoom = newZoom;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-  function applyTransform() {
-    if (state.sizerEl) {
-      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
-    }
-    if (state.canvasEl && state._dotZoom !== state.zoom) {
-      state._dotZoom = state.zoom;
-      var sp = DOT_SPACING / state.zoom;
-      var r = DOT_RADIUS / state.zoom;
-      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
-      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
-    }
-  }
-  function fitToContent() {
-    if (!state.wrapperEl || !state.project) return;
-    var screens = state.project.screens || [];
-    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-    var hasVisible = false;
-    screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      hasVisible = true;
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + el.offsetWidth);
-      maxY = Math.max(maxY, pos.y + el.offsetHeight);
-    });
-    if (!hasVisible) return;
-    var wrapperRect = state.wrapperEl.getBoundingClientRect();
-    var viewW = wrapperRect.width;
-    var viewH = wrapperRect.height;
-    var contentW = maxX - minX;
-    var contentH = maxY - minY;
-    var padding = 60;
-    var zoomX = (viewW - padding * 2) / contentW;
-    var zoomY = (viewH - padding * 2) / contentH;
-    var zoom = Math.min(zoomX, zoomY, 1);
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
-    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
-    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
-    state.zoom = zoom;
-    state.panX = panX;
-    state.panY = panY;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-  function initPan() {
-    var wrapper = state.wrapperEl;
-    wrapper.addEventListener("wheel", function(e) {
-      closeArrowPopup();
-      closeScreenPopup();
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        var wrapperRect = wrapper.getBoundingClientRect();
-        var mx = e.clientX - wrapperRect.left;
-        var my = e.clientY - wrapperRect.top;
-        var cx = (mx - state.panX) / state.zoom;
-        var cy = (my - state.panY) / state.zoom;
-        var delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-        var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((state.zoom + delta) * 100) / 100));
-        state.panX = mx - cx * newZoom;
-        state.panY = my - cy * newZoom;
-        state.zoom = newZoom;
-        applyTransform();
-        var label = document.getElementById("fb-zoom-label");
-        if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-        saveZoom();
-      } else {
-        e.preventDefault();
-        state.panX -= e.deltaX;
-        state.panY -= e.deltaY;
-        applyTransform();
-        saveZoom();
-      }
-    }, { passive: false });
-    wrapper.addEventListener("mousedown", function(e) {
-      if (state.mode !== "drag") return;
-      if (state.creatingArrow) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
-      if (e.button !== 0) return;
-      closeArrowPopup();
-      closeScreenPopup();
-      state.panDrag = {
-        startX: e.clientX,
-        startY: e.clientY,
-        startPanX: state.panX,
-        startPanY: state.panY
-      };
-      wrapper.classList.add("fb-panning");
-      e.preventDefault();
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.panDrag) return;
-      state.panX = state.panDrag.startPanX + (e.clientX - state.panDrag.startX);
-      state.panY = state.panDrag.startPanY + (e.clientY - state.panDrag.startY);
-      applyTransform();
-    });
-    document.addEventListener("mouseup", function() {
-      if (!state.panDrag) return;
-      state.panDrag = null;
-      wrapper.classList.remove("fb-panning");
-      saveZoom();
-    });
-  }
-  function updateSelectionStyles() {
-    for (var id in state.screenEls) {
-      var el = state.screenEls[id];
-      if (!el) continue;
-      if (state.selected[id]) {
-        el.classList.add("fb-selected");
-      } else {
-        el.classList.remove("fb-selected");
-      }
-    }
-  }
-  function startScreenDrag(e) {
-    hideAnchorDots();
-    var wrapperRect = state.wrapperEl.getBoundingClientRect();
-    var startCanvas = {
-      x: (e.clientX - wrapperRect.left - state.panX) / state.zoom,
-      y: (e.clientY - wrapperRect.top - state.panY) / state.zoom
-    };
-    var ids;
-    if (state.mode === "select" && Object.keys(state.selected).length) {
-      ids = Object.keys(state.selected);
-    } else {
-      var target = e.target.closest(".fb-screen");
-      ids = target ? [target.dataset.screenId] : [];
-    }
-    var items = [];
-    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (var i = 0; i < ids.length; i++) {
-      var id = ids[i];
-      if (state.hiddenScreens[id]) continue;
-      var el = state.screenEls[id];
-      if (!el) continue;
-      var pos = state.positions[id] || { x: 0, y: 0 };
-      el.classList.add("fb-dragging");
-      items.push({ id, el, startX: pos.x, startY: pos.y });
-      if (pos.x < minX) minX = pos.x;
-      if (pos.y < minY) minY = pos.y;
-      if (pos.x > maxX) maxX = pos.x;
-      if (pos.y > maxY) maxY = pos.y;
-    }
-    if (!items.length) return;
-    state.screenDrag = {
-      startCanvas,
-      items,
-      bounds: { minX, minY, maxX, maxY }
-    };
-    state.wrapperEl.classList.add("fb-dragging-screen");
-  }
-  function initDrag() {
-    state.canvasEl.addEventListener("mousedown", function(e) {
-      closeArrowPopup();
-      closeScreenPopup();
-      if (state.creatingArrow) return;
-      if (e.button !== 0) return;
-      var screenEl = e.target.closest(".fb-screen");
-      if (!screenEl) return;
-      var id = screenEl.dataset.screenId;
-      if (state.hiddenScreens[id]) return;
-      e.stopPropagation();
-      e.preventDefault();
-      if (state.mode === "select") {
-        if (e.metaKey || e.ctrlKey || e.shiftKey) {
-          toggleSelection(state.selected, id);
-          updateSelectionStyles();
-          return;
-        }
-        if (!state.selected[id]) {
-          state.selected = {};
-          state.selected[id] = true;
-          updateSelectionStyles();
-        }
-      }
-      startScreenDrag(e);
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.screenDrag) return;
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var cmx = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
-      var cmy = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
-      var dx = cmx - state.screenDrag.startCanvas.x;
-      var dy = cmy - state.screenDrag.startCanvas.y;
-      var b = state.screenDrag.bounds;
-      dx = Math.max(-b.minX, Math.min(CANVAS_W - 50 - b.maxX, dx));
-      dy = Math.max(-b.minY, Math.min(CANVAS_H - 50 - b.maxY, dy));
-      var items = state.screenDrag.items;
-      for (var i = 0; i < items.length; i++) {
-        var it = items[i];
-        var newX = it.startX + dx;
-        var newY = it.startY + dy;
-        it.el.style.left = newX + "px";
-        it.el.style.top = newY + "px";
-        state.positions[it.id] = { x: newX, y: newY };
-      }
-      drawArrows(!!state.draggingHandle);
-    });
-    document.addEventListener("mouseup", function(e) {
-      if (!state.screenDrag) return;
-      var items = state.screenDrag.items;
-      for (var i = 0; i < items.length; i++) {
-        items[i].el.classList.remove("fb-dragging");
-      }
-      var singleId = items.length === 1 ? items[0].id : null;
-      state.screenDrag = null;
-      state.wrapperEl.classList.remove("fb-dragging-screen");
-      savePositions();
-      if (singleId) {
-        var elUnder = document.elementFromPoint(e.clientX, e.clientY);
-        var screenUnder = elUnder && elUnder.closest(".fb-screen");
-        if (screenUnder && screenUnder.dataset.screenId === singleId) {
-          showAnchorDots(singleId);
-        }
-      }
-    });
-  }
-  function initSelection() {
-    var wrapper = state.wrapperEl;
-    wrapper.addEventListener("mousedown", function(e) {
-      if (state.mode !== "select") return;
-      if (state.creatingArrow) return;
-      if (e.button !== 0) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
-      closeArrowPopup();
-      closeScreenPopup();
-      var additive = e.metaKey || e.ctrlKey || e.shiftKey;
-      var base = {};
-      if (additive) {
-        for (var k in state.selected) base[k] = true;
-      }
-      state.selectBox = { startX: e.clientX, startY: e.clientY, base, additive, moved: false, el: null };
-      e.preventDefault();
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.selectBox) return;
-      var sb = state.selectBox;
-      if (!sb.moved && Math.abs(e.clientX - sb.startX) < SELECT_DRAG_THRESHOLD && Math.abs(e.clientY - sb.startY) < SELECT_DRAG_THRESHOLD) {
-        return;
-      }
-      sb.moved = true;
-      if (!sb.el) {
-        sb.el = document.createElement("div");
-        sb.el.className = "fb-select-rect";
-        state.wrapperEl.appendChild(sb.el);
-      }
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var left = Math.min(e.clientX, sb.startX);
-      var top = Math.min(e.clientY, sb.startY);
-      var right = Math.max(e.clientX, sb.startX);
-      var bottom = Math.max(e.clientY, sb.startY);
-      sb.el.style.left = left - wrapperRect.left + "px";
-      sb.el.style.top = top - wrapperRect.top + "px";
-      sb.el.style.width = right - left + "px";
-      sb.el.style.height = bottom - top + "px";
-      var box = { left, top, right, bottom };
-      var next = {};
-      for (var bk in sb.base) next[bk] = true;
-      var screens = state.project.screens || [];
-      for (var i = 0; i < screens.length; i++) {
-        var id = screens[i].id;
-        if (state.hiddenScreens[id]) continue;
-        var el = state.screenEls[id];
-        if (!el) continue;
-        if (rectsIntersect(box, el.getBoundingClientRect())) next[id] = true;
-      }
-      state.selected = next;
-      updateSelectionStyles();
-    });
-    document.addEventListener("mouseup", function() {
-      if (!state.selectBox) return;
-      var sb = state.selectBox;
-      if (sb.el && sb.el.parentNode) sb.el.parentNode.removeChild(sb.el);
-      if (!sb.moved && !sb.additive) {
-        state.selected = {};
-        updateSelectionStyles();
-      }
-      state.selectBox = null;
-    });
-  }
-  function setMode(mode) {
-    if (mode !== "select") mode = "drag";
-    state.mode = mode;
-    if (mode === "drag") {
-      state.selected = {};
-      updateSelectionStyles();
-    }
-    if (state.wrapperEl) {
-      state.wrapperEl.classList.toggle("fb-mode-select", mode === "select");
-      state.wrapperEl.classList.toggle("fb-mode-drag", mode === "drag");
-    }
-    var sw = state.container && state.container.querySelector(".fb-mode-switch");
-    if (sw) {
-      var btns = sw.querySelectorAll(".fb-mode-btn");
-      for (var i = 0; i < btns.length; i++) {
-        btns[i].classList.toggle("active", btns[i].dataset.mode === mode);
-      }
-    }
-  }
-  function initModeKeys() {
-    state.wrapperEl.addEventListener("mouseenter", function() {
-      state.pointerInBoard = true;
-    });
-    state.wrapperEl.addEventListener("mouseleave", function() {
-      state.pointerInBoard = false;
-    });
-    document.addEventListener("keydown", function(e) {
-      if (!state.pointerInBoard) return;
-      var t = e.target;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "v" || e.key === "V") {
-        setMode("select");
-      } else if (e.key === "h" || e.key === "H") {
-        setMode("drag");
-      } else if (e.key === "Escape" && state.mode === "select") {
-        state.selected = {};
-        updateSelectionStyles();
-      }
-    });
-  }
-  function initArrowDrag() {
-    state.canvasEl.addEventListener("mousedown", function(e) {
-      if (state.creatingArrow) return;
-      var handle = e.target.closest(".fb-arrow-handle");
-      if (!handle) return;
-      closeArrowPopup();
-      closeScreenPopup();
-      e.stopPropagation();
-      e.preventDefault();
-      var arrowIdx = parseInt(handle.dataset.arrowIndex, 10);
-      var arrow = state.project.arrows[arrowIdx];
-      var end = handle.dataset.arrowEnd;
-      var screenId = handle.dataset.screenId;
-      if (!arrow.fromSide || !arrow.toSide) {
-        var spread = buildSpreadMap();
-        if (spread[arrowIdx]) {
-          arrow.fromSide = spread[arrowIdx].from;
-          arrow.toSide = spread[arrowIdx].to;
-        } else {
-          var fe = state.screenEls[arrow.from];
-          var te = state.screenEls[arrow.to];
-          if (fe && te) {
-            var auto = getBestSides(fe, te);
-            arrow.fromSide = auto.from;
-            arrow.toSide = auto.to;
-          } else {
-            arrow.fromSide = "right";
-            arrow.toSide = "left";
-          }
-        }
-      }
-      state.draggingHandle = { arrowIdx, end, el: handle, screenId };
-      state.wrapperEl.classList.add("fb-dragging-handle");
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.draggingHandle) return;
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var canvasX = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
-      var canvasY = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
-      var screenId = state.draggingHandle.screenId;
-      var anchors = getAllAnchorPoints(screenId);
-      var bestDist = Infinity;
-      var bestAnchor = anchors[0];
-      for (var i = 0; i < anchors.length; i++) {
-        var dx = anchors[i].x - canvasX;
-        var dy = anchors[i].y - canvasY;
-        var dist = dx * dx + dy * dy;
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestAnchor = anchors[i];
-        }
-      }
-      state.draggingHandle.el.style.left = bestAnchor.x - 8 + "px";
-      state.draggingHandle.el.style.top = bestAnchor.y - 8 + "px";
-      var arrow = state.project.arrows[state.draggingHandle.arrowIdx];
-      var prop = state.draggingHandle.end === "from" ? "fromSide" : "toSide";
-      arrow[prop] = bestAnchor.name;
-      drawArrows(true);
-    });
-    document.addEventListener("mouseup", function() {
-      if (!state.draggingHandle) return;
-      saveArrowMutations();
-      updateHandles();
-      state.draggingHandle = null;
-      state.wrapperEl.classList.remove("fb-dragging-handle");
-    });
-  }
-
-  // src/layout.ts
-  function bfsDepth(screens, arrows) {
-    var children = {};
-    var hasParent = {};
-    screens.forEach(function(s) {
-      children[s.id] = [];
-    });
-    arrows.forEach(function(a) {
-      if (children[a.from]) children[a.from].push(a.to);
-      hasParent[a.to] = true;
-    });
-    var roots = screens.filter(function(s) {
-      return !hasParent[s.id];
-    }).map(function(s) {
-      return s.id;
-    });
-    if (roots.length === 0 && screens.length > 0) roots = [screens[0].id];
-    var col = {};
-    var visited = {};
-    var queue = [];
-    roots.forEach(function(r) {
-      queue.push(r);
-      col[r] = 0;
-      visited[r] = true;
-    });
-    while (queue.length > 0) {
-      var cur = queue.shift();
-      (children[cur] || []).forEach(function(child) {
-        if (!visited[child]) {
-          visited[child] = true;
-          col[child] = (col[cur] || 0) + 1;
-          queue.push(child);
-        }
-      });
-    }
-    screens.forEach(function(s) {
-      if (col[s.id] === void 0) col[s.id] = 0;
-    });
-    return col;
-  }
-  function centerPositions(positions, screens, totalW, totalH) {
-    var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
-    var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
-    screens.forEach(function(s) {
-      if (positions[s.id]) {
-        positions[s.id].x += cx;
-        positions[s.id].y += cy;
-      }
-    });
-  }
-  function autoLayout(screens, arrows, heights) {
-    var col = bfsDepth(screens, arrows);
-    var columns = {};
-    screens.forEach(function(s) {
-      var c = col[s.id];
-      if (!columns[c]) columns[c] = [];
-      columns[c].push(s);
-    });
-    var positions = {};
-    var colKeys = Object.keys(columns).map(Number).sort(function(a, b) {
-      return a - b;
-    });
-    var offsetX = 0;
-    var totalH = 0;
-    colKeys.forEach(function(c) {
-      var colScreens = columns[c];
-      var maxW = 0;
-      colScreens.forEach(function(s) {
-        var w = SIZES[s.size || "md"] || SIZES.md;
-        if (w > maxW) maxW = w;
-      });
-      var offsetY = 0;
-      colScreens.forEach(function(s) {
-        positions[s.id] = { x: offsetX, y: offsetY };
-        var h = heights && heights[s.id] ? heights[s.id] : 200;
-        offsetY += h + GAP_Y;
-      });
-      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
-      offsetX += maxW + GAP_X;
-    });
-    var totalW = offsetX - GAP_X;
-    centerPositions(positions, screens, totalW, totalH);
-    return positions;
-  }
-  function layoutByEpics(screens, arrows, heights) {
-    var epicGroups = {};
-    var epicOrder = [];
-    screens.forEach(function(s) {
-      var eid = s.epic || "_none";
-      if (!epicGroups[eid]) {
-        epicGroups[eid] = [];
-        epicOrder.push(eid);
-      }
-      epicGroups[eid].push(s);
-    });
-    var col = bfsDepth(screens, arrows);
-    var positions = {};
-    var offsetX = 0;
-    var totalH = 0;
-    epicOrder.forEach(function(eid) {
-      var group = epicGroups[eid];
-      group.sort(function(a, b) {
-        return (col[a.id] || 0) - (col[b.id] || 0);
-      });
-      var maxW = 0;
-      group.forEach(function(s) {
-        var w = SIZES[s.size || "md"] || SIZES.md;
-        if (w > maxW) maxW = w;
-      });
-      var offsetY = 0;
-      group.forEach(function(s) {
-        positions[s.id] = { x: offsetX, y: offsetY };
-        var h = heights && heights[s.id] ? heights[s.id] : 200;
-        offsetY += h + GAP_Y;
-      });
-      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
-      offsetX += maxW + GAP_X;
-    });
-    centerPositions(positions, screens, offsetX - GAP_X, totalH);
-    return positions;
-  }
-  function layoutGrid(screens, arrows, heights) {
-    var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
-    var positions = {};
-    var offsetX = 0, offsetY = 0;
-    var rowMaxH = 0;
-    var totalW = 0, totalH = 0;
-    screens.forEach(function(s, i) {
-      var colIdx = i % cols;
-      if (colIdx === 0 && i > 0) {
-        offsetY += rowMaxH + GAP_Y;
-        offsetX = 0;
-        rowMaxH = 0;
-      }
-      positions[s.id] = { x: offsetX, y: offsetY };
-      var w = SIZES[s.size || "md"] || SIZES.md;
-      var h = heights && heights[s.id] ? heights[s.id] : 200;
-      if (h > rowMaxH) rowMaxH = h;
-      offsetX += w + GAP_X;
-      if (offsetX > totalW) totalW = offsetX;
-    });
-    totalH = offsetY + rowMaxH;
-    centerPositions(positions, screens, totalW - GAP_X, totalH);
-    return positions;
-  }
-  var LAYOUT_STRATEGIES = [
-    { name: "Flow", fn: autoLayout },
-    { name: "Epics", fn: layoutByEpics },
-    { name: "Grid", fn: layoutGrid }
-  ];
-
-  // src/board.ts
-  function cycleLayout() {
-    state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
-    var heights = {};
-    var screens = state.project.screens || [];
-    var arrows = state.project.arrows || [];
-    screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
-      if (el) heights[s.id] = el.offsetHeight;
-    });
-    var layoutFn = LAYOUT_STRATEGIES[state.layoutIndex].fn;
-    state.positions = layoutFn(screens, arrows, heights);
-    screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (el && pos) {
-        el.style.left = pos.x + "px";
-        el.style.top = pos.y + "px";
-      }
-    });
-    updateLayoutButton();
-    savePositions();
-    drawArrows();
-    fitToContent();
-  }
-  function doReset() {
-    if (!confirm("Remettre la disposition par d\xE9faut ?")) return;
-    var key = storageKey();
-    try {
-      localStorage.removeItem(key + "-pos");
-      localStorage.removeItem(key + "-zoom");
-      localStorage.removeItem(key + "-arrows");
-      localStorage.removeItem(key + "-hidden");
-      localStorage.removeItem(key + "-arrowmods");
-    } catch (e) {
-    }
-    if (state._originalArrows) {
-      state.project.arrows = JSON.parse(JSON.stringify(state._originalArrows));
-    }
-    state.hiddenScreens = {};
-    state.hiddenEpics = {};
-    state.selected = {};
-    state.layoutIndex = 0;
-    var screens = state.project.screens || [];
-    var arrows = state.project.arrows || [];
-    var heights = {};
-    screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
-      if (el) heights[s.id] = el.offsetHeight;
-    });
-    state.positions = autoLayout(screens, arrows, heights);
-    state.defaultPositions = JSON.parse(JSON.stringify(state.positions));
-    screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (el && pos) {
-        el.style.left = pos.x + "px";
-        el.style.top = pos.y + "px";
-        el.classList.remove("fb-screen-dimmed", "fb-selected");
-      }
-    });
-    var checkboxes = state.container.querySelectorAll(".fb-legend-checkbox");
-    for (var i = 0; i < checkboxes.length; i++) {
-      checkboxes[i].checked = true;
-      var item = checkboxes[i].closest(".fb-legend-item");
-      if (item) item.classList.remove("fb-dimmed");
-    }
-    updateLayoutButton();
-    drawArrows();
-    freezeArrowSides();
-    fitToContent();
-  }
-  function init(config) {
-    if (!config || !config.project) {
-      console.error("FlowBoard.init: config.project is required");
-      return;
-    }
-    state.project = config.project;
-    state.showNotes = true;
-    state.hiddenScreens = {};
-    state.hiddenEpics = {};
-    state.arrowPopup = null;
-    state.creatingArrow = null;
-    state.anchorDotsEls = [];
-    state.layoutIndex = 0;
-    state._originalArrows = JSON.parse(JSON.stringify(state.project.arrows || []));
-    var configState = config.state || null;
-    if (configState && configState.arrows) {
-      state.project.arrows = JSON.parse(JSON.stringify(configState.arrows));
-    } else {
-      var savedArrowMods = loadArrowMutations();
-      if (savedArrowMods) state.project.arrows = savedArrowMods;
-    }
-    if (configState && configState.hiddenScreens) {
-      state.hiddenScreens = JSON.parse(JSON.stringify(configState.hiddenScreens));
-    } else {
-      var savedHidden = loadHiddenScreens();
-      if (savedHidden) {
-        state.hiddenScreens = savedHidden;
-      }
-    }
-    var allScreens = config.project.screens || [];
-    (config.project.epics || []).forEach(function(epic) {
-      var epicScreens = allScreens.filter(function(s) {
-        return s.epic === epic.id;
-      });
-      if (epicScreens.length > 0 && epicScreens.every(function(s) {
-        return state.hiddenScreens[s.id];
-      })) {
-        state.hiddenEpics[epic.id] = true;
-      }
-    });
-    var containerEl;
-    if (typeof config.container === "string") {
-      containerEl = document.querySelector(config.container);
-    } else if (config.container instanceof HTMLElement) {
-      containerEl = config.container;
-    }
-    if (!containerEl) {
-      console.error("FlowBoard.init: container not found");
-      return;
-    }
-    var root = document.createElement("div");
-    root.className = "fb-container";
-    containerEl.innerHTML = "";
-    containerEl.appendChild(root);
-    state.container = root;
-    root.appendChild(renderToolbar());
-    var wrapper = document.createElement("div");
-    wrapper.className = "fb-canvas-wrapper";
-    var sizer = document.createElement("div");
-    sizer.className = "fb-canvas-sizer";
-    var canvas = document.createElement("div");
-    canvas.className = "fb-canvas";
-    canvas.style.width = CANVAS_W + "px";
-    canvas.style.height = CANVAS_H + "px";
-    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("class", "fb-arrows-layer");
-    svg.setAttribute("width", CANVAS_W);
-    svg.setAttribute("height", CANVAS_H);
-    canvas.appendChild(svg);
-    sizer.appendChild(canvas);
-    wrapper.appendChild(sizer);
-    wrapper.appendChild(renderModeSwitch());
-    root.appendChild(wrapper);
-    state.wrapperEl = wrapper;
-    state.sizerEl = sizer;
-    state.canvasEl = canvas;
-    state.svgEl = svg;
-    state.screenEls = {};
-    var screens = state.project.screens || [];
-    var arrows = state.project.arrows || [];
-    state.defaultPositions = autoLayout(screens, arrows);
-    state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
-    var hasSavedPositions = false;
-    if (configState && configState.positions) {
-      hasSavedPositions = true;
-      state.positions = JSON.parse(JSON.stringify(configState.positions));
-    } else {
-      var savedPos = loadPositions();
-      if (savedPos) {
-        hasSavedPositions = true;
-        screens.forEach(function(s) {
-          if (savedPos[s.id]) state.positions[s.id] = savedPos[s.id];
-        });
-      }
-    }
-    var hasSavedZoom = false;
-    if (configState && configState.zoom !== void 0) {
-      hasSavedZoom = true;
-      state.zoom = configState.zoom;
-      state.panX = configState.panX || 0;
-      state.panY = configState.panY || 0;
-    } else {
-      var savedZoom = loadZoom();
-      if (savedZoom) {
-        hasSavedZoom = true;
-        state.zoom = savedZoom.zoom || 1;
-        state.panX = savedZoom.panX || 0;
-        state.panY = savedZoom.panY || 0;
-      }
-    }
-    if (hasSavedZoom) {
-      var zl = document.getElementById("fb-zoom-label");
-      if (zl) zl.textContent = Math.round(state.zoom * 100) + "%";
-    }
-    screens.forEach(function(s) {
-      var el = renderScreen(s);
-      canvas.appendChild(el);
-    });
-    applyTransform();
-    initPan();
-    initDrag();
-    initArrowDrag();
-    initSelection();
-    initModeKeys();
-    setMode("drag");
-    requestAnimationFrame(function() {
-      var heights = {};
-      screens.forEach(function(s) {
-        var el = state.screenEls[s.id];
-        if (el) heights[s.id] = el.offsetHeight;
-      });
-      state.defaultPositions = autoLayout(screens, arrows, heights);
-      if (!hasSavedPositions) {
-        state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
-        screens.forEach(function(s) {
-          var el = state.screenEls[s.id];
-          var pos = state.positions[s.id];
-          if (el && pos) {
-            el.style.left = pos.x + "px";
-            el.style.top = pos.y + "px";
-          }
-        });
-      }
-      if (!hasSavedZoom) {
-        fitToContent();
-      }
-      drawArrows();
-      freezeArrowSides();
-    });
-  }
-
-  // src/export.ts
-  var html2canvasLoaded = null;
-  function loadHtml2Canvas() {
-    if (html2canvasLoaded) return html2canvasLoaded;
-    html2canvasLoaded = new Promise(function(resolve, reject) {
-      if (window.html2canvas) {
-        resolve(window.html2canvas);
-        return;
-      }
-      var s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
-      s.onload = function() {
-        resolve(window.html2canvas);
-      };
-      s.onerror = function() {
-        html2canvasLoaded = null;
-        reject(new Error("Failed to load html2canvas"));
-      };
-      document.head.appendChild(s);
-    });
-    return html2canvasLoaded;
-  }
-  function collectExportBounds() {
-    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-    var arrows = state.project.arrows || [];
-    var spreadMap = buildSpreadMap();
-    state.project.screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + el.offsetWidth);
-      maxY = Math.max(maxY, pos.y + el.offsetHeight);
-    });
-    arrows.forEach(function(arrow, idx) {
-      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
-      var fromEl = state.screenEls[arrow.from];
-      var toEl = state.screenEls[arrow.to];
-      if (!fromEl || !toEl) return;
-      var sides = resolveArrowSides(arrow, idx, spreadMap);
-      var start = getAnchor(arrow.from, sides.from);
-      var end = getAnchor(arrow.to, sides.to);
-      var cps = computeControlPoints(start, end, sides.from, sides.to);
-      var cp1 = cps.cp1;
-      var cp2 = cps.cp2;
-      [start, end, cp1, cp2].forEach(function(p) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      });
-    });
-    return { minX, minY, maxX, maxY };
-  }
-  function doExport() {
-    if (!state.canvasEl || !state.project) return;
-    var bounds = collectExportBounds();
-    if (bounds.minX === Infinity) return;
-    var padding = 40;
-    var vx = Math.max(0, bounds.minX - padding);
-    var vy = Math.max(0, bounds.minY - padding);
-    var vw = bounds.maxX - bounds.minX + padding * 2;
-    var vh = bounds.maxY - bounds.minY + padding * 2;
-    var tmp = document.createElement("div");
-    tmp.className = "fb-container";
-    tmp.style.cssText = "position:fixed;left:-99999px;top:0;width:" + vw + "px;height:" + vh + "px;overflow:visible;background:transparent;";
-    state.project.screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      var clone = el.cloneNode(true);
-      clone.classList.remove("fb-selected", "fb-dragging");
-      clone.style.left = pos.x - vx + "px";
-      clone.style.top = pos.y - vy + "px";
-      tmp.appendChild(clone);
-    });
-    var svgClone = state.svgEl.cloneNode(true);
-    var dimmedEls = svgClone.querySelectorAll(".fb-arrow-dimmed");
-    for (var di = 0; di < dimmedEls.length; di++) {
-      dimmedEls[di].parentNode.removeChild(dimmedEls[di]);
-    }
-    svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svgClone.setAttribute("viewBox", vx + " " + vy + " " + vw + " " + vh);
-    svgClone.setAttribute("width", vw);
-    svgClone.setAttribute("height", vh);
-    var svgStr = new XMLSerializer().serializeToString(svgClone);
-    var blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var img = new Image();
-    img.onload = function() {
-      URL.revokeObjectURL(url);
-      var ac = document.createElement("canvas");
-      ac.width = vw * 2;
-      ac.height = vh * 2;
-      ac.style.cssText = "position:absolute;top:0;left:0;width:" + vw + "px;height:" + vh + "px;pointer-events:none;";
-      ac.getContext("2d").drawImage(img, 0, 0, vw * 2, vh * 2);
-      tmp.appendChild(ac);
-      document.body.appendChild(tmp);
-      loadHtml2Canvas().then(function(html2canvas) {
-        return html2canvas(tmp, {
-          width: vw,
-          height: vh,
-          scale: 2,
-          backgroundColor: "#f0f2f5",
-          useCORS: true
-        });
-      }).then(function(resultCanvas) {
-        document.body.removeChild(tmp);
-        var link = document.createElement("a");
-        link.download = (state.project.name || "flowboard") + ".png";
-        link.href = resultCanvas.toDataURL("image/png");
-        link.click();
-      }).catch(function(err) {
-        if (tmp.parentNode) document.body.removeChild(tmp);
-        console.error("Export failed:", err);
-      });
-    };
-    img.onerror = function() {
-      URL.revokeObjectURL(url);
-      console.error("Arrow rasterization failed");
-    };
-    img.src = url;
-  }
-  function doExportConfig() {
-    var projectCopy = {
-      name: state.project.name,
-      epics: JSON.parse(JSON.stringify(state.project.epics || [])),
-      screens: (state.project.screens || []).map(function(s) {
-        var clean = {
-          id: s.id,
-          title: s.title,
-          epic: s.epic,
-          size: s.size
-        };
-        if (s.label) clean.label = s.label;
-        if (s.notes) clean.notes = s.notes;
-        if (s.content) clean.content = s.content;
-        return clean;
-      }),
-      arrows: JSON.parse(JSON.stringify(state.project.arrows))
-    };
-    var stateCopy = {
-      positions: JSON.parse(JSON.stringify(state.positions)),
-      zoom: state.zoom,
-      panX: state.panX,
-      panY: state.panY,
-      hiddenScreens: JSON.parse(JSON.stringify(state.hiddenScreens))
-    };
-    var screenStrs = projectCopy.screens.map(function(s) {
-      var lines = [];
-      lines.push("      {");
-      lines.push("        id: " + JSON.stringify(s.id) + ",");
-      lines.push("        title: " + JSON.stringify(s.title) + ",");
-      lines.push("        epic: " + JSON.stringify(s.epic) + ",");
-      lines.push("        size: " + JSON.stringify(s.size) + ",");
-      if (s.label) lines.push("        label: " + JSON.stringify(s.label) + ",");
-      if (s.notes) lines.push("        notes: " + JSON.stringify(s.notes) + ",");
-      if (s.content) {
-        lines.push("        content: `");
-        lines.push(s.content.replace(/`/g, "\\`"));
-        lines.push("        `");
-      }
-      lines.push("      }");
-      return lines.join("\n");
-    });
-    var arrowStrs = projectCopy.arrows.map(function(a) {
-      var parts = ["from: " + JSON.stringify(a.from), "to: " + JSON.stringify(a.to)];
-      if (a.label) parts.push("label: " + JSON.stringify(a.label));
-      if (a.dashed) parts.push("dashed: true");
-      if (a.fromSide) parts.push("fromSide: " + JSON.stringify(a.fromSide));
-      if (a.toSide) parts.push("toSide: " + JSON.stringify(a.toSide));
-      return "      { " + parts.join(", ") + " }";
-    });
-    var js = "FlowBoard.init({\n";
-    js += "  container: '#app',\n";
-    js += "  project: {\n";
-    js += "    name: " + JSON.stringify(projectCopy.name) + ",\n";
-    js += "    epics: " + JSON.stringify(projectCopy.epics, null, 6).replace(/\n/g, "\n    ") + ",\n";
-    js += "    screens: [\n" + screenStrs.join(",\n") + "\n    ],\n";
-    js += "    arrows: [\n" + arrowStrs.join(",\n") + "\n    ]\n";
-    js += "  },\n";
-    js += "  state: " + JSON.stringify(stateCopy, null, 4).replace(/\n/g, "\n  ") + "\n";
-    js += "});\n";
-    var btn = state.container.querySelector('.fb-action-btn[title*="presse-papier"]');
-    function showFeedback(success) {
-      if (!btn) return;
-      var original = btn.textContent;
-      btn.textContent = success ? "Copied!" : "Error!";
-      setTimeout(function() {
-        btn.textContent = original;
-      }, 2e3);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(js).then(function() {
-        showFeedback(true);
-      }, function() {
-        showFeedback(false);
-      });
-    } else {
-      var ta = document.createElement("textarea");
-      ta.value = js;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-        showFeedback(true);
-      } catch (e) {
-        showFeedback(false);
-      }
-      document.body.removeChild(ta);
-    }
-  }
-
-  // src/render.ts
-  function updateLayoutButton() {
-    var btn = document.getElementById("fb-layout-btn");
-    if (btn) {
-      var name = LAYOUT_STRATEGIES[state.layoutIndex].name;
-      btn.textContent = "Auto-Layout (" + name + ")";
-    }
-  }
-  function renderToolbar() {
-    var header = document.createElement("div");
-    header.className = "fb-header";
-    var left = document.createElement("div");
-    left.className = "fb-toolbar-group";
-    var title = document.createElement("span");
-    title.className = "fb-project-title";
-    title.textContent = state.project.name || "FlowBoard";
-    left.appendChild(title);
-    var sep1 = document.createElement("div");
-    sep1.className = "fb-header-separator";
-    left.appendChild(sep1);
-    var legend = document.createElement("div");
-    legend.className = "fb-legend";
-    (state.project.epics || []).forEach(function(epic) {
-      var label = document.createElement("label");
-      label.className = "fb-legend-item";
-      var cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = !state.hiddenEpics[epic.id];
-      cb.className = "fb-legend-checkbox";
-      cb.style.accentColor = epic.color;
-      cb.dataset.epicId = epic.id;
-      cb.addEventListener("change", function() {
-        toggleEpic(epic.id);
-      });
-      label.appendChild(cb);
-      var dot = document.createElement("span");
-      dot.className = "fb-legend-dot";
-      dot.style.background = epic.color;
-      label.appendChild(dot);
-      label.appendChild(document.createTextNode(epic.label));
-      legend.appendChild(label);
-    });
-    left.appendChild(legend);
-    header.appendChild(left);
-    var right = document.createElement("div");
-    right.className = "fb-toolbar-group";
-    var toggleLabel = document.createElement("label");
-    toggleLabel.className = "fb-toggle-label";
-    var checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = state.showNotes;
-    checkbox.addEventListener("change", function() {
-      state.showNotes = checkbox.checked;
-      toggleNotesVisibility();
-    });
-    toggleLabel.appendChild(checkbox);
-    toggleLabel.appendChild(document.createTextNode("Notes"));
-    right.appendChild(toggleLabel);
-    var sep2 = document.createElement("div");
-    sep2.className = "fb-header-separator";
-    right.appendChild(sep2);
-    var zoomOut = document.createElement("button");
-    zoomOut.className = "fb-toolbar-btn";
-    zoomOut.textContent = "\u2212";
-    zoomOut.title = "Zoom out";
-    zoomOut.addEventListener("click", function() {
-      setZoom(state.zoom - ZOOM_STEP);
-    });
-    right.appendChild(zoomOut);
-    var zoomLabel = document.createElement("span");
-    zoomLabel.className = "fb-zoom-label";
-    zoomLabel.id = "fb-zoom-label";
-    zoomLabel.textContent = Math.round(state.zoom * 100) + "%";
-    right.appendChild(zoomLabel);
-    var zoomIn = document.createElement("button");
-    zoomIn.className = "fb-toolbar-btn";
-    zoomIn.textContent = "+";
-    zoomIn.title = "Zoom in";
-    zoomIn.addEventListener("click", function() {
-      setZoom(state.zoom + ZOOM_STEP);
-    });
-    right.appendChild(zoomIn);
-    var sep3 = document.createElement("div");
-    sep3.className = "fb-header-separator";
-    right.appendChild(sep3);
-    var layoutBtn = document.createElement("button");
-    layoutBtn.className = "fb-action-btn";
-    layoutBtn.id = "fb-layout-btn";
-    layoutBtn.title = "Changer la disposition";
-    layoutBtn.textContent = "Auto-Layout (" + LAYOUT_STRATEGIES[state.layoutIndex].name + ")";
-    layoutBtn.addEventListener("click", cycleLayout);
-    right.appendChild(layoutBtn);
-    var exportBtn = document.createElement("button");
-    exportBtn.className = "fb-action-btn";
-    exportBtn.textContent = "Export PNG";
-    exportBtn.title = "Export as PNG";
-    exportBtn.addEventListener("click", doExport);
-    right.appendChild(exportBtn);
-    var exportConfigBtn = document.createElement("button");
-    exportConfigBtn.className = "fb-action-btn";
-    exportConfigBtn.textContent = "Copy Init";
-    exportConfigBtn.title = "Copier le code FlowBoard.init() dans le presse-papier";
-    exportConfigBtn.addEventListener("click", doExportConfig);
-    right.appendChild(exportConfigBtn);
-    var sep4 = document.createElement("div");
-    sep4.className = "fb-header-separator";
-    right.appendChild(sep4);
-    var resetBtn = document.createElement("button");
-    resetBtn.className = "fb-action-btn";
-    resetBtn.textContent = "Reset";
-    resetBtn.title = "Remettre la disposition par d\xE9faut";
-    resetBtn.addEventListener("click", doReset);
-    right.appendChild(resetBtn);
-    header.appendChild(right);
-    return header;
-  }
-  function toggleNotesVisibility() {
-    var footers = state.container.querySelectorAll(".fb-screen-footer");
-    for (var i = 0; i < footers.length; i++) {
-      if (state.showNotes) {
-        footers[i].classList.remove("fb-hidden");
-      } else {
-        footers[i].classList.add("fb-hidden");
-      }
-    }
-  }
-  function toggleEpic(epicId) {
-    var hasVisible = false;
-    state.project.screens.forEach(function(s) {
-      if (s.epic === epicId && !state.hiddenScreens[s.id]) hasVisible = true;
-    });
-    var isHiding = hasVisible;
-    if (isHiding) {
-      state.hiddenEpics[epicId] = true;
-    } else {
-      delete state.hiddenEpics[epicId];
-    }
-    var checkboxes = state.container.querySelectorAll(".fb-legend-checkbox");
-    for (var i = 0; i < checkboxes.length; i++) {
-      var cb = checkboxes[i];
-      var item = cb.closest(".fb-legend-item");
-      if (cb.dataset.epicId === epicId) {
-        cb.checked = !isHiding;
-        if (isHiding) {
-          item.classList.add("fb-dimmed");
-        } else {
-          item.classList.remove("fb-dimmed");
-        }
-      }
-    }
-    state.project.screens.forEach(function(s) {
-      if (s.epic !== epicId) return;
-      if (isHiding) {
-        state.hiddenScreens[s.id] = true;
-      } else {
-        delete state.hiddenScreens[s.id];
-      }
-      applyScreenVisibility(s.id);
-    });
-    saveHiddenScreens();
-    drawArrows();
-  }
+  // src/render/screen.ts
   function toggleScreen(screenId) {
     if (state.hiddenScreens[screenId]) {
       delete state.hiddenScreens[screenId];
@@ -1575,31 +411,8 @@
     state.screenEls[screenData.id] = el;
     return el;
   }
-  function renderModeSwitch() {
-    var sw = document.createElement("div");
-    sw.className = "fb-mode-switch";
-    var selectBtn = document.createElement("button");
-    selectBtn.className = "fb-mode-btn";
-    selectBtn.dataset.mode = "select";
-    selectBtn.title = "Curseur \u2014 s\xE9lection (V)";
-    selectBtn.innerHTML = ICON_CURSOR;
-    selectBtn.addEventListener("click", function() {
-      setMode("select");
-    });
-    sw.appendChild(selectBtn);
-    var dragBtn = document.createElement("button");
-    dragBtn.className = "fb-mode-btn";
-    dragBtn.dataset.mode = "drag";
-    dragBtn.title = "D\xE9placement \u2014 pan (H)";
-    dragBtn.innerHTML = ICON_HAND;
-    dragBtn.addEventListener("click", function() {
-      setMode("drag");
-    });
-    sw.appendChild(dragBtn);
-    return sw;
-  }
 
-  // src/popups.ts
+  // src/render/popups.ts
   function handlePopupOutsideClick(e) {
     if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target)) {
       closeArrowPopup();
@@ -2181,6 +994,1207 @@
         state.canvasEl.appendChild(h);
         state.handleEls.push(h);
       });
+    });
+  }
+
+  // src/interactions/arrow-drag.ts
+  function initArrowDrag() {
+    state.canvasEl.addEventListener("mousedown", function(e) {
+      if (state.creatingArrow) return;
+      var handle = e.target.closest(".fb-arrow-handle");
+      if (!handle) return;
+      closeArrowPopup();
+      closeScreenPopup();
+      e.stopPropagation();
+      e.preventDefault();
+      var arrowIdx = parseInt(handle.dataset.arrowIndex, 10);
+      var arrow = state.project.arrows[arrowIdx];
+      var end = handle.dataset.arrowEnd;
+      var screenId = handle.dataset.screenId;
+      if (!arrow.fromSide || !arrow.toSide) {
+        var spread = buildSpreadMap();
+        if (spread[arrowIdx]) {
+          arrow.fromSide = spread[arrowIdx].from;
+          arrow.toSide = spread[arrowIdx].to;
+        } else {
+          var fe = state.screenEls[arrow.from];
+          var te = state.screenEls[arrow.to];
+          if (fe && te) {
+            var auto = getBestSides(fe, te);
+            arrow.fromSide = auto.from;
+            arrow.toSide = auto.to;
+          } else {
+            arrow.fromSide = "right";
+            arrow.toSide = "left";
+          }
+        }
+      }
+      state.draggingHandle = { arrowIdx, end, el: handle, screenId };
+      state.wrapperEl.classList.add("fb-dragging-handle");
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.draggingHandle) return;
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var canvasX = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
+      var canvasY = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
+      var screenId = state.draggingHandle.screenId;
+      var anchors = getAllAnchorPoints(screenId);
+      var bestDist = Infinity;
+      var bestAnchor = anchors[0];
+      for (var i = 0; i < anchors.length; i++) {
+        var dx = anchors[i].x - canvasX;
+        var dy = anchors[i].y - canvasY;
+        var dist = dx * dx + dy * dy;
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestAnchor = anchors[i];
+        }
+      }
+      state.draggingHandle.el.style.left = bestAnchor.x - 8 + "px";
+      state.draggingHandle.el.style.top = bestAnchor.y - 8 + "px";
+      var arrow = state.project.arrows[state.draggingHandle.arrowIdx];
+      var prop = state.draggingHandle.end === "from" ? "fromSide" : "toSide";
+      arrow[prop] = bestAnchor.name;
+      drawArrows(true);
+    });
+    document.addEventListener("mouseup", function() {
+      if (!state.draggingHandle) return;
+      saveArrowMutations();
+      updateHandles();
+      state.draggingHandle = null;
+      state.wrapperEl.classList.remove("fb-dragging-handle");
+    });
+  }
+
+  // src/interactions/drag.ts
+  function updateSelectionStyles() {
+    for (var id in state.screenEls) {
+      var el = state.screenEls[id];
+      if (!el) continue;
+      if (state.selected[id]) {
+        el.classList.add("fb-selected");
+      } else {
+        el.classList.remove("fb-selected");
+      }
+    }
+  }
+  function startScreenDrag(e) {
+    hideAnchorDots();
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var startCanvas = {
+      x: (e.clientX - wrapperRect.left - state.panX) / state.zoom,
+      y: (e.clientY - wrapperRect.top - state.panY) / state.zoom
+    };
+    var ids;
+    if (state.mode === "select" && Object.keys(state.selected).length) {
+      ids = Object.keys(state.selected);
+    } else {
+      var target = e.target.closest(".fb-screen");
+      ids = target ? [target.dataset.screenId] : [];
+    }
+    var items = [];
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      if (state.hiddenScreens[id]) continue;
+      var el = state.screenEls[id];
+      if (!el) continue;
+      var pos = state.positions[id] || { x: 0, y: 0 };
+      el.classList.add("fb-dragging");
+      items.push({ id, el, startX: pos.x, startY: pos.y });
+      if (pos.x < minX) minX = pos.x;
+      if (pos.y < minY) minY = pos.y;
+      if (pos.x > maxX) maxX = pos.x;
+      if (pos.y > maxY) maxY = pos.y;
+    }
+    if (!items.length) return;
+    state.screenDrag = {
+      startCanvas,
+      items,
+      bounds: { minX, minY, maxX, maxY }
+    };
+    state.wrapperEl.classList.add("fb-dragging-screen");
+  }
+  function initDrag() {
+    state.canvasEl.addEventListener("mousedown", function(e) {
+      closeArrowPopup();
+      closeScreenPopup();
+      if (state.creatingArrow) return;
+      if (e.button !== 0) return;
+      var screenEl = e.target.closest(".fb-screen");
+      if (!screenEl) return;
+      var id = screenEl.dataset.screenId;
+      if (state.hiddenScreens[id]) return;
+      e.stopPropagation();
+      e.preventDefault();
+      if (state.mode === "select") {
+        if (e.metaKey || e.ctrlKey || e.shiftKey) {
+          toggleSelection(state.selected, id);
+          updateSelectionStyles();
+          return;
+        }
+        if (!state.selected[id]) {
+          state.selected = {};
+          state.selected[id] = true;
+          updateSelectionStyles();
+        }
+      }
+      startScreenDrag(e);
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.screenDrag) return;
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var cmx = (e.clientX - wrapperRect.left - state.panX) / state.zoom;
+      var cmy = (e.clientY - wrapperRect.top - state.panY) / state.zoom;
+      var dx = cmx - state.screenDrag.startCanvas.x;
+      var dy = cmy - state.screenDrag.startCanvas.y;
+      var b = state.screenDrag.bounds;
+      dx = Math.max(-b.minX, Math.min(CANVAS_W - 50 - b.maxX, dx));
+      dy = Math.max(-b.minY, Math.min(CANVAS_H - 50 - b.maxY, dy));
+      var items = state.screenDrag.items;
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var newX = it.startX + dx;
+        var newY = it.startY + dy;
+        it.el.style.left = newX + "px";
+        it.el.style.top = newY + "px";
+        state.positions[it.id] = { x: newX, y: newY };
+      }
+      drawArrows(!!state.draggingHandle);
+    });
+    document.addEventListener("mouseup", function(e) {
+      if (!state.screenDrag) return;
+      var items = state.screenDrag.items;
+      for (var i = 0; i < items.length; i++) {
+        items[i].el.classList.remove("fb-dragging");
+      }
+      var singleId = items.length === 1 ? items[0].id : null;
+      state.screenDrag = null;
+      state.wrapperEl.classList.remove("fb-dragging-screen");
+      savePositions();
+      if (singleId) {
+        var elUnder = document.elementFromPoint(e.clientX, e.clientY);
+        var screenUnder = elUnder && elUnder.closest(".fb-screen");
+        if (screenUnder && screenUnder.dataset.screenId === singleId) {
+          showAnchorDots(singleId);
+        }
+      }
+    });
+  }
+
+  // src/interactions/mode.ts
+  function setMode(mode) {
+    if (mode !== "select") mode = "drag";
+    state.mode = mode;
+    if (mode === "drag") {
+      state.selected = {};
+      updateSelectionStyles();
+    }
+    if (state.wrapperEl) {
+      state.wrapperEl.classList.toggle("fb-mode-select", mode === "select");
+      state.wrapperEl.classList.toggle("fb-mode-drag", mode === "drag");
+    }
+    var sw = state.container && state.container.querySelector(".fb-mode-switch");
+    if (sw) {
+      var btns = sw.querySelectorAll(".fb-mode-btn");
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle("active", btns[i].dataset.mode === mode);
+      }
+    }
+  }
+  function initModeKeys() {
+    state.wrapperEl.addEventListener("mouseenter", function() {
+      state.pointerInBoard = true;
+    });
+    state.wrapperEl.addEventListener("mouseleave", function() {
+      state.pointerInBoard = false;
+    });
+    document.addEventListener("keydown", function(e) {
+      if (!state.pointerInBoard) return;
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "v" || e.key === "V") {
+        setMode("select");
+      } else if (e.key === "h" || e.key === "H") {
+        setMode("drag");
+      } else if (e.key === "Escape" && state.mode === "select") {
+        state.selected = {};
+        updateSelectionStyles();
+      }
+    });
+  }
+
+  // src/interactions/transform.ts
+  function setZoom(z) {
+    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
+    if (state.wrapperEl) {
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var mx = wrapperRect.width / 2;
+      var my = wrapperRect.height / 2;
+      var cx = (mx - state.panX) / state.zoom;
+      var cy = (my - state.panY) / state.zoom;
+      state.panX = mx - cx * newZoom;
+      state.panY = my - cy * newZoom;
+    }
+    state.zoom = newZoom;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
+  }
+  function applyTransform() {
+    if (state.sizerEl) {
+      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
+    }
+    if (state.canvasEl && state._dotZoom !== state.zoom) {
+      state._dotZoom = state.zoom;
+      var sp = DOT_SPACING / state.zoom;
+      var r = DOT_RADIUS / state.zoom;
+      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
+      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
+    }
+  }
+  function fitToContent() {
+    if (!state.wrapperEl || !state.project) return;
+    var screens = state.project.screens || [];
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var hasVisible = false;
+    screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el || !pos) return;
+      hasVisible = true;
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + el.offsetWidth);
+      maxY = Math.max(maxY, pos.y + el.offsetHeight);
+    });
+    if (!hasVisible) return;
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var viewW = wrapperRect.width;
+    var viewH = wrapperRect.height;
+    var contentW = maxX - minX;
+    var contentH = maxY - minY;
+    var padding = 60;
+    var zoomX = (viewW - padding * 2) / contentW;
+    var zoomY = (viewH - padding * 2) / contentH;
+    var zoom = Math.min(zoomX, zoomY, 1);
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
+    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
+    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
+    state.zoom = zoom;
+    state.panX = panX;
+    state.panY = panY;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
+  }
+
+  // src/interactions/pan.ts
+  function initPan() {
+    var wrapper = state.wrapperEl;
+    wrapper.addEventListener("wheel", function(e) {
+      closeArrowPopup();
+      closeScreenPopup();
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        var wrapperRect = wrapper.getBoundingClientRect();
+        var mx = e.clientX - wrapperRect.left;
+        var my = e.clientY - wrapperRect.top;
+        var cx = (mx - state.panX) / state.zoom;
+        var cy = (my - state.panY) / state.zoom;
+        var delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+        var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((state.zoom + delta) * 100) / 100));
+        state.panX = mx - cx * newZoom;
+        state.panY = my - cy * newZoom;
+        state.zoom = newZoom;
+        applyTransform();
+        var label = document.getElementById("fb-zoom-label");
+        if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+        saveZoom();
+      } else {
+        e.preventDefault();
+        state.panX -= e.deltaX;
+        state.panY -= e.deltaY;
+        applyTransform();
+        saveZoom();
+      }
+    }, { passive: false });
+    wrapper.addEventListener("mousedown", function(e) {
+      if (state.mode !== "drag") return;
+      if (state.creatingArrow) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      if (e.button !== 0) return;
+      closeArrowPopup();
+      closeScreenPopup();
+      state.panDrag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startPanX: state.panX,
+        startPanY: state.panY
+      };
+      wrapper.classList.add("fb-panning");
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.panDrag) return;
+      state.panX = state.panDrag.startPanX + (e.clientX - state.panDrag.startX);
+      state.panY = state.panDrag.startPanY + (e.clientY - state.panDrag.startY);
+      applyTransform();
+    });
+    document.addEventListener("mouseup", function() {
+      if (!state.panDrag) return;
+      state.panDrag = null;
+      wrapper.classList.remove("fb-panning");
+      saveZoom();
+    });
+  }
+
+  // src/interactions/selection.ts
+  function initSelection() {
+    var wrapper = state.wrapperEl;
+    wrapper.addEventListener("mousedown", function(e) {
+      if (state.mode !== "select") return;
+      if (state.creatingArrow) return;
+      if (e.button !== 0) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      closeArrowPopup();
+      closeScreenPopup();
+      var additive = e.metaKey || e.ctrlKey || e.shiftKey;
+      var base = {};
+      if (additive) {
+        for (var k in state.selected) base[k] = true;
+      }
+      state.selectBox = { startX: e.clientX, startY: e.clientY, base, additive, moved: false, el: null };
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.selectBox) return;
+      var sb = state.selectBox;
+      if (!sb.moved && Math.abs(e.clientX - sb.startX) < SELECT_DRAG_THRESHOLD && Math.abs(e.clientY - sb.startY) < SELECT_DRAG_THRESHOLD) {
+        return;
+      }
+      sb.moved = true;
+      if (!sb.el) {
+        sb.el = document.createElement("div");
+        sb.el.className = "fb-select-rect";
+        state.wrapperEl.appendChild(sb.el);
+      }
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var left = Math.min(e.clientX, sb.startX);
+      var top = Math.min(e.clientY, sb.startY);
+      var right = Math.max(e.clientX, sb.startX);
+      var bottom = Math.max(e.clientY, sb.startY);
+      sb.el.style.left = left - wrapperRect.left + "px";
+      sb.el.style.top = top - wrapperRect.top + "px";
+      sb.el.style.width = right - left + "px";
+      sb.el.style.height = bottom - top + "px";
+      var box = { left, top, right, bottom };
+      var next = {};
+      for (var bk in sb.base) next[bk] = true;
+      var screens = state.project.screens || [];
+      for (var i = 0; i < screens.length; i++) {
+        var id = screens[i].id;
+        if (state.hiddenScreens[id]) continue;
+        var el = state.screenEls[id];
+        if (!el) continue;
+        if (rectsIntersect(box, el.getBoundingClientRect())) next[id] = true;
+      }
+      state.selected = next;
+      updateSelectionStyles();
+    });
+    document.addEventListener("mouseup", function() {
+      if (!state.selectBox) return;
+      var sb = state.selectBox;
+      if (sb.el && sb.el.parentNode) sb.el.parentNode.removeChild(sb.el);
+      if (!sb.moved && !sb.additive) {
+        state.selected = {};
+        updateSelectionStyles();
+      }
+      state.selectBox = null;
+    });
+  }
+
+  // src/layout.ts
+  function bfsDepth(screens, arrows) {
+    var children = {};
+    var hasParent = {};
+    screens.forEach(function(s) {
+      children[s.id] = [];
+    });
+    arrows.forEach(function(a) {
+      if (children[a.from]) children[a.from].push(a.to);
+      hasParent[a.to] = true;
+    });
+    var roots = screens.filter(function(s) {
+      return !hasParent[s.id];
+    }).map(function(s) {
+      return s.id;
+    });
+    if (roots.length === 0 && screens.length > 0) roots = [screens[0].id];
+    var col = {};
+    var visited = {};
+    var queue = [];
+    roots.forEach(function(r) {
+      queue.push(r);
+      col[r] = 0;
+      visited[r] = true;
+    });
+    while (queue.length > 0) {
+      var cur = queue.shift();
+      (children[cur] || []).forEach(function(child) {
+        if (!visited[child]) {
+          visited[child] = true;
+          col[child] = (col[cur] || 0) + 1;
+          queue.push(child);
+        }
+      });
+    }
+    screens.forEach(function(s) {
+      if (col[s.id] === void 0) col[s.id] = 0;
+    });
+    return col;
+  }
+  function centerPositions(positions, screens, totalW, totalH) {
+    var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
+    var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
+    screens.forEach(function(s) {
+      if (positions[s.id]) {
+        positions[s.id].x += cx;
+        positions[s.id].y += cy;
+      }
+    });
+  }
+  function autoLayout(screens, arrows, heights) {
+    var col = bfsDepth(screens, arrows);
+    var columns = {};
+    screens.forEach(function(s) {
+      var c = col[s.id];
+      if (!columns[c]) columns[c] = [];
+      columns[c].push(s);
+    });
+    var positions = {};
+    var colKeys = Object.keys(columns).map(Number).sort(function(a, b) {
+      return a - b;
+    });
+    var offsetX = 0;
+    var totalH = 0;
+    colKeys.forEach(function(c) {
+      var colScreens = columns[c];
+      var maxW = 0;
+      colScreens.forEach(function(s) {
+        var w = SIZES[s.size || "md"] || SIZES.md;
+        if (w > maxW) maxW = w;
+      });
+      var offsetY = 0;
+      colScreens.forEach(function(s) {
+        positions[s.id] = { x: offsetX, y: offsetY };
+        var h = heights && heights[s.id] ? heights[s.id] : 200;
+        offsetY += h + GAP_Y;
+      });
+      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
+      offsetX += maxW + GAP_X;
+    });
+    var totalW = offsetX - GAP_X;
+    centerPositions(positions, screens, totalW, totalH);
+    return positions;
+  }
+  function layoutByEpics(screens, arrows, heights) {
+    var epicGroups = {};
+    var epicOrder = [];
+    screens.forEach(function(s) {
+      var eid = s.epic || "_none";
+      if (!epicGroups[eid]) {
+        epicGroups[eid] = [];
+        epicOrder.push(eid);
+      }
+      epicGroups[eid].push(s);
+    });
+    var col = bfsDepth(screens, arrows);
+    var positions = {};
+    var offsetX = 0;
+    var totalH = 0;
+    epicOrder.forEach(function(eid) {
+      var group = epicGroups[eid];
+      group.sort(function(a, b) {
+        return (col[a.id] || 0) - (col[b.id] || 0);
+      });
+      var maxW = 0;
+      group.forEach(function(s) {
+        var w = SIZES[s.size || "md"] || SIZES.md;
+        if (w > maxW) maxW = w;
+      });
+      var offsetY = 0;
+      group.forEach(function(s) {
+        positions[s.id] = { x: offsetX, y: offsetY };
+        var h = heights && heights[s.id] ? heights[s.id] : 200;
+        offsetY += h + GAP_Y;
+      });
+      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
+      offsetX += maxW + GAP_X;
+    });
+    centerPositions(positions, screens, offsetX - GAP_X, totalH);
+    return positions;
+  }
+  function layoutGrid(screens, arrows, heights) {
+    var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
+    var positions = {};
+    var offsetX = 0, offsetY = 0;
+    var rowMaxH = 0;
+    var totalW = 0, totalH = 0;
+    screens.forEach(function(s, i) {
+      var colIdx = i % cols;
+      if (colIdx === 0 && i > 0) {
+        offsetY += rowMaxH + GAP_Y;
+        offsetX = 0;
+        rowMaxH = 0;
+      }
+      positions[s.id] = { x: offsetX, y: offsetY };
+      var w = SIZES[s.size || "md"] || SIZES.md;
+      var h = heights && heights[s.id] ? heights[s.id] : 200;
+      if (h > rowMaxH) rowMaxH = h;
+      offsetX += w + GAP_X;
+      if (offsetX > totalW) totalW = offsetX;
+    });
+    totalH = offsetY + rowMaxH;
+    centerPositions(positions, screens, totalW - GAP_X, totalH);
+    return positions;
+  }
+  var LAYOUT_STRATEGIES = [
+    { name: "Flow", fn: autoLayout },
+    { name: "Epics", fn: layoutByEpics },
+    { name: "Grid", fn: layoutGrid }
+  ];
+
+  // src/render/mode-switch.ts
+  function renderModeSwitch() {
+    var sw = document.createElement("div");
+    sw.className = "fb-mode-switch";
+    var selectBtn = document.createElement("button");
+    selectBtn.className = "fb-mode-btn";
+    selectBtn.dataset.mode = "select";
+    selectBtn.title = "Curseur \u2014 s\xE9lection (V)";
+    selectBtn.innerHTML = ICON_CURSOR;
+    selectBtn.addEventListener("click", function() {
+      setMode("select");
+    });
+    sw.appendChild(selectBtn);
+    var dragBtn = document.createElement("button");
+    dragBtn.className = "fb-mode-btn";
+    dragBtn.dataset.mode = "drag";
+    dragBtn.title = "D\xE9placement \u2014 pan (H)";
+    dragBtn.innerHTML = ICON_HAND;
+    dragBtn.addEventListener("click", function() {
+      setMode("drag");
+    });
+    sw.appendChild(dragBtn);
+    return sw;
+  }
+
+  // src/export.ts
+  var html2canvasLoaded = null;
+  function loadHtml2Canvas() {
+    if (html2canvasLoaded) return html2canvasLoaded;
+    html2canvasLoaded = new Promise(function(resolve, reject) {
+      if (window.html2canvas) {
+        resolve(window.html2canvas);
+        return;
+      }
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+      s.onload = function() {
+        resolve(window.html2canvas);
+      };
+      s.onerror = function() {
+        html2canvasLoaded = null;
+        reject(new Error("Failed to load html2canvas"));
+      };
+      document.head.appendChild(s);
+    });
+    return html2canvasLoaded;
+  }
+  function collectExportBounds() {
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var arrows = state.project.arrows || [];
+    var spreadMap = buildSpreadMap();
+    state.project.screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el || !pos) return;
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + el.offsetWidth);
+      maxY = Math.max(maxY, pos.y + el.offsetHeight);
+    });
+    arrows.forEach(function(arrow, idx) {
+      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
+      var fromEl = state.screenEls[arrow.from];
+      var toEl = state.screenEls[arrow.to];
+      if (!fromEl || !toEl) return;
+      var sides = resolveArrowSides(arrow, idx, spreadMap);
+      var start = getAnchor(arrow.from, sides.from);
+      var end = getAnchor(arrow.to, sides.to);
+      var cps = computeControlPoints(start, end, sides.from, sides.to);
+      var cp1 = cps.cp1;
+      var cp2 = cps.cp2;
+      [start, end, cp1, cp2].forEach(function(p) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
+    });
+    return { minX, minY, maxX, maxY };
+  }
+  function doExport() {
+    if (!state.canvasEl || !state.project) return;
+    var bounds = collectExportBounds();
+    if (bounds.minX === Infinity) return;
+    var padding = 40;
+    var vx = Math.max(0, bounds.minX - padding);
+    var vy = Math.max(0, bounds.minY - padding);
+    var vw = bounds.maxX - bounds.minX + padding * 2;
+    var vh = bounds.maxY - bounds.minY + padding * 2;
+    var tmp = document.createElement("div");
+    tmp.className = "fb-container";
+    tmp.style.cssText = "position:fixed;left:-99999px;top:0;width:" + vw + "px;height:" + vh + "px;overflow:visible;background:transparent;";
+    state.project.screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el || !pos) return;
+      var clone = el.cloneNode(true);
+      clone.classList.remove("fb-selected", "fb-dragging");
+      clone.style.left = pos.x - vx + "px";
+      clone.style.top = pos.y - vy + "px";
+      tmp.appendChild(clone);
+    });
+    var svgClone = state.svgEl.cloneNode(true);
+    var dimmedEls = svgClone.querySelectorAll(".fb-arrow-dimmed");
+    for (var di = 0; di < dimmedEls.length; di++) {
+      dimmedEls[di].parentNode.removeChild(dimmedEls[di]);
+    }
+    svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svgClone.setAttribute("viewBox", vx + " " + vy + " " + vw + " " + vh);
+    svgClone.setAttribute("width", vw);
+    svgClone.setAttribute("height", vh);
+    var svgStr = new XMLSerializer().serializeToString(svgClone);
+    var blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var ac = document.createElement("canvas");
+      ac.width = vw * 2;
+      ac.height = vh * 2;
+      ac.style.cssText = "position:absolute;top:0;left:0;width:" + vw + "px;height:" + vh + "px;pointer-events:none;";
+      ac.getContext("2d").drawImage(img, 0, 0, vw * 2, vh * 2);
+      tmp.appendChild(ac);
+      document.body.appendChild(tmp);
+      loadHtml2Canvas().then(function(html2canvas) {
+        return html2canvas(tmp, {
+          width: vw,
+          height: vh,
+          scale: 2,
+          backgroundColor: "#f0f2f5",
+          useCORS: true
+        });
+      }).then(function(resultCanvas) {
+        document.body.removeChild(tmp);
+        var link = document.createElement("a");
+        link.download = (state.project.name || "flowboard") + ".png";
+        link.href = resultCanvas.toDataURL("image/png");
+        link.click();
+      }).catch(function(err) {
+        if (tmp.parentNode) document.body.removeChild(tmp);
+        console.error("Export failed:", err);
+      });
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      console.error("Arrow rasterization failed");
+    };
+    img.src = url;
+  }
+  function doExportConfig() {
+    var projectCopy = {
+      name: state.project.name,
+      epics: JSON.parse(JSON.stringify(state.project.epics || [])),
+      screens: (state.project.screens || []).map(function(s) {
+        var clean = {
+          id: s.id,
+          title: s.title,
+          epic: s.epic,
+          size: s.size
+        };
+        if (s.label) clean.label = s.label;
+        if (s.notes) clean.notes = s.notes;
+        if (s.content) clean.content = s.content;
+        return clean;
+      }),
+      arrows: JSON.parse(JSON.stringify(state.project.arrows))
+    };
+    var stateCopy = {
+      positions: JSON.parse(JSON.stringify(state.positions)),
+      zoom: state.zoom,
+      panX: state.panX,
+      panY: state.panY,
+      hiddenScreens: JSON.parse(JSON.stringify(state.hiddenScreens))
+    };
+    var screenStrs = projectCopy.screens.map(function(s) {
+      var lines = [];
+      lines.push("      {");
+      lines.push("        id: " + JSON.stringify(s.id) + ",");
+      lines.push("        title: " + JSON.stringify(s.title) + ",");
+      lines.push("        epic: " + JSON.stringify(s.epic) + ",");
+      lines.push("        size: " + JSON.stringify(s.size) + ",");
+      if (s.label) lines.push("        label: " + JSON.stringify(s.label) + ",");
+      if (s.notes) lines.push("        notes: " + JSON.stringify(s.notes) + ",");
+      if (s.content) {
+        lines.push("        content: `");
+        lines.push(s.content.replace(/`/g, "\\`"));
+        lines.push("        `");
+      }
+      lines.push("      }");
+      return lines.join("\n");
+    });
+    var arrowStrs = projectCopy.arrows.map(function(a) {
+      var parts = ["from: " + JSON.stringify(a.from), "to: " + JSON.stringify(a.to)];
+      if (a.label) parts.push("label: " + JSON.stringify(a.label));
+      if (a.dashed) parts.push("dashed: true");
+      if (a.fromSide) parts.push("fromSide: " + JSON.stringify(a.fromSide));
+      if (a.toSide) parts.push("toSide: " + JSON.stringify(a.toSide));
+      return "      { " + parts.join(", ") + " }";
+    });
+    var js = "FlowBoard.init({\n";
+    js += "  container: '#app',\n";
+    js += "  project: {\n";
+    js += "    name: " + JSON.stringify(projectCopy.name) + ",\n";
+    js += "    epics: " + JSON.stringify(projectCopy.epics, null, 6).replace(/\n/g, "\n    ") + ",\n";
+    js += "    screens: [\n" + screenStrs.join(",\n") + "\n    ],\n";
+    js += "    arrows: [\n" + arrowStrs.join(",\n") + "\n    ]\n";
+    js += "  },\n";
+    js += "  state: " + JSON.stringify(stateCopy, null, 4).replace(/\n/g, "\n  ") + "\n";
+    js += "});\n";
+    var btn = state.container.querySelector('.fb-action-btn[title*="presse-papier"]');
+    function showFeedback(success) {
+      if (!btn) return;
+      var original = btn.textContent;
+      btn.textContent = success ? "Copied!" : "Error!";
+      setTimeout(function() {
+        btn.textContent = original;
+      }, 2e3);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(js).then(function() {
+        showFeedback(true);
+      }, function() {
+        showFeedback(false);
+      });
+    } else {
+      var ta = document.createElement("textarea");
+      ta.value = js;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showFeedback(true);
+      } catch (e) {
+        showFeedback(false);
+      }
+      document.body.removeChild(ta);
+    }
+  }
+
+  // src/render/toolbar.ts
+  function updateLayoutButton() {
+    var btn = document.getElementById("fb-layout-btn");
+    if (btn) {
+      var name = LAYOUT_STRATEGIES[state.layoutIndex].name;
+      btn.textContent = "Auto-Layout (" + name + ")";
+    }
+  }
+  function renderToolbar() {
+    var header = document.createElement("div");
+    header.className = "fb-header";
+    var left = document.createElement("div");
+    left.className = "fb-toolbar-group";
+    var title = document.createElement("span");
+    title.className = "fb-project-title";
+    title.textContent = state.project.name || "FlowBoard";
+    left.appendChild(title);
+    var sep1 = document.createElement("div");
+    sep1.className = "fb-header-separator";
+    left.appendChild(sep1);
+    var legend = document.createElement("div");
+    legend.className = "fb-legend";
+    (state.project.epics || []).forEach(function(epic) {
+      var label = document.createElement("label");
+      label.className = "fb-legend-item";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !state.hiddenEpics[epic.id];
+      cb.className = "fb-legend-checkbox";
+      cb.style.accentColor = epic.color;
+      cb.dataset.epicId = epic.id;
+      cb.addEventListener("change", function() {
+        toggleEpic(epic.id);
+      });
+      label.appendChild(cb);
+      var dot = document.createElement("span");
+      dot.className = "fb-legend-dot";
+      dot.style.background = epic.color;
+      label.appendChild(dot);
+      label.appendChild(document.createTextNode(epic.label));
+      legend.appendChild(label);
+    });
+    left.appendChild(legend);
+    header.appendChild(left);
+    var right = document.createElement("div");
+    right.className = "fb-toolbar-group";
+    var toggleLabel = document.createElement("label");
+    toggleLabel.className = "fb-toggle-label";
+    var checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = state.showNotes;
+    checkbox.addEventListener("change", function() {
+      state.showNotes = checkbox.checked;
+      toggleNotesVisibility();
+    });
+    toggleLabel.appendChild(checkbox);
+    toggleLabel.appendChild(document.createTextNode("Notes"));
+    right.appendChild(toggleLabel);
+    var sep2 = document.createElement("div");
+    sep2.className = "fb-header-separator";
+    right.appendChild(sep2);
+    var zoomOut = document.createElement("button");
+    zoomOut.className = "fb-toolbar-btn";
+    zoomOut.textContent = "\u2212";
+    zoomOut.title = "Zoom out";
+    zoomOut.addEventListener("click", function() {
+      setZoom(state.zoom - ZOOM_STEP);
+    });
+    right.appendChild(zoomOut);
+    var zoomLabel = document.createElement("span");
+    zoomLabel.className = "fb-zoom-label";
+    zoomLabel.id = "fb-zoom-label";
+    zoomLabel.textContent = Math.round(state.zoom * 100) + "%";
+    right.appendChild(zoomLabel);
+    var zoomIn = document.createElement("button");
+    zoomIn.className = "fb-toolbar-btn";
+    zoomIn.textContent = "+";
+    zoomIn.title = "Zoom in";
+    zoomIn.addEventListener("click", function() {
+      setZoom(state.zoom + ZOOM_STEP);
+    });
+    right.appendChild(zoomIn);
+    var sep3 = document.createElement("div");
+    sep3.className = "fb-header-separator";
+    right.appendChild(sep3);
+    var layoutBtn = document.createElement("button");
+    layoutBtn.className = "fb-action-btn";
+    layoutBtn.id = "fb-layout-btn";
+    layoutBtn.title = "Changer la disposition";
+    layoutBtn.textContent = "Auto-Layout (" + LAYOUT_STRATEGIES[state.layoutIndex].name + ")";
+    layoutBtn.addEventListener("click", cycleLayout);
+    right.appendChild(layoutBtn);
+    var exportBtn = document.createElement("button");
+    exportBtn.className = "fb-action-btn";
+    exportBtn.textContent = "Export PNG";
+    exportBtn.title = "Export as PNG";
+    exportBtn.addEventListener("click", doExport);
+    right.appendChild(exportBtn);
+    var exportConfigBtn = document.createElement("button");
+    exportConfigBtn.className = "fb-action-btn";
+    exportConfigBtn.textContent = "Copy Init";
+    exportConfigBtn.title = "Copier le code FlowBoard.init() dans le presse-papier";
+    exportConfigBtn.addEventListener("click", doExportConfig);
+    right.appendChild(exportConfigBtn);
+    var sep4 = document.createElement("div");
+    sep4.className = "fb-header-separator";
+    right.appendChild(sep4);
+    var resetBtn = document.createElement("button");
+    resetBtn.className = "fb-action-btn";
+    resetBtn.textContent = "Reset";
+    resetBtn.title = "Remettre la disposition par d\xE9faut";
+    resetBtn.addEventListener("click", doReset);
+    right.appendChild(resetBtn);
+    header.appendChild(right);
+    return header;
+  }
+  function toggleNotesVisibility() {
+    var footers = state.container.querySelectorAll(".fb-screen-footer");
+    for (var i = 0; i < footers.length; i++) {
+      if (state.showNotes) {
+        footers[i].classList.remove("fb-hidden");
+      } else {
+        footers[i].classList.add("fb-hidden");
+      }
+    }
+  }
+  function toggleEpic(epicId) {
+    var hasVisible = false;
+    state.project.screens.forEach(function(s) {
+      if (s.epic === epicId && !state.hiddenScreens[s.id]) hasVisible = true;
+    });
+    var isHiding = hasVisible;
+    if (isHiding) {
+      state.hiddenEpics[epicId] = true;
+    } else {
+      delete state.hiddenEpics[epicId];
+    }
+    var checkboxes = state.container.querySelectorAll(".fb-legend-checkbox");
+    for (var i = 0; i < checkboxes.length; i++) {
+      var cb = checkboxes[i];
+      var item = cb.closest(".fb-legend-item");
+      if (cb.dataset.epicId === epicId) {
+        cb.checked = !isHiding;
+        if (isHiding) {
+          item.classList.add("fb-dimmed");
+        } else {
+          item.classList.remove("fb-dimmed");
+        }
+      }
+    }
+    state.project.screens.forEach(function(s) {
+      if (s.epic !== epicId) return;
+      if (isHiding) {
+        state.hiddenScreens[s.id] = true;
+      } else {
+        delete state.hiddenScreens[s.id];
+      }
+      applyScreenVisibility(s.id);
+    });
+    saveHiddenScreens();
+    drawArrows();
+  }
+
+  // src/board.ts
+  function cycleLayout() {
+    state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
+    var heights = {};
+    var screens = state.project.screens || [];
+    var arrows = state.project.arrows || [];
+    screens.forEach(function(s) {
+      var el = state.screenEls[s.id];
+      if (el) heights[s.id] = el.offsetHeight;
+    });
+    var layoutFn = LAYOUT_STRATEGIES[state.layoutIndex].fn;
+    state.positions = layoutFn(screens, arrows, heights);
+    screens.forEach(function(s) {
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (el && pos) {
+        el.style.left = pos.x + "px";
+        el.style.top = pos.y + "px";
+      }
+    });
+    updateLayoutButton();
+    savePositions();
+    drawArrows();
+    fitToContent();
+  }
+  function doReset() {
+    if (!confirm("Remettre la disposition par d\xE9faut ?")) return;
+    var key = storageKey();
+    try {
+      localStorage.removeItem(key + "-pos");
+      localStorage.removeItem(key + "-zoom");
+      localStorage.removeItem(key + "-arrows");
+      localStorage.removeItem(key + "-hidden");
+      localStorage.removeItem(key + "-arrowmods");
+    } catch (e) {
+    }
+    if (state._originalArrows) {
+      state.project.arrows = JSON.parse(JSON.stringify(state._originalArrows));
+    }
+    state.hiddenScreens = {};
+    state.hiddenEpics = {};
+    state.selected = {};
+    state.layoutIndex = 0;
+    var screens = state.project.screens || [];
+    var arrows = state.project.arrows || [];
+    var heights = {};
+    screens.forEach(function(s) {
+      var el = state.screenEls[s.id];
+      if (el) heights[s.id] = el.offsetHeight;
+    });
+    state.positions = autoLayout(screens, arrows, heights);
+    state.defaultPositions = JSON.parse(JSON.stringify(state.positions));
+    screens.forEach(function(s) {
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (el && pos) {
+        el.style.left = pos.x + "px";
+        el.style.top = pos.y + "px";
+        el.classList.remove("fb-screen-dimmed", "fb-selected");
+      }
+    });
+    var checkboxes = state.container.querySelectorAll(".fb-legend-checkbox");
+    for (var i = 0; i < checkboxes.length; i++) {
+      checkboxes[i].checked = true;
+      var item = checkboxes[i].closest(".fb-legend-item");
+      if (item) item.classList.remove("fb-dimmed");
+    }
+    updateLayoutButton();
+    drawArrows();
+    freezeArrowSides();
+    fitToContent();
+  }
+  function init(config) {
+    if (!config || !config.project) {
+      console.error("FlowBoard.init: config.project is required");
+      return;
+    }
+    state.project = config.project;
+    state.showNotes = true;
+    state.hiddenScreens = {};
+    state.hiddenEpics = {};
+    state.arrowPopup = null;
+    state.creatingArrow = null;
+    state.anchorDotsEls = [];
+    state.layoutIndex = 0;
+    state._originalArrows = JSON.parse(JSON.stringify(state.project.arrows || []));
+    var configState = config.state || null;
+    if (configState && configState.arrows) {
+      state.project.arrows = JSON.parse(JSON.stringify(configState.arrows));
+    } else {
+      var savedArrowMods = loadArrowMutations();
+      if (savedArrowMods) state.project.arrows = savedArrowMods;
+    }
+    if (configState && configState.hiddenScreens) {
+      state.hiddenScreens = JSON.parse(JSON.stringify(configState.hiddenScreens));
+    } else {
+      var savedHidden = loadHiddenScreens();
+      if (savedHidden) {
+        state.hiddenScreens = savedHidden;
+      }
+    }
+    var allScreens = config.project.screens || [];
+    (config.project.epics || []).forEach(function(epic) {
+      var epicScreens = allScreens.filter(function(s) {
+        return s.epic === epic.id;
+      });
+      if (epicScreens.length > 0 && epicScreens.every(function(s) {
+        return state.hiddenScreens[s.id];
+      })) {
+        state.hiddenEpics[epic.id] = true;
+      }
+    });
+    var containerEl;
+    if (typeof config.container === "string") {
+      containerEl = document.querySelector(config.container);
+    } else if (config.container instanceof HTMLElement) {
+      containerEl = config.container;
+    }
+    if (!containerEl) {
+      console.error("FlowBoard.init: container not found");
+      return;
+    }
+    var root = document.createElement("div");
+    root.className = "fb-container";
+    containerEl.innerHTML = "";
+    containerEl.appendChild(root);
+    state.container = root;
+    root.appendChild(renderToolbar());
+    var wrapper = document.createElement("div");
+    wrapper.className = "fb-canvas-wrapper";
+    var sizer = document.createElement("div");
+    sizer.className = "fb-canvas-sizer";
+    var canvas = document.createElement("div");
+    canvas.className = "fb-canvas";
+    canvas.style.width = CANVAS_W + "px";
+    canvas.style.height = CANVAS_H + "px";
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "fb-arrows-layer");
+    svg.setAttribute("width", CANVAS_W);
+    svg.setAttribute("height", CANVAS_H);
+    canvas.appendChild(svg);
+    sizer.appendChild(canvas);
+    wrapper.appendChild(sizer);
+    wrapper.appendChild(renderModeSwitch());
+    root.appendChild(wrapper);
+    state.wrapperEl = wrapper;
+    state.sizerEl = sizer;
+    state.canvasEl = canvas;
+    state.svgEl = svg;
+    state.screenEls = {};
+    var screens = state.project.screens || [];
+    var arrows = state.project.arrows || [];
+    state.defaultPositions = autoLayout(screens, arrows);
+    state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
+    var hasSavedPositions = false;
+    if (configState && configState.positions) {
+      hasSavedPositions = true;
+      state.positions = JSON.parse(JSON.stringify(configState.positions));
+    } else {
+      var savedPos = loadPositions();
+      if (savedPos) {
+        hasSavedPositions = true;
+        screens.forEach(function(s) {
+          if (savedPos[s.id]) state.positions[s.id] = savedPos[s.id];
+        });
+      }
+    }
+    var hasSavedZoom = false;
+    if (configState && configState.zoom !== void 0) {
+      hasSavedZoom = true;
+      state.zoom = configState.zoom;
+      state.panX = configState.panX || 0;
+      state.panY = configState.panY || 0;
+    } else {
+      var savedZoom = loadZoom();
+      if (savedZoom) {
+        hasSavedZoom = true;
+        state.zoom = savedZoom.zoom || 1;
+        state.panX = savedZoom.panX || 0;
+        state.panY = savedZoom.panY || 0;
+      }
+    }
+    if (hasSavedZoom) {
+      var zl = document.getElementById("fb-zoom-label");
+      if (zl) zl.textContent = Math.round(state.zoom * 100) + "%";
+    }
+    screens.forEach(function(s) {
+      var el = renderScreen(s);
+      canvas.appendChild(el);
+    });
+    applyTransform();
+    initPan();
+    initDrag();
+    initArrowDrag();
+    initSelection();
+    initModeKeys();
+    setMode("drag");
+    requestAnimationFrame(function() {
+      var heights = {};
+      screens.forEach(function(s) {
+        var el = state.screenEls[s.id];
+        if (el) heights[s.id] = el.offsetHeight;
+      });
+      state.defaultPositions = autoLayout(screens, arrows, heights);
+      if (!hasSavedPositions) {
+        state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
+        screens.forEach(function(s) {
+          var el = state.screenEls[s.id];
+          var pos = state.positions[s.id];
+          if (el && pos) {
+            el.style.left = pos.x + "px";
+            el.style.top = pos.y + "px";
+          }
+        });
+      }
+      if (!hasSavedZoom) {
+        fitToContent();
+      }
+      drawArrows();
+      freezeArrowSides();
     });
   }
 

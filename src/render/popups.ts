@@ -1,8 +1,8 @@
 // @ts-nocheck
-import { drawArrows } from './arrows';
-import { toggleScreen } from './render';
-import { state } from './state';
-import { saveArrowMutations } from './storage';
+import { drawArrows } from '../arrows';
+import { state } from '../core/state';
+import { saveArrowMutations } from '../core/storage';
+import { toggleScreen } from './screen';
 
 export function handlePopupOutsideClick(e) {
   if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target)) {

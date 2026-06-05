@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { buildSpreadMap, computeControlPoints, getAnchor, resolveArrowSides } from './arrows';
-import { state } from './state';
+import { state } from './core/state';
 
 export var html2canvasLoaded = null; // cached Promise
 
