@@ -6,7 +6,7 @@
   "style": "flowboard.css",
   "scripts": {
     "build": "tsup",
-    "dev": "concurrently -k \"tsup --watch\" \"serve . -l 3000\"",
+    "dev": "concurrently -k \"node scripts/dev-watch.cjs\" \"serve . -l 3000\"",
     "typecheck": "tsc --noEmit",
     "pretest": "tsup",
     "test": "vitest run",
