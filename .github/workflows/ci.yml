@@ -29,8 +29,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build bundle
+        run: npm run build
+
+      - name: Fail if committed bundle is stale
+        run: git diff --exit-code -- flowboard.js flowboard.min.js
+
       - name: Run tests
-        run: npm test
+        run: npx vitest run
 
   deploy:
     needs: ci
