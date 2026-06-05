@@ -8,6 +8,7 @@
     "build": "tsup",
     "dev": "concurrently -k \"node scripts/dev-watch.cjs\" \"serve . -l 3000\"",
     "typecheck": "tsc --noEmit",
+    "release": "bash scripts/release.sh",
     "pretest": "tsup",
     "test": "vitest run",
     "test:watch": "vitest"
