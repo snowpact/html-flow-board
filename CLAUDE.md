@@ -13,9 +13,11 @@ Two build outputs live at the repo root and are committed (so jsDelivr serves th
 
 ## Files
 
-- `src/` — TS modules: `constants`, `types`, `state` (singleton + data accessors), `storage`
-  (localStorage), `geometry` (pure helpers), `layout`, `arrows`, `render`, `popups`, `anchors`,
-  `interactions` (pan/drag/selection/mode/zoom), `export`, `board` (`init` + orchestration), `index` (entry).
+- `src/` — TS modules grouped by responsibility:
+  - `core/` — `constants`, `state` (+ data accessors), `storage` (localStorage), `geometry` (pure helpers)
+  - `render/` — `toolbar`, `screen`, `mode-switch`, `popups`, `anchors`
+  - `interactions/` — `transform` (zoom/pan apply), `pan`, `drag`, `selection`, `arrow-drag`, `mode`
+  - flat: `index` (entry → `window.FlowBoard`), `board` (`init` + orchestration), `layout`, `arrows`, `export`
 - `flowboard.js` / `flowboard.min.js` — **build outputs**, committed, served on the CDN. Do not hand-edit.
 - `flowboard.css` — all styles, every class prefixed `fb-` (hand-authored, root).
 - `index.html` — demo / GitHub Pages entry point (loads `flowboard.js` + `flowboard.css`).
