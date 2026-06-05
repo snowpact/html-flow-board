@@ -1,4 +1,4 @@
-// @ts-nocheck
+import { Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
 import { escapeHtml } from '../core/geometry';
 import { getEpic, state } from '../core/state';
@@ -6,7 +6,7 @@ import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { showScreenPopup } from './popups';
 
-export function toggleScreen(screenId) {
+export function toggleScreen(screenId: string): void {
   if (state.hiddenScreens[screenId]) {
     delete state.hiddenScreens[screenId];
   } else {
@@ -17,7 +17,7 @@ export function toggleScreen(screenId) {
   drawArrows();
 }
 
-export function applyScreenVisibility(screenId) {
+export function applyScreenVisibility(screenId: string): void {
   var el = state.screenEls[screenId];
   if (!el) return;
   if (state.hiddenScreens[screenId]) {
@@ -33,7 +33,7 @@ export function applyScreenVisibility(screenId) {
 }
 
 // -- Render a single screen --
-export function renderScreen(screenData) {
+export function renderScreen(screenData: Screen): HTMLElement {
   var epic = getEpic(screenData.epic);
   var color = epic ? epic.color : '#666';
   var size = screenData.size || 'md';
@@ -43,7 +43,7 @@ export function renderScreen(screenData) {
   el.dataset.screenId = screenData.id;
 
   // Position
-  var pos = state.positions[screenData.id] || { x: 100, y: 100 };
+  var pos: Position = state.positions[screenData.id] || { x: 100, y: 100 };
   el.style.left = pos.x + 'px';
   el.style.top = pos.y + 'px';
 
@@ -57,7 +57,7 @@ export function renderScreen(screenData) {
   toggleBtn.className = 'fb-screen-toggle';
   toggleBtn.title = 'Masquer cet écran';
   toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-  toggleBtn.addEventListener('click', function(e) {
+  toggleBtn.addEventListener('click', function(e: MouseEvent) {
     e.stopPropagation();
     toggleScreen(screenData.id);
   });
@@ -85,7 +85,7 @@ export function renderScreen(screenData) {
   }
 
   // Context menu (right-click)
-  el.addEventListener('contextmenu', function (e) {
+  el.addEventListener('contextmenu', function (e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     showScreenPopup(e, screenData.id);

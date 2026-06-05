@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { drawArrows } from '../arrows';
 import { CANVAS_H, CANVAS_W } from '../core/constants';
 import { toggleSelection } from '../core/geometry';
@@ -6,8 +5,9 @@ import { state } from '../core/state';
 import { savePositions } from '../core/storage';
 import { hideAnchorDots, showAnchorDots } from '../render/anchors';
 import { closeArrowPopup, closeScreenPopup } from '../render/popups';
+import { Position } from '../core/types';
 
-export function updateSelectionStyles() {
+export function updateSelectionStyles(): void {
   for (var id in state.screenEls) {
     var el = state.screenEls[id];
     if (!el) continue;
@@ -22,23 +22,23 @@ export function updateSelectionStyles() {
 // Begin moving screens. In select mode with a selection, moves the whole
 // group; otherwise moves just the screen under the cursor. Delta-based so
 // single and group moves share one path.
-export function startScreenDrag(e) {
+export function startScreenDrag(e: MouseEvent): void {
   hideAnchorDots();
   var wrapperRect = state.wrapperEl.getBoundingClientRect();
-  var startCanvas = {
+  var startCanvas: Position = {
     x: (e.clientX - wrapperRect.left - state.panX) / state.zoom,
     y: (e.clientY - wrapperRect.top - state.panY) / state.zoom
   };
 
-  var ids;
+  var ids: string[];
   if (state.mode === 'select' && Object.keys(state.selected).length) {
     ids = Object.keys(state.selected);
   } else {
-    var target = e.target.closest('.fb-screen');
+    var target = (e.target as HTMLElement).closest('.fb-screen') as HTMLElement;
     ids = target ? [target.dataset.screenId] : [];
   }
 
-  var items = [];
+  var items: { id: string; el: HTMLElement; startX: number; startY: number }[] = [];
   var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (var i = 0; i < ids.length; i++) {
     var id = ids[i];
@@ -64,13 +64,13 @@ export function startScreenDrag(e) {
 }
 
 // -- Drag screens (single in drag mode, group in select mode) --
-export function initDrag() {
-  state.canvasEl.addEventListener('mousedown', function (e) {
+export function initDrag(): void {
+  state.canvasEl.addEventListener('mousedown', function (e: MouseEvent) {
     closeArrowPopup();
     closeScreenPopup();
     if (state.creatingArrow) return;
     if (e.button !== 0) return;
-    var screenEl = e.target.closest('.fb-screen');
+    var screenEl = (e.target as HTMLElement).closest('.fb-screen') as HTMLElement;
     if (!screenEl) return;
 
     var id = screenEl.dataset.screenId;
@@ -100,7 +100,7 @@ export function initDrag() {
     startScreenDrag(e);
   });
 
-  document.addEventListener('mousemove', function (e) {
+  document.addEventListener('mousemove', function (e: MouseEvent) {
     if (!state.screenDrag) return;
 
     var wrapperRect = state.wrapperEl.getBoundingClientRect();
@@ -128,7 +128,7 @@ export function initDrag() {
     drawArrows(!!state.draggingHandle);
   });
 
-  document.addEventListener('mouseup', function (e) {
+  document.addEventListener('mouseup', function (e: MouseEvent) {
     if (!state.screenDrag) return;
 
     var items = state.screenDrag.items;
@@ -142,8 +142,8 @@ export function initDrag() {
 
     // Re-show anchor dots if cursor is still over a single dragged card
     if (singleId) {
-      var elUnder = document.elementFromPoint(e.clientX, e.clientY);
-      var screenUnder = elUnder && elUnder.closest('.fb-screen');
+      var elUnder = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement;
+      var screenUnder = elUnder && (elUnder.closest('.fb-screen') as HTMLElement);
       if (screenUnder && screenUnder.dataset.screenId === singleId) {
         showAnchorDots(singleId);
       }

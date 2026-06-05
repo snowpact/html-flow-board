@@ -1,15 +1,14 @@
-// @ts-nocheck
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from '../core/constants';
 import { state } from '../core/state';
 import { saveZoom } from '../core/storage';
 import { applyTransform } from './transform';
 import { closeArrowPopup, closeScreenPopup } from '../render/popups';
 
-export function initPan() {
+export function initPan(): void {
   var wrapper = state.wrapperEl;
 
   // Wheel: Ctrl/Meta = zoom toward cursor, otherwise = pan
-  wrapper.addEventListener('wheel', function (e) {
+  wrapper.addEventListener('wheel', function (e: WheelEvent) {
     closeArrowPopup();
     closeScreenPopup();
     if (e.ctrlKey || e.metaKey) {
@@ -27,7 +26,7 @@ export function initPan() {
       state.panY = my - cy * newZoom;
       state.zoom = newZoom;
       applyTransform();
-      var label = document.getElementById('fb-zoom-label');
+      var label = document.getElementById('fb-zoom-label') as HTMLElement;
       if (label) label.textContent = Math.round(state.zoom * 100) + '%';
       saveZoom();
     } else {
@@ -40,10 +39,10 @@ export function initPan() {
   }, { passive: false });
 
   // Click-drag on background to pan (drag mode only)
-  wrapper.addEventListener('mousedown', function (e) {
+  wrapper.addEventListener('mousedown', function (e: MouseEvent) {
     if (state.mode !== 'drag') return;
     if (state.creatingArrow) return;
-    if (e.target.closest('.fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend')) return;
+    if ((e.target as HTMLElement).closest('.fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend')) return;
     if (e.button !== 0) return;
 
     closeArrowPopup();
@@ -59,7 +58,7 @@ export function initPan() {
     e.preventDefault();
   });
 
-  document.addEventListener('mousemove', function (e) {
+  document.addEventListener('mousemove', function (e: MouseEvent) {
     if (!state.panDrag) return;
     state.panX = state.panDrag.startPanX + (e.clientX - state.panDrag.startX);
     state.panY = state.panDrag.startPanY + (e.clientY - state.panDrag.startY);

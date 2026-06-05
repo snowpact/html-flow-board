@@ -1,28 +1,28 @@
-// @ts-nocheck
 import { buildSpreadMap, computeControlPoints, getAnchor, resolveArrowSides } from './arrows';
 import { state } from './core/state';
+import { Arrow, Position, Screen } from './core/types';
 
-export var html2canvasLoaded = null; // cached Promise
+export var html2canvasLoaded: Promise<any> | null = null; // cached Promise
 
-export function loadHtml2Canvas() {
+export function loadHtml2Canvas(): Promise<any> {
   if (html2canvasLoaded) return html2canvasLoaded;
   html2canvasLoaded = new Promise(function (resolve, reject) {
-    if (window.html2canvas) { resolve(window.html2canvas); return; }
+    if ((window as any).html2canvas) { resolve((window as any).html2canvas); return; }
     var s = document.createElement('script');
     s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
-    s.onload = function () { resolve(window.html2canvas); };
+    s.onload = function () { resolve((window as any).html2canvas); };
     s.onerror = function () { html2canvasLoaded = null; reject(new Error('Failed to load html2canvas')); };
     document.head.appendChild(s);
   });
   return html2canvasLoaded;
 }
 
-export function collectExportBounds() {
+export function collectExportBounds(): { minX: number; minY: number; maxX: number; maxY: number } {
   var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-  var arrows = state.project.arrows || [];
+  var arrows: Arrow[] = state.project.arrows || [];
   var spreadMap = buildSpreadMap();
 
-  state.project.screens.forEach(function (s) {
+  state.project.screens.forEach(function (s: Screen) {
     if (state.hiddenScreens[s.id]) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
@@ -34,7 +34,7 @@ export function collectExportBounds() {
   });
 
   // Include arrow control points so arrows aren't clipped
-  arrows.forEach(function (arrow, idx) {
+  arrows.forEach(function (arrow: Arrow, idx: number) {
     if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
 
     var fromEl = state.screenEls[arrow.from];
@@ -50,7 +50,7 @@ export function collectExportBounds() {
     var cp1 = cps.cp1;
     var cp2 = cps.cp2;
 
-    [start, end, cp1, cp2].forEach(function (p) {
+    [start, end, cp1, cp2].forEach(function (p: Position) {
       minX = Math.min(minX, p.x);
       minY = Math.min(minY, p.y);
       maxX = Math.max(maxX, p.x);
@@ -61,7 +61,7 @@ export function collectExportBounds() {
   return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
 }
 
-export function doExport() {
+export function doExport(): void {
   if (!state.canvasEl || !state.project) return;
 
   var bounds = collectExportBounds();
@@ -79,12 +79,12 @@ export function doExport() {
   tmp.style.cssText = 'position:fixed;left:-99999px;top:0;width:' + vw + 'px;height:' + vh + 'px;overflow:visible;background:transparent;';
 
   // Clone visible screens, offset to crop origin
-  state.project.screens.forEach(function (s) {
+  state.project.screens.forEach(function (s: Screen) {
     if (state.hiddenScreens[s.id]) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (!el || !pos) return;
-    var clone = el.cloneNode(true);
+    var clone = el.cloneNode(true) as HTMLElement;
     clone.classList.remove('fb-selected', 'fb-dragging');
     clone.style.left = (pos.x - vx) + 'px';
     clone.style.top = (pos.y - vy) + 'px';
@@ -92,7 +92,7 @@ export function doExport() {
   });
 
   // Rasterize SVG arrows (cropped via viewBox)
-  var svgClone = state.svgEl.cloneNode(true);
+  var svgClone = state.svgEl.cloneNode(true) as SVGSVGElement;
   // Remove dimmed arrows from export
   var dimmedEls = svgClone.querySelectorAll('.fb-arrow-dimmed');
   for (var di = 0; di < dimmedEls.length; di++) {
@@ -100,8 +100,8 @@ export function doExport() {
   }
   svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   svgClone.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
-  svgClone.setAttribute('width', vw);
-  svgClone.setAttribute('height', vh);
+  svgClone.setAttribute('width', String(vw));
+  svgClone.setAttribute('height', String(vh));
 
   var svgStr = new XMLSerializer().serializeToString(svgClone);
   var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
@@ -122,7 +122,7 @@ export function doExport() {
     document.body.appendChild(tmp);
 
     // Capture the small temp container at 2x
-    loadHtml2Canvas().then(function (html2canvas) {
+    loadHtml2Canvas().then(function (html2canvas: any) {
       return html2canvas(tmp, {
         width: vw,
         height: vh,
@@ -130,13 +130,13 @@ export function doExport() {
         backgroundColor: '#f0f2f5',
         useCORS: true
       });
-    }).then(function (resultCanvas) {
+    }).then(function (resultCanvas: HTMLCanvasElement) {
       document.body.removeChild(tmp);
       var link = document.createElement('a');
       link.download = (state.project.name || 'flowboard') + '.png';
       link.href = resultCanvas.toDataURL('image/png');
       link.click();
-    }).catch(function (err) {
+    }).catch(function (err: any) {
       if (tmp.parentNode) document.body.removeChild(tmp);
       console.error('Export failed:', err);
     });
@@ -151,13 +151,13 @@ export function doExport() {
 }
 
 // -- Reset all customizations --
-export function doExportConfig() {
+export function doExportConfig(): void {
   // Build a clean copy of the project with current arrow mutations
   var projectCopy = {
     name: state.project.name,
     epics: JSON.parse(JSON.stringify(state.project.epics || [])),
-    screens: (state.project.screens || []).map(function (s) {
-      var clean = {
+    screens: (state.project.screens || []).map(function (s: Screen): Screen {
+      var clean: Screen = {
         id: s.id,
         title: s.title,
         epic: s.epic,
@@ -180,8 +180,8 @@ export function doExportConfig() {
   };
 
   // Build JS output with template literals for content fields
-  var screenStrs = projectCopy.screens.map(function (s) {
-    var lines = [];
+  var screenStrs = projectCopy.screens.map(function (s: Screen): string {
+    var lines: string[] = [];
     lines.push('      {');
     lines.push('        id: ' + JSON.stringify(s.id) + ',');
     lines.push('        title: ' + JSON.stringify(s.title) + ',');
@@ -198,8 +198,8 @@ export function doExportConfig() {
     return lines.join('\n');
   });
 
-  var arrowStrs = projectCopy.arrows.map(function (a) {
-    var parts = ['from: ' + JSON.stringify(a.from), 'to: ' + JSON.stringify(a.to)];
+  var arrowStrs = projectCopy.arrows.map(function (a: Arrow): string {
+    var parts: string[] = ['from: ' + JSON.stringify(a.from), 'to: ' + JSON.stringify(a.to)];
     if (a.label) parts.push('label: ' + JSON.stringify(a.label));
     if (a.dashed) parts.push('dashed: true');
     if (a.fromSide) parts.push('fromSide: ' + JSON.stringify(a.fromSide));
@@ -218,9 +218,9 @@ export function doExportConfig() {
   js += '  state: ' + JSON.stringify(stateCopy, null, 4).replace(/\n/g, '\n  ') + '\n';
   js += '});\n';
 
-  var btn = state.container.querySelector('.fb-action-btn[title*="presse-papier"]');
+  var btn = state.container.querySelector('.fb-action-btn[title*="presse-papier"]') as HTMLElement;
 
-  function showFeedback(success) {
+  function showFeedback(success: boolean): void {
     if (!btn) return;
     var original = btn.textContent;
     btn.textContent = success ? 'Copied!' : 'Error!';

@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { ICON_CURSOR, ICON_HAND } from '../core/constants';
 import { setMode } from '../interactions/mode';
 
-export function renderModeSwitch() {
+export function renderModeSwitch(): HTMLDivElement {
   var sw = document.createElement('div');
   sw.className = 'fb-mode-switch';
 

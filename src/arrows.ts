@@ -1,10 +1,19 @@
-// @ts-nocheck
 import { ARROW_BLEND, ARROW_OFFSET } from './core/constants';
 import { getPrimarySide } from './core/geometry';
 import { state } from './core/state';
 import { showArrowPopup } from './render/popups';
+import { Arrow, Position, Side } from './core/types';
 
-export function getBestSides(fromEl, toEl) {
+interface SidePair {
+  from: Side;
+  to: Side;
+}
+
+interface AnchorPoint extends Position {
+  name: string;
+}
+
+export function getBestSides(fromEl: HTMLElement, toEl: HTMLElement): SidePair {
   var fromId = fromEl.dataset.screenId;
   var toId = toEl.dataset.screenId;
   var fp = state.positions[fromId];
@@ -29,7 +38,7 @@ export function getBestSides(fromEl, toEl) {
   }
 }
 
-export function getAnchor(screenId, side) {
+export function getAnchor(screenId: string, side: Side): Position {
   var el = state.screenEls[screenId];
   if (!el) return { x: 0, y: 0 };
 
@@ -47,12 +56,12 @@ export function getAnchor(screenId, side) {
   } else if (parts[0] === 'left' || parts[0] === 'right') {
     // Left/right: 5 sub-positions along height
     primary = parts[0];
-    var lrMap = { top: 1/6, upper: 2/6, middle: 0.5, lower: 4/6, bottom: 5/6 };
+    var lrMap: Record<string, number> = { top: 1/6, upper: 2/6, middle: 0.5, lower: 4/6, bottom: 5/6 };
     fraction = lrMap[parts[1]] !== undefined ? lrMap[parts[1]] : 0.5;
   } else {
     // Top/bottom: 3 sub-positions along width
     primary = parts[0];
-    var tbMap = { left: 0.25, right: 0.75 };
+    var tbMap: Record<string, number> = { left: 0.25, right: 0.75 };
     fraction = tbMap[parts[1]] !== undefined ? tbMap[parts[1]] : 0.5;
   }
 
@@ -65,7 +74,7 @@ export function getAnchor(screenId, side) {
   }
 }
 
-export function computeControlPoints(start, end, fromSide, toSide) {
+export function computeControlPoints(start: Position, end: Position, fromSide: Side, toSide: Side): { cp1: Position; cp2: Position } {
   var fromPrimary = getPrimarySide(fromSide);
   var toPrimary = getPrimarySide(toSide);
   var dx = end.x - start.x;
@@ -91,7 +100,7 @@ export function computeControlPoints(start, end, fromSide, toSide) {
 }
 
 // Resolve the sides for a given arrow: arrow props → auto-spread → auto-detect.
-export function resolveArrowSides(arrow, idx, spreadMap) {
+export function resolveArrowSides(arrow: Arrow, idx: number, spreadMap: Record<number, SidePair>): SidePair {
   if (arrow.fromSide && arrow.toSide) {
     return { from: arrow.fromSide, to: arrow.toSide };
   }
@@ -106,14 +115,14 @@ export function resolveArrowSides(arrow, idx, spreadMap) {
   return { from: 'right', to: 'left' };
 }
 
-export function getAllAnchorPoints(screenId) {
+export function getAllAnchorPoints(screenId: string): AnchorPoint[] {
   var names = [
     'left-top', 'left-upper', 'left-middle', 'left-lower', 'left-bottom',
     'right-top', 'right-upper', 'right-middle', 'right-lower', 'right-bottom',
     'top-left', 'top', 'top-right',
     'bottom-left', 'bottom', 'bottom-right'
   ];
-  var points = [];
+  var points: AnchorPoint[] = [];
   for (var i = 0; i < names.length; i++) {
     var pt = getAnchor(screenId, names[i]);
     points.push({ name: names[i], x: pt.x, y: pt.y });
@@ -124,12 +133,12 @@ export function getAllAnchorPoints(screenId) {
 // Build auto-spread map (index-based): when multiple arrows connect the
 // same pair of screens and don't have explicit fromSide/toSide, distribute
 // them across sub-positions so they don't overlap visually.
-export function buildSpreadMap() {
-  var arrows = state.project ? (state.project.arrows || []) : [];
+export function buildSpreadMap(): Record<number, SidePair> {
+  var arrows: Arrow[] = state.project ? (state.project.arrows || []) : [];
 
   // First pass: group ALL visible arrows by screen pair
-  var pairGroups = {};
-  arrows.forEach(function (arrow, idx) {
+  var pairGroups: Record<string, number[]> = {};
+  arrows.forEach(function (arrow: Arrow, idx: number) {
     if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
 
     var ids = [arrow.from, arrow.to].sort();
@@ -139,13 +148,13 @@ export function buildSpreadMap() {
   });
 
   // Second pass: assign spread positions to arrows without explicit sides
-  var spreadMap = {};
+  var spreadMap: Record<number, SidePair> = {};
 
-  Object.keys(pairGroups).forEach(function (pairKey) {
+  Object.keys(pairGroups).forEach(function (pairKey: string) {
     var group = pairGroups[pairKey];
     if (group.length <= 1) return;
 
-    group.forEach(function (arrowIdx, posInGroup) {
+    group.forEach(function (arrowIdx: number, posInGroup: number) {
       var arrow = arrows[arrowIdx];
       // Skip arrows that already have explicit sides
       if (arrow.fromSide && arrow.toSide) return;
@@ -157,7 +166,7 @@ export function buildSpreadMap() {
       var baseSides = getBestSides(fromEl, toEl);
       var isHorizontal = (baseSides.from === 'right' || baseSides.from === 'left');
 
-      var suffixes;
+      var suffixes: string[];
       if (group.length === 2) {
         suffixes = isHorizontal ? ['-upper', '-lower'] : ['-left', '-right'];
       } else if (group.length === 3) {
@@ -185,10 +194,10 @@ export function buildSpreadMap() {
 
 // Freeze spread-computed sides onto arrow objects so they never shift
 // when arrows are added/removed later. Called once at init and on reset.
-export function freezeArrowSides() {
-  var arrows = state.project ? (state.project.arrows || []) : [];
+export function freezeArrowSides(): void {
+  var arrows: Arrow[] = state.project ? (state.project.arrows || []) : [];
   var spreadMap = buildSpreadMap();
-  arrows.forEach(function (arrow, idx) {
+  arrows.forEach(function (arrow: Arrow, idx: number) {
     if (arrow.fromSide && arrow.toSide) return;
     var sides = resolveArrowSides(arrow, idx, spreadMap);
     arrow.fromSide = sides.from;
@@ -196,10 +205,10 @@ export function freezeArrowSides() {
   });
 }
 
-export function drawArrows(skipHandles) {
+export function drawArrows(skipHandles?: boolean): void {
   if (!state.svgEl || !state.project) return;
 
-  var arrows = state.project.arrows || [];
+  var arrows: Arrow[] = state.project.arrows || [];
   var ns = 'http://www.w3.org/2000/svg';
   var spreadMap = buildSpreadMap();
   state.svgEl.innerHTML = '';
@@ -221,7 +230,7 @@ export function drawArrows(skipHandles) {
   defs.appendChild(marker);
   state.svgEl.appendChild(defs);
 
-  arrows.forEach(function (arrow, idx) {
+  arrows.forEach(function (arrow: Arrow, idx: number) {
     var fromEl = state.screenEls[arrow.from];
     var toEl = state.screenEls[arrow.to];
     if (!fromEl || !toEl) return;
@@ -268,9 +277,9 @@ export function drawArrows(skipHandles) {
     hitPath.setAttribute('stroke', 'transparent');
     hitPath.setAttribute('stroke-width', '16');
     hitPath.setAttribute('pointer-events', 'stroke');
-    hitPath.style.cursor = 'pointer';
-    (function (arrowIdx) {
-      hitPath.addEventListener('click', function (e) {
+    (hitPath as SVGElement).style.cursor = 'pointer';
+    (function (arrowIdx: number) {
+      hitPath.addEventListener('click', function (e: MouseEvent) {
         e.stopPropagation();
         showArrowPopup(e, arrowIdx);
       });
@@ -288,8 +297,8 @@ export function drawArrows(skipHandles) {
       if (isDimmed) labelGroup.setAttribute('class', 'fb-arrow-dimmed');
 
       var text = document.createElementNS(ns, 'text');
-      text.setAttribute('x', midX);
-      text.setAttribute('y', midY);
+      text.setAttribute('x', String(midX));
+      text.setAttribute('y', String(midY));
       text.setAttribute('class', 'fb-arrow-label');
       text.setAttribute('fill', '#555');
       text.setAttribute('font-size', '11');
@@ -301,14 +310,14 @@ export function drawArrows(skipHandles) {
       // Temporarily add text to measure
       state.svgEl.appendChild(text);
       var bbox;
-      try { bbox = text.getBBox(); } catch (e) { bbox = { x: midX - 20, y: midY - 8, width: 40, height: 16 }; }
+      try { bbox = (text as SVGTextElement).getBBox(); } catch (e) { bbox = { x: midX - 20, y: midY - 8, width: 40, height: 16 }; }
       state.svgEl.removeChild(text);
 
       var bgRect = document.createElementNS(ns, 'rect');
-      bgRect.setAttribute('x', bbox.x - 4);
-      bgRect.setAttribute('y', bbox.y - 2);
-      bgRect.setAttribute('width', bbox.width + 8);
-      bgRect.setAttribute('height', bbox.height + 4);
+      bgRect.setAttribute('x', String(bbox.x - 4));
+      bgRect.setAttribute('y', String(bbox.y - 2));
+      bgRect.setAttribute('width', String(bbox.width + 8));
+      bgRect.setAttribute('height', String(bbox.height + 4));
       bgRect.setAttribute('class', 'fb-arrow-label-bg');
       bgRect.setAttribute('fill', '#f0f2f5');
       bgRect.setAttribute('rx', '3');
@@ -325,17 +334,17 @@ export function drawArrows(skipHandles) {
   }
 }
 
-export function updateHandles() {
+export function updateHandles(): void {
   // Remove old handle divs
-  state.handleEls.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+  state.handleEls.forEach(function (el: HTMLElement) { if (el.parentNode) el.parentNode.removeChild(el); });
   state.handleEls = [];
 
   if (!state.project) return;
 
-  var arrows = state.project.arrows || [];
+  var arrows: Arrow[] = state.project.arrows || [];
   var spreadMap = buildSpreadMap();
 
-  arrows.forEach(function (arrow, idx) {
+  arrows.forEach(function (arrow: Arrow, idx: number) {
     var fromEl = state.screenEls[arrow.from];
     var toEl = state.screenEls[arrow.to];
     if (!fromEl || !toEl) return;
@@ -351,12 +360,12 @@ export function updateHandles() {
     [
       { pt: start, end: 'from', screenId: arrow.from },
       { pt: end,   end: 'to',   screenId: arrow.to }
-    ].forEach(function (cfg) {
+    ].forEach(function (cfg: { pt: Position; end: string; screenId: string }) {
       var h = document.createElement('div');
       h.className = 'fb-arrow-handle';
       h.style.left = (cfg.pt.x - 8) + 'px';
       h.style.top = (cfg.pt.y - 8) + 'px';
-      h.dataset.arrowIndex = idx;
+      h.dataset.arrowIndex = String(idx);
       h.dataset.arrowEnd = cfg.end;
       h.dataset.screenId = cfg.screenId;
 

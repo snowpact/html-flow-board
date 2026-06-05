@@ -295,8 +295,9 @@
     }
   }
   function handleArrowCreationCancel(e) {
-    if (e.target.classList.contains("fb-anchor-dot")) return;
-    if (e.target.closest(".fb-screen")) return;
+    var target = e.target;
+    if (target.classList.contains("fb-anchor-dot")) return;
+    if (target.closest(".fb-screen")) return;
     cancelArrowCreation();
   }
   function cancelArrowCreation() {
@@ -928,8 +929,8 @@
         var labelGroup = document.createElementNS(ns, "g");
         if (isDimmed) labelGroup.setAttribute("class", "fb-arrow-dimmed");
         var text = document.createElementNS(ns, "text");
-        text.setAttribute("x", midX);
-        text.setAttribute("y", midY);
+        text.setAttribute("x", String(midX));
+        text.setAttribute("y", String(midY));
         text.setAttribute("class", "fb-arrow-label");
         text.setAttribute("fill", "#555");
         text.setAttribute("font-size", "11");
@@ -946,10 +947,10 @@
         }
         state.svgEl.removeChild(text);
         var bgRect = document.createElementNS(ns, "rect");
-        bgRect.setAttribute("x", bbox.x - 4);
-        bgRect.setAttribute("y", bbox.y - 2);
-        bgRect.setAttribute("width", bbox.width + 8);
-        bgRect.setAttribute("height", bbox.height + 4);
+        bgRect.setAttribute("x", String(bbox.x - 4));
+        bgRect.setAttribute("y", String(bbox.y - 2));
+        bgRect.setAttribute("width", String(bbox.width + 8));
+        bgRect.setAttribute("height", String(bbox.height + 4));
         bgRect.setAttribute("class", "fb-arrow-label-bg");
         bgRect.setAttribute("fill", "#f0f2f5");
         bgRect.setAttribute("rx", "3");
@@ -987,7 +988,7 @@
         h.className = "fb-arrow-handle";
         h.style.left = cfg.pt.x - 8 + "px";
         h.style.top = cfg.pt.y - 8 + "px";
-        h.dataset.arrowIndex = idx;
+        h.dataset.arrowIndex = String(idx);
         h.dataset.arrowEnd = cfg.end;
         h.dataset.screenId = cfg.screenId;
         state.canvasEl.appendChild(h);
@@ -1197,7 +1198,8 @@
     if (sw) {
       var btns = sw.querySelectorAll(".fb-mode-btn");
       for (var i = 0; i < btns.length; i++) {
-        btns[i].classList.toggle("active", btns[i].dataset.mode === mode);
+        var btn = btns[i];
+        btn.classList.toggle("active", btn.dataset.mode === mode);
       }
     }
   }
@@ -1679,8 +1681,8 @@
     }
     svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     svgClone.setAttribute("viewBox", vx + " " + vy + " " + vw + " " + vh);
-    svgClone.setAttribute("width", vw);
-    svgClone.setAttribute("height", vh);
+    svgClone.setAttribute("width", String(vw));
+    svgClone.setAttribute("height", String(vh));
     var svgStr = new XMLSerializer().serializeToString(svgClone);
     var blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
     var url = URL.createObjectURL(blob);
@@ -2112,8 +2114,8 @@
     canvas.style.height = CANVAS_H + "px";
     var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "fb-arrows-layer");
-    svg.setAttribute("width", CANVAS_W);
-    svg.setAttribute("height", CANVAS_H);
+    svg.setAttribute("width", String(CANVAS_W));
+    svg.setAttribute("height", String(CANVAS_H));
     canvas.appendChild(svg);
     sizer.appendChild(canvas);
     wrapper.appendChild(sizer);

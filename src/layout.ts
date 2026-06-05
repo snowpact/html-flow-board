@@ -1,9 +1,9 @@
-// @ts-nocheck
 import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y, SIZES } from './core/constants';
+import { Arrow, Position, Screen } from './core/types';
 
-export function bfsDepth(screens, arrows) {
-  var children = {};
-  var hasParent = {};
+export function bfsDepth(screens: Screen[], arrows: Arrow[]): Record<string, number> {
+  var children: Record<string, string[]> = {};
+  var hasParent: Record<string, boolean> = {};
   screens.forEach(function (s) { children[s.id] = []; });
   arrows.forEach(function (a) {
     if (children[a.from]) children[a.from].push(a.to);
@@ -12,9 +12,9 @@ export function bfsDepth(screens, arrows) {
   var roots = screens.filter(function (s) { return !hasParent[s.id]; }).map(function (s) { return s.id; });
   if (roots.length === 0 && screens.length > 0) roots = [screens[0].id];
 
-  var col = {};
-  var visited = {};
-  var queue = [];
+  var col: Record<string, number> = {};
+  var visited: Record<string, boolean> = {};
+  var queue: string[] = [];
   roots.forEach(function (r) { queue.push(r); col[r] = 0; visited[r] = true; });
   while (queue.length > 0) {
     var cur = queue.shift();
@@ -30,7 +30,7 @@ export function bfsDepth(screens, arrows) {
   return col;
 }
 
-export function centerPositions(positions, screens, totalW, totalH) {
+export function centerPositions(positions: Record<string, Position>, screens: Screen[], totalW: number, totalH: number): void {
   var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
   var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
   screens.forEach(function (s) {
@@ -42,11 +42,11 @@ export function centerPositions(positions, screens, totalW, totalH) {
 }
 
 // -- Auto layout (Flow) --
-export function autoLayout(screens, arrows, heights) {
+export function autoLayout(screens: Screen[], arrows: Arrow[], heights?: Record<string, number>): Record<string, Position> {
   var col = bfsDepth(screens, arrows);
 
   // Group by column
-  var columns = {};
+  var columns: Record<string, Screen[]> = {};
   screens.forEach(function (s) {
     var c = col[s.id];
     if (!columns[c]) columns[c] = [];
@@ -54,7 +54,7 @@ export function autoLayout(screens, arrows, heights) {
   });
 
   // Compute positions (first pass: relative to 0,0)
-  var positions = {};
+  var positions: Record<string, Position> = {};
   var colKeys = Object.keys(columns).map(Number).sort(function (a, b) { return a - b; });
   var offsetX = 0;
   var totalH = 0;
@@ -84,9 +84,9 @@ export function autoLayout(screens, arrows, heights) {
 }
 
 // -- Layout by Epics --
-export function layoutByEpics(screens, arrows, heights) {
-  var epicGroups = {};
-  var epicOrder = [];
+export function layoutByEpics(screens: Screen[], arrows: Arrow[], heights: Record<string, number>): Record<string, Position> {
+  var epicGroups: Record<string, Screen[]> = {};
+  var epicOrder: string[] = [];
   screens.forEach(function (s) {
     var eid = s.epic || '_none';
     if (!epicGroups[eid]) { epicGroups[eid] = []; epicOrder.push(eid); }
@@ -95,7 +95,7 @@ export function layoutByEpics(screens, arrows, heights) {
 
   var col = bfsDepth(screens, arrows);
 
-  var positions = {};
+  var positions: Record<string, Position> = {};
   var offsetX = 0;
   var totalH = 0;
 
@@ -124,9 +124,9 @@ export function layoutByEpics(screens, arrows, heights) {
 }
 
 // -- Layout Grid --
-export function layoutGrid(screens, arrows, heights) {
+export function layoutGrid(screens: Screen[], arrows: Arrow[], heights: Record<string, number>): Record<string, Position> {
   var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
-  var positions = {};
+  var positions: Record<string, Position> = {};
   var offsetX = 0, offsetY = 0;
   var rowMaxH = 0;
   var totalW = 0, totalH = 0;

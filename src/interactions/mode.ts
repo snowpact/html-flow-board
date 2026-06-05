@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { state } from '../core/state';
 import { updateSelectionStyles } from './drag';
 
-export function setMode(mode) {
+export function setMode(mode: string): void {
   if (mode !== 'select') mode = 'drag';
   state.mode = mode;
 
@@ -16,22 +15,23 @@ export function setMode(mode) {
     state.wrapperEl.classList.toggle('fb-mode-select', mode === 'select');
     state.wrapperEl.classList.toggle('fb-mode-drag', mode === 'drag');
   }
-  var sw = state.container && state.container.querySelector('.fb-mode-switch');
+  var sw = state.container && (state.container.querySelector('.fb-mode-switch') as HTMLElement);
   if (sw) {
     var btns = sw.querySelectorAll('.fb-mode-btn');
     for (var i = 0; i < btns.length; i++) {
-      btns[i].classList.toggle('active', btns[i].dataset.mode === mode);
+      var btn = btns[i] as HTMLElement;
+      btn.classList.toggle('active', btn.dataset.mode === mode);
     }
   }
 }
 
-export function initModeKeys() {
+export function initModeKeys(): void {
   state.wrapperEl.addEventListener('mouseenter', function () { state.pointerInBoard = true; });
   state.wrapperEl.addEventListener('mouseleave', function () { state.pointerInBoard = false; });
 
-  document.addEventListener('keydown', function (e) {
+  document.addEventListener('keydown', function (e: KeyboardEvent) {
     if (!state.pointerInBoard) return;
-    var t = e.target;
+    var t = e.target as HTMLElement;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'v' || e.key === 'V') {

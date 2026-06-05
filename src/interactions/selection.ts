@@ -1,24 +1,24 @@
-// @ts-nocheck
 import { SELECT_DRAG_THRESHOLD } from '../core/constants';
 import { rectsIntersect } from '../core/geometry';
 import { state } from '../core/state';
 import { updateSelectionStyles } from './drag';
 import { closeArrowPopup, closeScreenPopup } from '../render/popups';
+import { Screen, Rect } from '../core/types';
 
-export function initSelection() {
+export function initSelection(): void {
   var wrapper = state.wrapperEl;
 
-  wrapper.addEventListener('mousedown', function (e) {
+  wrapper.addEventListener('mousedown', function (e: MouseEvent) {
     if (state.mode !== 'select') return;
     if (state.creatingArrow) return;
     if (e.button !== 0) return;
-    if (e.target.closest('.fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend')) return;
+    if ((e.target as HTMLElement).closest('.fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend')) return;
 
     closeArrowPopup();
     closeScreenPopup();
 
     var additive = e.metaKey || e.ctrlKey || e.shiftKey;
-    var base = {};
+    var base: Record<string, boolean> = {};
     if (additive) {
       for (var k in state.selected) base[k] = true;
     }
@@ -26,7 +26,7 @@ export function initSelection() {
     e.preventDefault();
   });
 
-  document.addEventListener('mousemove', function (e) {
+  document.addEventListener('mousemove', function (e: MouseEvent) {
     if (!state.selectBox) return;
     var sb = state.selectBox;
     if (!sb.moved &&
@@ -54,10 +54,10 @@ export function initSelection() {
 
     // Live hit-test: rubber-band vs each screen, both in viewport px
     // (so zoom/pan need no conversion).
-    var box = { left: left, top: top, right: right, bottom: bottom };
-    var next = {};
+    var box: Rect = { left: left, top: top, right: right, bottom: bottom };
+    var next: Record<string, boolean> = {};
     for (var bk in sb.base) next[bk] = true;
-    var screens = state.project.screens || [];
+    var screens: Screen[] = state.project.screens || [];
     for (var i = 0; i < screens.length; i++) {
       var id = screens[i].id;
       if (state.hiddenScreens[id]) continue;
@@ -69,7 +69,7 @@ export function initSelection() {
     updateSelectionStyles();
   });
 
-  document.addEventListener('mouseup', function () {
+  document.addEventListener('mouseup', function (): void {
     if (!state.selectBox) return;
     var sb = state.selectBox;
     if (sb.el && sb.el.parentNode) sb.el.parentNode.removeChild(sb.el);

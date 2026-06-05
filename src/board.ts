@@ -1,7 +1,7 @@
-// @ts-nocheck
 import { drawArrows, freezeArrowSides } from './arrows';
 import { CANVAS_H, CANVAS_W } from './core/constants';
 import { state } from './core/state';
+import { Epic, FlowConfig, Screen } from './core/types';
 import { loadArrowMutations, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
 import { initArrowDrag } from './interactions/arrow-drag';
 import { initDrag } from './interactions/drag';
@@ -14,13 +14,13 @@ import { renderModeSwitch } from './render/mode-switch';
 import { renderScreen } from './render/screen';
 import { renderToolbar, updateLayoutButton } from './render/toolbar';
 
-export function cycleLayout() {
+export function cycleLayout(): void {
   state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
 
-  var heights = {};
+  var heights: Record<string, number> = {};
   var screens = state.project.screens || [];
   var arrows = state.project.arrows || [];
-  screens.forEach(function (s) {
+  screens.forEach(function (s: Screen) {
     var el = state.screenEls[s.id];
     if (el) heights[s.id] = el.offsetHeight;
   });
@@ -28,7 +28,7 @@ export function cycleLayout() {
   var layoutFn = LAYOUT_STRATEGIES[state.layoutIndex].fn;
   state.positions = layoutFn(screens, arrows, heights);
 
-  screens.forEach(function (s) {
+  screens.forEach(function (s: Screen) {
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (el && pos) {
@@ -43,7 +43,7 @@ export function cycleLayout() {
   fitToContent();
 }
 
-export function doReset() {
+export function doReset(): void {
   if (!confirm('Remettre la disposition par défaut ?')) return;
 
   var key = storageKey();
@@ -67,15 +67,15 @@ export function doReset() {
 
   var screens = state.project.screens || [];
   var arrows = state.project.arrows || [];
-  var heights = {};
-  screens.forEach(function (s) {
+  var heights: Record<string, number> = {};
+  screens.forEach(function (s: Screen) {
     var el = state.screenEls[s.id];
     if (el) heights[s.id] = el.offsetHeight;
   });
   state.positions = autoLayout(screens, arrows, heights);
   state.defaultPositions = JSON.parse(JSON.stringify(state.positions));
 
-  screens.forEach(function (s) {
+  screens.forEach(function (s: Screen) {
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (el && pos) {
@@ -87,7 +87,7 @@ export function doReset() {
 
   var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
   for (var i = 0; i < checkboxes.length; i++) {
-    checkboxes[i].checked = true;
+    (checkboxes[i] as HTMLInputElement).checked = true;
     var item = checkboxes[i].closest('.fb-legend-item');
     if (item) item.classList.remove('fb-dimmed');
   }
@@ -99,7 +99,7 @@ export function doReset() {
 }
 
 // -- Export full init config as JS --
-export function init(config) {
+export function init(config: FlowConfig): void {
   if (!config || !config.project) {
     console.error('FlowBoard.init: config.project is required');
     return;
@@ -140,17 +140,17 @@ export function init(config) {
 
   // Derive hiddenEpics from hiddenScreens: an epic is "hidden" if all its screens are hidden
   var allScreens = config.project.screens || [];
-  (config.project.epics || []).forEach(function (epic) {
-    var epicScreens = allScreens.filter(function (s) { return s.epic === epic.id; });
-    if (epicScreens.length > 0 && epicScreens.every(function (s) { return state.hiddenScreens[s.id]; })) {
+  (config.project.epics || []).forEach(function (epic: Epic) {
+    var epicScreens = allScreens.filter(function (s: Screen) { return s.epic === epic.id; });
+    if (epicScreens.length > 0 && epicScreens.every(function (s: Screen) { return state.hiddenScreens[s.id]; })) {
       state.hiddenEpics[epic.id] = true;
     }
   });
 
   // Resolve container
-  var containerEl;
+  var containerEl: HTMLElement;
   if (typeof config.container === 'string') {
-    containerEl = document.querySelector(config.container);
+    containerEl = document.querySelector(config.container) as HTMLElement;
   } else if (config.container instanceof HTMLElement) {
     containerEl = config.container;
   }
@@ -184,8 +184,8 @@ export function init(config) {
   // SVG arrows layer
   var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'fb-arrows-layer');
-  svg.setAttribute('width', CANVAS_W);
-  svg.setAttribute('height', CANVAS_H);
+  svg.setAttribute('width', String(CANVAS_W));
+  svg.setAttribute('height', String(CANVAS_H));
 
   canvas.appendChild(svg);
   sizer.appendChild(canvas);
@@ -263,8 +263,8 @@ export function init(config) {
   // After DOM layout: measure heights, recompute layout, draw arrows
   requestAnimationFrame(function () {
     // Measure actual screen heights
-    var heights = {};
-    screens.forEach(function (s) {
+    var heights: Record<string, number> = {};
+    screens.forEach(function (s: Screen) {
       var el = state.screenEls[s.id];
       if (el) heights[s.id] = el.offsetHeight;
     });
@@ -275,7 +275,7 @@ export function init(config) {
     if (!hasSavedPositions) {
       state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
       // Apply corrected positions to DOM
-      screens.forEach(function (s) {
+      screens.forEach(function (s: Screen) {
         var el = state.screenEls[s.id];
         var pos = state.positions[s.id];
         if (el && pos) {

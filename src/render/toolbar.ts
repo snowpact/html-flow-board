@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { drawArrows } from '../arrows';
 import { cycleLayout, doReset } from '../board';
 import { ZOOM_STEP } from '../core/constants';
@@ -8,8 +7,9 @@ import { doExport, doExportConfig } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
 import { applyScreenVisibility } from './screen';
+import { Epic, Screen } from '../core/types';
 
-export function updateLayoutButton() {
+export function updateLayoutButton(): void {
   var btn = document.getElementById('fb-layout-btn');
   if (btn) {
     var name = LAYOUT_STRATEGIES[state.layoutIndex].name;
@@ -18,7 +18,7 @@ export function updateLayoutButton() {
 }
 
 // -- Get epic by id --
-export function renderToolbar() {
+export function renderToolbar(): HTMLElement {
   var header = document.createElement('div');
   header.className = 'fb-header';
 
@@ -39,7 +39,7 @@ export function renderToolbar() {
   // Legend with checkboxes
   var legend = document.createElement('div');
   legend.className = 'fb-legend';
-  (state.project.epics || []).forEach(function (epic) {
+  (state.project.epics || []).forEach(function (epic: Epic) {
     var label = document.createElement('label');
     label.className = 'fb-legend-item';
 
@@ -159,7 +159,7 @@ export function renderToolbar() {
 }
 
 // -- Toggle notes visibility --
-export function toggleNotesVisibility() {
+export function toggleNotesVisibility(): void {
   var footers = state.container.querySelectorAll('.fb-screen-footer');
   for (var i = 0; i < footers.length; i++) {
     if (state.showNotes) {
@@ -171,10 +171,10 @@ export function toggleNotesVisibility() {
 }
 
 // -- Toggle epic visibility (shortcut: hides/shows each screen individually) --
-export function toggleEpic(epicId) {
+export function toggleEpic(epicId: string): void {
   // If any screen of this epic is visible → hide all; otherwise show all
   var hasVisible = false;
-  state.project.screens.forEach(function (s) {
+  state.project.screens.forEach(function (s: Screen) {
     if (s.epic === epicId && !state.hiddenScreens[s.id]) hasVisible = true;
   });
   var isHiding = hasVisible;
@@ -188,8 +188,8 @@ export function toggleEpic(epicId) {
   // Update legend item dimming
   var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
   for (var i = 0; i < checkboxes.length; i++) {
-    var cb = checkboxes[i];
-    var item = cb.closest('.fb-legend-item');
+    var cb = checkboxes[i] as HTMLInputElement;
+    var item = cb.closest('.fb-legend-item') as HTMLElement;
     if (cb.dataset.epicId === epicId) {
       cb.checked = !isHiding;
       if (isHiding) {
@@ -201,7 +201,7 @@ export function toggleEpic(epicId) {
   }
 
   // Toggle each screen of this epic individually
-  state.project.screens.forEach(function (s) {
+  state.project.screens.forEach(function (s: Screen) {
     if (s.epic !== epicId) return;
     if (isHiding) {
       state.hiddenScreens[s.id] = true;

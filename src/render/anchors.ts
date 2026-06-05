@@ -1,11 +1,11 @@
-// @ts-nocheck
 import { computeControlPoints, drawArrows, getAllAnchorPoints, getAnchor } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
+import { Arrow, Screen, Side } from '../core/types';
 
-export var hoverHideTimeout = null;
+export var hoverHideTimeout: ReturnType<typeof setTimeout> | null = null;
 
-export function scheduleHideAnchors() {
+export function scheduleHideAnchors(): void {
   if (state.creatingArrow) return;
   hoverHideTimeout = setTimeout(function () {
     hideAnchorDots();
@@ -13,14 +13,14 @@ export function scheduleHideAnchors() {
   }, 150);
 }
 
-export function cancelHideAnchors() {
+export function cancelHideAnchors(): void {
   if (hoverHideTimeout) {
     clearTimeout(hoverHideTimeout);
     hoverHideTimeout = null;
   }
 }
 
-export function showAnchorDots(screenId) {
+export function showAnchorDots(screenId: string): void {
   hideAnchorDots();
   if (state.hiddenScreens[screenId]) return;
 
@@ -41,7 +41,7 @@ export function showAnchorDots(screenId) {
       dot.classList.remove('fb-anchor-dot-hover');
       scheduleHideAnchors();
     });
-    dot.addEventListener('mousedown', function (e) {
+    dot.addEventListener('mousedown', function (e: MouseEvent) {
       e.stopPropagation();
       e.preventDefault();
       startArrowCreation(screenId, anchor.name);
@@ -52,17 +52,17 @@ export function showAnchorDots(screenId) {
   });
 }
 
-export function hideAnchorDots() {
-  state.anchorDotsEls.forEach(function (el) {
+export function hideAnchorDots(): void {
+  state.anchorDotsEls.forEach(function (el: HTMLElement) {
     if (el.parentNode) el.parentNode.removeChild(el);
   });
   state.anchorDotsEls = [];
 }
 
-export function showAllAnchorDots() {
+export function showAllAnchorDots(): void {
   hideAnchorDots();
   var screens = state.project.screens || [];
-  screens.forEach(function (s) {
+  screens.forEach(function (s: Screen) {
     if (state.hiddenScreens[s.id]) return;
     var anchors = getAllAnchorPoints(s.id);
     anchors.forEach(function (anchor) {
@@ -79,7 +79,7 @@ export function showAllAnchorDots() {
       dot.addEventListener('mouseleave', function () {
         dot.classList.remove('fb-anchor-dot-hover');
       });
-      dot.addEventListener('mousedown', function (e) {
+      dot.addEventListener('mousedown', function (e: MouseEvent) {
         e.stopPropagation();
         e.preventDefault();
         if (state.creatingArrow && s.id !== state.creatingArrow.fromScreenId) {
@@ -94,7 +94,7 @@ export function showAllAnchorDots() {
 
   // Highlight source dot
   if (state.creatingArrow) {
-    state.anchorDotsEls.forEach(function (dot) {
+    state.anchorDotsEls.forEach(function (dot: HTMLElement) {
       if (dot.dataset.screenId === state.creatingArrow.fromScreenId &&
           dot.dataset.anchorName === state.creatingArrow.fromSide) {
         dot.classList.add('fb-anchor-dot-source');
@@ -103,7 +103,7 @@ export function showAllAnchorDots() {
   }
 }
 
-export function startArrowCreation(fromScreenId, fromSide) {
+export function startArrowCreation(fromScreenId: string, fromSide: Side): void {
   state.creatingArrow = {
     fromScreenId: fromScreenId,
     fromSide: fromSide,
@@ -150,7 +150,7 @@ export function startArrowCreation(fromScreenId, fromSide) {
   state.wrapperEl.addEventListener('mousedown', handleArrowCreationCancel);
 }
 
-export function handleArrowCreationMove(e) {
+export function handleArrowCreationMove(e: MouseEvent): void {
   if (!state.creatingArrow || !state.creatingArrow.tempLine) return;
 
   var wrapperRect = state.wrapperEl.getBoundingClientRect();
@@ -161,7 +161,7 @@ export function handleArrowCreationMove(e) {
 
   var dx = canvasX - start.x;
   var dy = canvasY - start.y;
-  var toSide;
+  var toSide: Side;
   if (Math.abs(dx) >= Math.abs(dy)) {
     toSide = dx > 0 ? 'left' : 'right';
   } else {
@@ -178,19 +178,20 @@ export function handleArrowCreationMove(e) {
   state.creatingArrow.tempLine.setAttribute('d', d);
 }
 
-export function handleArrowCreationKeydown(e) {
+export function handleArrowCreationKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     cancelArrowCreation();
   }
 }
 
-export function handleArrowCreationCancel(e) {
-  if (e.target.classList.contains('fb-anchor-dot')) return;
-  if (e.target.closest('.fb-screen')) return;
+export function handleArrowCreationCancel(e: MouseEvent): void {
+  var target = e.target as HTMLElement;
+  if (target.classList.contains('fb-anchor-dot')) return;
+  if (target.closest('.fb-screen')) return;
   cancelArrowCreation();
 }
 
-export function cancelArrowCreation() {
+export function cancelArrowCreation(): void {
   if (!state.creatingArrow) return;
 
   if (state.creatingArrow.tempLine && state.creatingArrow.tempLine.parentNode) {
@@ -211,7 +212,7 @@ export function cancelArrowCreation() {
   state.wrapperEl.removeEventListener('mousedown', handleArrowCreationCancel);
 }
 
-export function completeArrowCreation(toScreenId, toSide) {
+export function completeArrowCreation(toScreenId: string, toSide: Side): void {
   if (!state.creatingArrow) return;
 
   var fromScreenId = state.creatingArrow.fromScreenId;
@@ -222,7 +223,7 @@ export function completeArrowCreation(toScreenId, toSide) {
     return;
   }
 
-  var newArrow = { from: fromScreenId, to: toScreenId, fromSide: fromSide, toSide: toSide };
+  var newArrow: Arrow = { from: fromScreenId, to: toScreenId, fromSide: fromSide, toSide: toSide };
   state.project.arrows.push(newArrow);
   saveArrowMutations();
 

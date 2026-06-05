@@ -1,14 +1,14 @@
-// @ts-nocheck
 import { buildSpreadMap, drawArrows, getAllAnchorPoints, getBestSides, updateHandles } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
 import { closeArrowPopup, closeScreenPopup } from '../render/popups';
+import { Arrow } from '../core/types';
 
-export function initArrowDrag() {
+export function initArrowDrag(): void {
   // Mousedown: event delegation on canvas for .fb-arrow-handle
-  state.canvasEl.addEventListener('mousedown', function (e) {
+  state.canvasEl.addEventListener('mousedown', function (e: MouseEvent) {
     if (state.creatingArrow) return;
-    var handle = e.target.closest('.fb-arrow-handle');
+    var handle = (e.target as HTMLElement).closest('.fb-arrow-handle') as HTMLElement;
     if (!handle) return;
 
     closeArrowPopup();
@@ -17,7 +17,7 @@ export function initArrowDrag() {
     e.preventDefault();
 
     var arrowIdx = parseInt(handle.dataset.arrowIndex, 10);
-    var arrow = state.project.arrows[arrowIdx];
+    var arrow: Arrow = state.project.arrows[arrowIdx];
     var end = handle.dataset.arrowEnd;
     var screenId = handle.dataset.screenId;
 
@@ -46,7 +46,7 @@ export function initArrowDrag() {
   });
 
   // Mousemove: snap to nearest anchor point
-  document.addEventListener('mousemove', function (e) {
+  document.addEventListener('mousemove', function (e: MouseEvent) {
     if (!state.draggingHandle) return;
 
     var wrapperRect = state.wrapperEl.getBoundingClientRect();
@@ -74,7 +74,7 @@ export function initArrowDrag() {
     state.draggingHandle.el.style.top = (bestAnchor.y - 8) + 'px';
 
     // Update side directly on the arrow object
-    var arrow = state.project.arrows[state.draggingHandle.arrowIdx];
+    var arrow: Arrow = state.project.arrows[state.draggingHandle.arrowIdx];
     var prop = state.draggingHandle.end === 'from' ? 'fromSide' : 'toSide';
     arrow[prop] = bestAnchor.name;
 
@@ -83,7 +83,7 @@ export function initArrowDrag() {
   });
 
   // Mouseup: finish drag
-  document.addEventListener('mouseup', function () {
+  document.addEventListener('mouseup', function (): void {
     if (!state.draggingHandle) return;
 
     saveArrowMutations();

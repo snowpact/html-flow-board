@@ -1,9 +1,9 @@
-// @ts-nocheck
 import { DOT_COLOR, DOT_RADIUS, DOT_SPACING, ZOOM_MAX, ZOOM_MIN } from '../core/constants';
 import { state } from '../core/state';
 import { saveZoom } from '../core/storage';
+import { Screen } from '../core/types';
 
-export function setZoom(z) {
+export function setZoom(z: number): void {
   var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
   // Zoom toward center of viewport
   if (state.wrapperEl) {
@@ -22,7 +22,7 @@ export function setZoom(z) {
   saveZoom();
 }
 
-export function applyTransform() {
+export function applyTransform(): void {
   if (state.sizerEl) {
     state.sizerEl.style.transform = 'translate(' + state.panX + 'px,' + state.panY + 'px) scale(' + state.zoom + ')';
   }
@@ -40,14 +40,14 @@ export function applyTransform() {
 }
 
 // -- Fit to content --
-export function fitToContent() {
+export function fitToContent(): void {
   if (!state.wrapperEl || !state.project) return;
 
   var screens = state.project.screens || [];
   var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
   var hasVisible = false;
 
-  screens.forEach(function (s) {
+  screens.forEach(function (s: Screen) {
     if (state.hiddenScreens[s.id]) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
