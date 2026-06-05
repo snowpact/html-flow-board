@@ -1,21 +1,27 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import fs from 'fs';
-import path from 'path';
+import { init } from './src/board';
+import { state } from './src/core/state';
 
-const src = fs.readFileSync(path.resolve(__dirname, 'flowboard.js'), 'utf-8');
+// Modules are imported directly and share one `state` singleton, so reset it
+// between tests (init repopulates most of it, but not every transient field).
+function resetState() {
+  state.zoom = 1; state.panX = 0; state.panY = 0;
+  state.mode = 'drag'; state.selected = {}; state.selectBox = null; state.screenDrag = null;
+  state.pointerInBoard = false; state._dotZoom = null;
+  state.project = null; state.positions = {}; state.defaultPositions = {};
+  state.screenEls = {}; state.hiddenEpics = {}; state.hiddenScreens = {};
+  state.showNotes = true; state.layoutIndex = 0;
+  state.creatingArrow = null; state.draggingHandle = null; state.panDrag = null;
+}
 
-function loadFlowBoard() {
+function initBoard() {
   document.body.innerHTML = '<div id="app"></div>';
   try { window.localStorage.clear(); } catch (e) {}
   // jsdom has no layout engine: stub elementFromPoint (used by the drag
   // mouseup to re-show anchor dots) so it returns nothing instead of throwing.
   if (!document.elementFromPoint) document.elementFromPoint = function () { return null; };
-  eval(src);
-  return window.FlowBoard;
-}
-
-function initBoard(fb) {
-  fb.init({
+  resetState();
+  init({
     container: document.getElementById('app'),
     project: {
       name: 'Smoke',
@@ -28,7 +34,6 @@ function initBoard(fb) {
       arrows: [],
     },
   });
-  return fb._internal.state;
 }
 
 function mdown(el, opts) {
@@ -43,15 +48,14 @@ function mup(opts) {
 function keydown(key) {
   document.dispatchEvent(new window.KeyboardEvent('keydown', { key: key, bubbles: true }));
 }
-function enterBoard(state) {
+function enterBoard() {
   state.wrapperEl.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: false }));
 }
 function selectMode() { document.querySelector('.fb-mode-btn[data-mode="select"]').click(); }
 function dragMode() { document.querySelector('.fb-mode-btn[data-mode="drag"]').click(); }
 
 describe('mode switch + selection', () => {
-  let fb, state;
-  beforeEach(() => { fb = loadFlowBoard(); state = initBoard(fb); });
+  beforeEach(() => { initBoard(); });
 
   it('renders the mode switch, drag active by default', () => {
     const sw = document.querySelector('.fb-mode-switch');
@@ -66,7 +70,7 @@ describe('mode switch + selection', () => {
     selectMode();
     expect(state.mode).toBe('select');
     expect(state.wrapperEl.classList.contains('fb-mode-select')).toBe(true);
-    enterBoard(state); // shortcuts only fire while hovering the board
+    enterBoard(); // shortcuts only fire while hovering the board
     keydown('h');
     expect(state.mode).toBe('drag');
     keydown('v');
@@ -129,7 +133,7 @@ describe('mode switch + selection', () => {
   it('Escape clears the selection in select mode', () => {
     selectMode();
     mdown(state.screenEls['A']); mup();
-    enterBoard(state);
+    enterBoard();
     keydown('Escape');
     expect(state.selected).toEqual({});
   });

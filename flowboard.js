@@ -2200,24 +2200,5 @@
   }
 
   // src/index.ts
-  window.FlowBoard = {
-    init,
-    _internal: {
-      state,
-      autoLayout,
-      bfsDepth,
-      centerPositions,
-      layoutByEpics,
-      layoutGrid,
-      getAnchor,
-      getPrimarySide,
-      computeControlPoints,
-      getAllAnchorPoints,
-      getBestSides,
-      buildSpreadMap,
-      resolveArrowSides,
-      rectsIntersect,
-      toggleSelection
-    }
-  };
+  window.FlowBoard = { init };
 })();

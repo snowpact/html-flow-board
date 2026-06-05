@@ -2,36 +2,36 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 
-// Smoke-test the MINIFIED bundle (the file jsDelivr serves to most consumers).
-// The main suites load flowboard.js; this guards against a minifier-introduced
-// break in flowboard.min.js by asserting the runtime contract still holds.
+// Smoke-test the MINIFIED bundle (the file jsDelivr serves to most consumers)
+// through its public API, guarding against a minifier-introduced break.
 const src = fs.readFileSync(path.resolve(__dirname, 'flowboard.min.js'), 'utf-8');
 
-const INTERNAL = [
-  'state', 'autoLayout', 'bfsDepth', 'centerPositions', 'layoutByEpics', 'layoutGrid',
-  'getAnchor', 'getPrimarySide', 'computeControlPoints', 'getAllAnchorPoints',
-  'getBestSides', 'buildSpreadMap', 'resolveArrowSides', 'rectsIntersect', 'toggleSelection',
-];
-
-describe('minified bundle runtime contract', () => {
+describe('minified bundle (shipped artifact)', () => {
   beforeEach(() => {
     document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    if (!document.elementFromPoint) document.elementFromPoint = () => null;
     eval(src);
   });
 
-  it('sets window.FlowBoard.init as a function', () => {
+  it('exposes FlowBoard.init as a function', () => {
     expect(typeof window.FlowBoard.init).toBe('function');
   });
 
-  it('exposes all 15 _internal symbols', () => {
-    INTERNAL.forEach((name) => {
-      expect(window.FlowBoard._internal).toHaveProperty(name);
+  it('init() builds the board from the public API', () => {
+    window.FlowBoard.init({
+      container: document.getElementById('app'),
+      project: {
+        name: 'Min',
+        epics: [{ id: 'e1', label: 'E', color: '#f00' }],
+        screens: [
+          { id: 'A', title: 'A', epic: 'e1' },
+          { id: 'B', title: 'B', epic: 'e1' },
+        ],
+        arrows: [{ from: 'A', to: 'B' }],
+      },
     });
-  });
-
-  it('keeps the geometry helper behaving after minification', () => {
-    const { rectsIntersect } = window.FlowBoard._internal;
-    expect(rectsIntersect({ left: 0, top: 0, right: 10, bottom: 10 }, { left: 5, top: 5, right: 15, bottom: 15 })).toBe(true);
-    expect(rectsIntersect({ left: 0, top: 0, right: 10, bottom: 10 }, { left: 20, top: 0, right: 30, bottom: 10 })).toBe(false);
+    expect(document.querySelector('.fb-mode-switch')).toBeTruthy();
+    expect(document.querySelectorAll('.fb-screen').length).toBe(2);
   });
 });

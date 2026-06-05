@@ -7,7 +7,7 @@ it into one IIFE for the CDN.
 ## Architecture
 
 TypeScript source in `src/` (one module per responsibility). `tsup` (esbuild) bundles
-`src/index.ts` into a single browser **IIFE** that assigns `window.FlowBoard = { init, _internal }`.
+`src/index.ts` into a single browser **IIFE** that assigns `window.FlowBoard = { init }`.
 Two build outputs live at the repo root and are committed (so jsDelivr serves them):
 `flowboard.js` (readable) and `flowboard.min.js` (minified). Companion stylesheet `flowboard.css`.
 
@@ -21,7 +21,7 @@ Two build outputs live at the repo root and are committed (so jsDelivr serves th
 - `flowboard.js` / `flowboard.min.js` — **build outputs**, committed, served on the CDN. Do not hand-edit.
 - `flowboard.css` — all styles, every class prefixed `fb-` (hand-authored, root).
 - `index.html` — demo / GitHub Pages entry point (loads `flowboard.js` + `flowboard.css`).
-- `flowboard.test.js`, `flowboard.interactions.test.js` — vitest + jsdom, 104 tests.
+- `flowboard.test.js`, `flowboard.interactions.test.js`, `flowboard.min.test.js` — vitest + jsdom, 106 tests (direct module imports).
 
 ## Conventions
 
@@ -72,17 +72,12 @@ A tag push triggers `.github/workflows/release.yml` to purge jsDelivr's `@main`/
 - **Legend** — toggle epic visibility with accent-colored checkboxes
 - **Export PNG** — html2canvas snapshot · **Copy Init** — clipboard JS preserving all state · **Reset**
 
-## Internal API (exposed via `_internal` for testing)
-
-`state`, `autoLayout`, `bfsDepth`, `centerPositions`, `layoutByEpics`, `layoutGrid`,
-`getAnchor`, `getPrimarySide`, `computeControlPoints`, `getAllAnchorPoints`,
-`getBestSides`, `buildSpreadMap`, `resolveArrowSides`, `rectsIntersect`, `toggleSelection`
-
 ## Testing
 
-vitest + jsdom. `loadFlowBoard()` reads and `eval`s the **built** `flowboard.js` (so `pretest` builds
-first) and drives `window.FlowBoard` — tests are black-box and independent of the internal module split.
-`setupState()` mocks screen elements with `Object.defineProperty` for offsetWidth/offsetHeight (320x300).
-Suites: pure-logic (getPrimarySide, getAnchor, computeControlPoints, getAllAnchorPoints, getBestSides,
-buildSpreadMap, resolveArrowSides, autoLayout, bfsDepth, centerPositions, layoutByEpics, layoutGrid,
-rectsIntersect, toggleSelection) + an interaction suite (mode switch, selection, group move, dot-grid zoom).
+vitest + jsdom. Tests **import the modules directly** (`import { autoLayout } from './src/layout'`) — they
+exercise real units, not the built bundle. The shared `state` singleton is reset between cases (`resetState()`).
+- `flowboard.test.js` — pure-logic units (geometry, layout, arrows). `setupState()` mocks screens with
+  `Object.defineProperty` for offsetWidth/offsetHeight (320x300).
+- `flowboard.interactions.test.js` — drives `init()` + dispatched DOM events (mode switch, selection,
+  group move, dot-grid zoom).
+- `flowboard.min.test.js` — smoke-tests the shipped **minified** bundle through the public `init()`.
