@@ -185,12 +185,78 @@
   background: #e4e6e9;
 }
 
+/* Drag mode = grabbable canvas; select mode keeps the default arrow */
+.fb-canvas-wrapper.fb-mode-drag {
+  cursor: grab;
+}
+
+.fb-canvas-wrapper.fb-panning {
+  cursor: grabbing;
+}
+
 .fb-canvas-wrapper.fb-dragging-screen {
   cursor: default;
 }
 
 .fb-canvas-wrapper.fb-dragging-handle {
   cursor: grabbing;
+}
+
+/* --- Mode switch (bottom-right) --- */
+.fb-mode-switch {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #d0d3d8;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
+  z-index: 20;
+}
+
+.fb-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #5a6472;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.fb-mode-btn:hover {
+  background: #eef0f3;
+  color: #2b3138;
+}
+
+.fb-mode-btn.active {
+  background: #2d7ef7;
+  color: #fff;
+}
+
+/* --- Selection --- */
+/* Use outline, not box-shadow: it snaps instantly (box-shadow is animated by
+   the 0.2s transition on .fb-screen) and it doesn't collide with the
+   box-shadow that .fb-dragging applies during a drag. */
+.fb-screen.fb-selected {
+  outline: 2px solid #2d7ef7;
+  outline-offset: 2px;
+}
+
+.fb-select-rect {
+  position: absolute;
+  border: 1px solid #2d7ef7;
+  background: rgba(45, 126, 247, 0.12);
+  pointer-events: none;
+  z-index: 15;
 }
 
 .fb-canvas-sizer {
@@ -204,7 +270,12 @@
   position: relative;
   width: 10000px;
   height: 8000px;
-  background: #f0f2f5;
+  background-color: #f0f2f5;
+  /* Dotted grid. It lives on .fb-canvas (inside the zoom/pan transform) so the
+     dots pan and scale with the content. The PNG export rebuilds a separate
+     .fb-container and never clones .fb-canvas, so the dots never leak into it. */
+  background-image: radial-gradient(circle, #c9ced6 1.3px, transparent 1.3px);
+  background-size: 22px 22px;
   border: 2px dashed #ccc;
 }
 

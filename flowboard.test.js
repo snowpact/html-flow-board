@@ -1041,3 +1041,74 @@ describe('getPrimarySide extended', () => {
     expect(fb._internal.getPrimarySide('r')).toBe('r');
   });
 });
+
+// ─────────────────────────────────────────────────
+// rectsIntersect — axis-aligned rectangle overlap (selection hit-test)
+// ─────────────────────────────────────────────────
+describe('rectsIntersect', () => {
+  let fb;
+  beforeEach(() => { fb = loadFlowBoard(); });
+
+  it('returns true for overlapping rectangles', () => {
+    var a = { left: 0, top: 0, right: 100, bottom: 100 };
+    var b = { left: 50, top: 50, right: 150, bottom: 150 };
+    expect(fb._internal.rectsIntersect(a, b)).toBe(true);
+  });
+
+  it('returns true when one rect fully contains the other', () => {
+    var outer = { left: 0, top: 0, right: 200, bottom: 200 };
+    var inner = { left: 50, top: 50, right: 100, bottom: 100 };
+    expect(fb._internal.rectsIntersect(outer, inner)).toBe(true);
+    expect(fb._internal.rectsIntersect(inner, outer)).toBe(true);
+  });
+
+  it('returns false when separated horizontally', () => {
+    var a = { left: 0, top: 0, right: 100, bottom: 100 };
+    var b = { left: 200, top: 0, right: 300, bottom: 100 };
+    expect(fb._internal.rectsIntersect(a, b)).toBe(false);
+  });
+
+  it('returns false when separated vertically', () => {
+    var a = { left: 0, top: 0, right: 100, bottom: 100 };
+    var b = { left: 0, top: 200, right: 100, bottom: 300 };
+    expect(fb._internal.rectsIntersect(a, b)).toBe(false);
+  });
+
+  it('returns false when edges only touch (zero overlap area)', () => {
+    var a = { left: 0, top: 0, right: 100, bottom: 100 };
+    var b = { left: 100, top: 0, right: 200, bottom: 100 };
+    expect(fb._internal.rectsIntersect(a, b)).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────
+// toggleSelection — add/remove a screen id from the selection map
+// ─────────────────────────────────────────────────
+describe('toggleSelection', () => {
+  let fb;
+  beforeEach(() => { fb = loadFlowBoard(); });
+
+  it('adds an id to an empty selection', () => {
+    var sel = {};
+    fb._internal.toggleSelection(sel, 'A');
+    expect(sel).toEqual({ A: true });
+  });
+
+  it('removes an id that is already selected', () => {
+    var sel = { A: true };
+    fb._internal.toggleSelection(sel, 'A');
+    expect(sel.A).toBeUndefined();
+  });
+
+  it('leaves other selected ids untouched when toggling one', () => {
+    var sel = { A: true, B: true };
+    fb._internal.toggleSelection(sel, 'A');
+    expect(sel.A).toBeUndefined();
+    expect(sel.B).toBe(true);
+  });
+
+  it('returns the same selection object', () => {
+    var sel = {};
+    expect(fb._internal.toggleSelection(sel, 'A')).toBe(sel);
+  });
+});
