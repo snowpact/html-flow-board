@@ -32,8 +32,9 @@ Two build outputs live at the repo root and are committed (so jsDelivr serves th
 - localStorage keys follow `fb-{projectName}-{suffix}` (-pos, -zoom, -hidden, -arrowmods). Do not change keys/formats (breaks saved boards).
 - **The committed bundle must match the source.** After editing `src/`, run `npm run build` and commit
   `flowboard.js` + `flowboard.min.js`. CI fails if they are stale (`git diff --exit-code`).
-- `src/` is currently `// @ts-nocheck` (esbuild strips types without checking). Progressive strict
-  typing under `tsc --noEmit` is an in-progress follow-up.
+- `src/` is fully type-checked by `tsc --noEmit` (`noImplicitAny` on; `strictNullChecks` **off** to
+  avoid DOM null-check noise on this legacy code). esbuild builds the bundle without type-checking, so
+  `npm run typecheck` is the type gate (enforced in CI). Shared domain types live in `src/core/types.ts`.
 
 ## Commands
 
