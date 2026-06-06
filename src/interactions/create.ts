@@ -1,5 +1,6 @@
 import { PresetId, Screen } from '../core/types';
 import { drawArrows } from '../arrows';
+import { CANVAS_H, CANVAS_W } from '../core/constants';
 import { state } from '../core/state';
 import { savePositions } from '../core/storage';
 import { showContextMenu } from '../render/context-menu';
@@ -23,17 +24,18 @@ function uniqueId(): string {
   return id;
 }
 
-// Create a screen of `preset` at the given viewport point, render it, persist.
+// Create a screen of `preset` at the given viewport point, render it, persist
+// positions. NOTE: the screen LIST itself is not saved to localStorage — created
+// screens are ephemeral until Copy Init (real text persistence arrives in S1).
 export function createScreen(preset: PresetId, clientX: number, clientY: number): string {
   if (!state.project) return '';
   var wrapperRect = state.wrapperEl.getBoundingClientRect();
-  var x = (clientX - wrapperRect.left - state.panX) / state.zoom;
-  var y = (clientY - wrapperRect.top - state.panY) / state.zoom;
+  var x = Math.max(0, Math.min(CANVAS_W - 50, (clientX - wrapperRect.left - state.panX) / state.zoom));
+  var y = Math.max(0, Math.min(CANVAS_H - 50, (clientY - wrapperRect.top - state.panY) / state.zoom));
 
   if (!state.project.screens) state.project.screens = [];
-  var n = state.project.screens.length + 1;
-  var id = uniqueId();
-  var screen: Screen = { id: id, title: 'Écran ' + n, size: 'md', preset: preset };
+  var id = uniqueId(); // bumps createCounter; title shares the same number as the id
+  var screen: Screen = { id: id, title: 'Écran ' + createCounter, size: 'md', preset: preset };
 
   state.project.screens.push(screen);
   state.positions[id] = { x: x, y: y };

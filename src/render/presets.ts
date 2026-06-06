@@ -37,7 +37,7 @@ export const PRESETS: Preset[] = [
   },
   {
     id: 'cardgrid', label: 'Card grid',
-    skeleton: () => `<div class="fb-skel-cards">${rep(6, box)}</div>`,
+    skeleton: () => rep(6, box),
   },
   {
     id: 'detail', label: 'Detail',

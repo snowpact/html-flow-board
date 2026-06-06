@@ -363,7 +363,7 @@
     {
       id: "cardgrid",
       label: "Card grid",
-      skeleton: () => `<div class="fb-skel-cards">${rep(6, box)}</div>`
+      skeleton: () => rep(6, box)
     },
     {
       id: "detail",
@@ -564,6 +564,9 @@
           var sub = buildMenu(item.submenu);
           sub.classList.add("fb-ctx-sub");
           row.appendChild(sub);
+          if (sub.getBoundingClientRect().right > window.innerWidth) {
+            sub.classList.add("fb-ctx-sub-left");
+          }
         });
         row.addEventListener("mouseleave", function() {
           var s = row.querySelector(".fb-ctx-sub");
@@ -597,10 +600,11 @@
       }
       if (openRoot && !openRoot.contains(e.target)) closeContextMenu();
     };
+    var fn = dismiss;
     setTimeout(function() {
-      if (!dismiss) return;
-      document.addEventListener("mousedown", dismiss, true);
-      document.addEventListener("keydown", dismiss, true);
+      if (dismiss !== fn) return;
+      document.addEventListener("mousedown", fn, true);
+      document.addEventListener("keydown", fn, true);
     }, 0);
     return menu;
   }
@@ -1298,12 +1302,11 @@
   function createScreen(preset, clientX, clientY) {
     if (!state.project) return "";
     var wrapperRect = state.wrapperEl.getBoundingClientRect();
-    var x = (clientX - wrapperRect.left - state.panX) / state.zoom;
-    var y = (clientY - wrapperRect.top - state.panY) / state.zoom;
+    var x = Math.max(0, Math.min(CANVAS_W - 50, (clientX - wrapperRect.left - state.panX) / state.zoom));
+    var y = Math.max(0, Math.min(CANVAS_H - 50, (clientY - wrapperRect.top - state.panY) / state.zoom));
     if (!state.project.screens) state.project.screens = [];
-    var n = state.project.screens.length + 1;
     var id = uniqueId();
-    var screen = { id, title: "\xC9cran " + n, size: "md", preset };
+    var screen = { id, title: "\xC9cran " + createCounter, size: "md", preset };
     state.project.screens.push(screen);
     state.positions[id] = { x, y };
     var el = renderScreen(screen);

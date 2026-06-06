@@ -53,6 +53,10 @@ function buildMenu(items: CtxItem[]): HTMLElement {
         var sub = buildMenu(item.submenu as CtxItem[]);
         sub.classList.add('fb-ctx-sub');
         row.appendChild(sub);
+        // flip to the left if it would overflow the right edge
+        if (sub.getBoundingClientRect().right > window.innerWidth) {
+          sub.classList.add('fb-ctx-sub-left');
+        }
       });
       row.addEventListener('mouseleave', function () {
         var s = row.querySelector('.fb-ctx-sub');
@@ -93,11 +97,13 @@ export function showContextMenu(x: number, y: number, items: CtxItem[]): HTMLEle
     }
     if (openRoot && !openRoot.contains(e.target as Node)) closeContextMenu();
   };
-  // Defer so the opening interaction doesn't immediately dismiss it.
+  // Defer so the opening interaction doesn't immediately dismiss it. Capture the
+  // specific handler so a second menu opened in the same tick can't cross-wire.
+  var fn = dismiss;
   setTimeout(function () {
-    if (!dismiss) return;
-    document.addEventListener('mousedown', dismiss, true);
-    document.addEventListener('keydown', dismiss, true);
+    if (dismiss !== fn) return;
+    document.addEventListener('mousedown', fn, true);
+    document.addEventListener('keydown', fn, true);
   }, 0);
 
   return menu;

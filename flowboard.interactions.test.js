@@ -285,6 +285,7 @@ describe('preset create + modify', () => {
     expect(state.project.screens.length).toBe(before + 1);
     const s = state.project.screens.find((x) => x.id === id);
     expect(s.preset).toBe('form');
+    expect(s.title).toBe('Écran ' + id.replace('screen-', '')); // title number aligns with id
     expect(state.positions[id]).toBeTruthy();
     expect(state.screenEls[id].querySelector('.fb-skel-form')).toBeTruthy();
   });

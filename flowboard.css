@@ -605,7 +605,8 @@
 }
 
 /* --- Skeleton presets (grey wireframe bodies, no real text) --- */
-.fb-screen-body.fb-skeleton { overflow: hidden; }
+/* min-height gives flex/grid fillers vertical space (the card is auto-height). */
+.fb-screen-body.fb-skeleton { overflow: hidden; min-height: 150px; }
 .fb-skeleton i { display: block; background: #e3e6eb; border-radius: 4px; }
 .fb-skel-bar { height: 9px; width: 100%; }
 .fb-skel-box { flex: 1 1 auto; min-height: 20px; border-radius: 6px; }
@@ -627,7 +628,7 @@
 
 /* table */
 .fb-skel-table .fb-skel-thead .fb-skel-bar { width: 40%; height: 11px; }
-.fb-skel-table .fb-skel-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; flex: 1; }
+.fb-skel-table .fb-skel-grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; gap: 5px; flex: 1; }
 .fb-skel-table .fb-skel-grid .fb-skel-box { min-height: 0; }
 
 /* dashboard */
