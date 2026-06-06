@@ -469,14 +469,7 @@
     hdr.appendChild(toggleBtn);
     el.appendChild(hdr);
     var body = document.createElement("div");
-    body.className = "fb-screen-body";
-    var preset = screenData.preset || "custom";
-    if (isCustomPreset(preset)) {
-      body.innerHTML = screenData.content || "";
-    } else {
-      body.classList.add("fb-skeleton", "fb-skel-" + preset);
-      body.innerHTML = skeletonHtml(preset);
-    }
+    applyScreenBody(body, screenData);
     el.appendChild(body);
     if (screenData.notes) {
       var footer = document.createElement("div");
@@ -505,6 +498,111 @@
     });
     state.screenEls[screenData.id] = el;
     return el;
+  }
+  function applyScreenBody(body, screenData) {
+    body.className = "fb-screen-body";
+    body.innerHTML = "";
+    var preset = screenData.preset || "custom";
+    if (isCustomPreset(preset)) {
+      body.innerHTML = screenData.content || "";
+    } else {
+      body.classList.add("fb-skeleton", "fb-skel-" + preset);
+      body.innerHTML = skeletonHtml(preset);
+    }
+  }
+  function setScreenPreset(screenId, preset) {
+    var screens = state.project && state.project.screens || [];
+    var screen = null;
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) {
+        screen = screens[i];
+        break;
+      }
+    }
+    if (!screen) return;
+    screen.preset = preset;
+    var el = state.screenEls[screenId];
+    if (!el) return;
+    var body = el.querySelector(".fb-screen-body");
+    if (body) applyScreenBody(body, screen);
+    drawArrows();
+  }
+
+  // src/render/context-menu.ts
+  var openRoot = null;
+  var dismiss = null;
+  function closeContextMenu() {
+    if (openRoot && openRoot.parentNode) openRoot.parentNode.removeChild(openRoot);
+    openRoot = null;
+    if (dismiss) {
+      document.removeEventListener("mousedown", dismiss, true);
+      document.removeEventListener("keydown", dismiss, true);
+      dismiss = null;
+    }
+  }
+  function buildMenu(items) {
+    var menu = document.createElement("div");
+    menu.className = "fb-ctx-menu";
+    items.forEach(function(item) {
+      var row = document.createElement("div");
+      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
+      var label = document.createElement("span");
+      label.className = "fb-ctx-label";
+      label.textContent = item.label;
+      row.appendChild(label);
+      if (item.submenu && item.submenu.length) {
+        var caret = document.createElement("span");
+        caret.className = "fb-ctx-caret";
+        caret.textContent = "\u25B8";
+        row.appendChild(caret);
+        row.addEventListener("mouseenter", function() {
+          var existing = menu.querySelectorAll(".fb-ctx-sub");
+          for (var i = 0; i < existing.length; i++) {
+            var e = existing[i];
+            if (e.parentNode) e.parentNode.removeChild(e);
+          }
+          var sub = buildMenu(item.submenu);
+          sub.classList.add("fb-ctx-sub");
+          row.appendChild(sub);
+        });
+        row.addEventListener("mouseleave", function() {
+          var s = row.querySelector(".fb-ctx-sub");
+          if (s && s.parentNode) s.parentNode.removeChild(s);
+        });
+      } else {
+        row.addEventListener("click", function(e) {
+          e.stopPropagation();
+          closeContextMenu();
+          if (item.onClick) item.onClick();
+        });
+      }
+      menu.appendChild(row);
+    });
+    return menu;
+  }
+  function showContextMenu(x, y, items) {
+    closeContextMenu();
+    var menu = buildMenu(items);
+    menu.style.left = x + "px";
+    menu.style.top = y + "px";
+    document.body.appendChild(menu);
+    openRoot = menu;
+    var r = menu.getBoundingClientRect();
+    if (r.width && r.right > window.innerWidth) menu.style.left = Math.max(0, x - r.width) + "px";
+    if (r.height && r.bottom > window.innerHeight) menu.style.top = Math.max(0, y - r.height) + "px";
+    dismiss = function(e) {
+      if (e.type === "keydown") {
+        if (e.key === "Escape") closeContextMenu();
+        return;
+      }
+      if (openRoot && !openRoot.contains(e.target)) closeContextMenu();
+    };
+    setTimeout(function() {
+      if (!dismiss) return;
+      document.addEventListener("mousedown", dismiss, true);
+      document.addEventListener("keydown", dismiss, true);
+    }, 0);
+    return menu;
   }
 
   // src/render/popups.ts
@@ -746,6 +844,27 @@
       closeScreenPopup();
     });
     popup.appendChild(hideBtn);
+    var layoutBtn = document.createElement("button");
+    layoutBtn.className = "fb-screen-popup-btn";
+    layoutBtn.textContent = "Modifier le layout";
+    layoutBtn.addEventListener("click", function(ev) {
+      ev.stopPropagation();
+      var cx = ev.clientX;
+      var cy = ev.clientY;
+      var current = screenData.preset || "custom";
+      closeScreenPopup();
+      var items = PRESETS.map(function(p) {
+        return {
+          label: p.label,
+          active: p.id === current,
+          onClick: function() {
+            setScreenPreset(screenId, p.id);
+          }
+        };
+      });
+      showContextMenu(cx, cy, items);
+    });
+    popup.appendChild(layoutBtn);
     var wrapperRect = state.wrapperEl.getBoundingClientRect();
     var popupX = e.clientX - wrapperRect.left + 4;
     var popupY = e.clientY - wrapperRect.top + 4;
@@ -1158,6 +1277,57 @@
       updateHandles();
       state.draggingHandle = null;
       state.wrapperEl.classList.remove("fb-dragging-handle");
+    });
+  }
+
+  // src/interactions/create.ts
+  var createCounter = 0;
+  function screenExists(id) {
+    var screens = state.project && state.project.screens || [];
+    for (var i = 0; i < screens.length; i++) if (screens[i].id === id) return true;
+    return false;
+  }
+  function uniqueId() {
+    var id;
+    do {
+      createCounter++;
+      id = "screen-" + createCounter;
+    } while (state.screenEls[id] || screenExists(id));
+    return id;
+  }
+  function createScreen(preset, clientX, clientY) {
+    if (!state.project) return "";
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var x = (clientX - wrapperRect.left - state.panX) / state.zoom;
+    var y = (clientY - wrapperRect.top - state.panY) / state.zoom;
+    if (!state.project.screens) state.project.screens = [];
+    var n = state.project.screens.length + 1;
+    var id = uniqueId();
+    var screen = { id, title: "\xC9cran " + n, size: "md", preset };
+    state.project.screens.push(screen);
+    state.positions[id] = { x, y };
+    var el = renderScreen(screen);
+    state.canvasEl.appendChild(el);
+    drawArrows();
+    savePositions();
+    return id;
+  }
+  function initCreateMenu() {
+    state.wrapperEl.addEventListener("contextmenu", function(e) {
+      if (state.creatingArrow) return;
+      var target = e.target;
+      if (target.closest(".fb-screen, .fb-arrow-handle, .fb-anchor-dot, .fb-ctx-menu, .fb-screen-popup, .fb-arrow-popup, .fb-mode-switch")) {
+        return;
+      }
+      e.preventDefault();
+      var cx = e.clientX;
+      var cy = e.clientY;
+      var presetItems = PRESETS.map(function(p) {
+        return { label: p.label, onClick: function() {
+          createScreen(p.id, cx, cy);
+        } };
+      });
+      showContextMenu(cx, cy, [{ label: "Cr\xE9er", submenu: presetItems }]);
     });
   }
 
@@ -1830,6 +2000,7 @@
         if (s.label) clean.label = s.label;
         if (s.notes) clean.notes = s.notes;
         if (s.content) clean.content = s.content;
+        if (s.preset && s.preset !== "custom") clean.preset = s.preset;
         return clean;
       }),
       arrows: JSON.parse(JSON.stringify(state.project.arrows))
@@ -1848,6 +2019,7 @@
       lines.push("        title: " + JSON.stringify(s.title) + ",");
       lines.push("        epic: " + JSON.stringify(s.epic) + ",");
       lines.push("        size: " + JSON.stringify(s.size) + ",");
+      if (s.preset && s.preset !== "custom") lines.push("        preset: " + JSON.stringify(s.preset) + ",");
       if (s.label) lines.push("        label: " + JSON.stringify(s.label) + ",");
       if (s.notes) lines.push("        notes: " + JSON.stringify(s.notes) + ",");
       if (s.content) {
@@ -2267,6 +2439,7 @@
     initArrowDrag();
     initSelection();
     initModeKeys();
+    initCreateMenu();
     setMode("drag");
     requestAnimationFrame(function() {
       var heights = {};

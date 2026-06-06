@@ -4,6 +4,7 @@ import { state } from './core/state';
 import { Epic, FlowConfig, Screen } from './core/types';
 import { loadArrowMutations, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
 import { initArrowDrag } from './interactions/arrow-drag';
+import { initCreateMenu } from './interactions/create';
 import { initDrag } from './interactions/drag';
 import { initModeKeys, setMode } from './interactions/mode';
 import { initPan } from './interactions/pan';
@@ -258,6 +259,7 @@ export function init(config: FlowConfig): void {
   initArrowDrag();
   initSelection();
   initModeKeys();
+  initCreateMenu();
   setMode('drag'); // default mode (sets wrapper class + active button)
 
   // After DOM layout: measure heights, recompute layout, draw arrows

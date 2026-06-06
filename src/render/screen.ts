@@ -1,4 +1,4 @@
-import { Screen, Position } from '../core/types';
+import { PresetId, Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
 import { escapeHtml } from '../core/geometry';
 import { getEpic, state } from '../core/state';
@@ -66,17 +66,9 @@ export function renderScreen(screenData: Screen): HTMLElement {
 
   el.appendChild(hdr);
 
-  // Body — 'custom' renders the raw HTML content (today); other presets render
-  // a grey wireframe skeleton instead (content is kept in data, just hidden).
+  // Body — see applyScreenBody.
   var body = document.createElement('div');
-  body.className = 'fb-screen-body';
-  var preset = screenData.preset || 'custom';
-  if (isCustomPreset(preset)) {
-    body.innerHTML = screenData.content || '';
-  } else {
-    body.classList.add('fb-skeleton', 'fb-skel-' + preset);
-    body.innerHTML = skeletonHtml(preset);
-  }
+  applyScreenBody(body, screenData);
   el.appendChild(body);
 
   // Footer (notes only)
@@ -114,5 +106,35 @@ export function renderScreen(screenData: Screen): HTMLElement {
 
   state.screenEls[screenData.id] = el;
   return el;
+}
+
+// Render a screen's body for its preset. 'custom' (or absent) renders the raw
+// `content` HTML; other presets render a grey skeleton (content kept in data).
+export function applyScreenBody(body: HTMLElement, screenData: Screen): void {
+  body.className = 'fb-screen-body';
+  body.innerHTML = '';
+  var preset: PresetId = screenData.preset || 'custom';
+  if (isCustomPreset(preset)) {
+    body.innerHTML = screenData.content || '';
+  } else {
+    body.classList.add('fb-skeleton', 'fb-skel-' + preset);
+    body.innerHTML = skeletonHtml(preset);
+  }
+}
+
+// Change a screen's preset and re-render its body in place.
+export function setScreenPreset(screenId: string, preset: PresetId): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var screen: Screen = null;
+  for (var i = 0; i < screens.length; i++) {
+    if (screens[i].id === screenId) { screen = screens[i]; break; }
+  }
+  if (!screen) return;
+  screen.preset = preset;
+  var el = state.screenEls[screenId];
+  if (!el) return;
+  var body = el.querySelector('.fb-screen-body') as HTMLElement;
+  if (body) applyScreenBody(body, screen);
+  drawArrows();
 }
 

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { init } from './src/board';
 import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
+import { createScreen } from './src/interactions/create';
+import { setScreenPreset } from './src/render/screen';
 
 // Modules are imported directly and share one `state` singleton, so reset it
 // between tests (init repopulates most of it, but not every transient field).
@@ -264,5 +266,41 @@ describe('context menu', () => {
     showContextMenu(0, 0, [{ label: 'A' }]);
     showContextMenu(0, 0, [{ label: 'B' }]);
     expect(document.querySelectorAll('.fb-ctx-menu').length).toBe(1);
+  });
+});
+
+describe('preset create + modify', () => {
+  beforeEach(() => { closeContextMenu(); initBoard(); });
+
+  it('right-click on the empty board opens a Créer menu', () => {
+    state.wrapperEl.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
+    const menu = document.querySelector('.fb-ctx-menu');
+    expect(menu).toBeTruthy();
+    expect(menu.textContent).toContain('Créer');
+  });
+
+  it('createScreen adds a positioned preset screen and renders its skeleton', () => {
+    const before = state.project.screens.length;
+    const id = createScreen('form', 40, 60);
+    expect(state.project.screens.length).toBe(before + 1);
+    const s = state.project.screens.find((x) => x.id === id);
+    expect(s.preset).toBe('form');
+    expect(state.positions[id]).toBeTruthy();
+    expect(state.screenEls[id].querySelector('.fb-skel-form')).toBeTruthy();
+  });
+
+  it('created ids are unique', () => {
+    expect(createScreen('list', 0, 0)).not.toBe(createScreen('list', 0, 0));
+  });
+
+  it('setScreenPreset swaps the body but keeps content in data (reversible)', () => {
+    const sA = state.project.screens.find((x) => x.id === 'A');
+    sA.content = '<b>hello</b>';
+    setScreenPreset('A', 'dashboard');
+    expect(sA.preset).toBe('dashboard');
+    expect(state.screenEls['A'].querySelector('.fb-screen-body').classList.contains('fb-skel-dashboard')).toBe(true);
+    expect(sA.content).toBe('<b>hello</b>'); // non-destructive
+    setScreenPreset('A', 'custom'); // back to custom restores the HTML
+    expect(state.screenEls['A'].querySelector('.fb-screen-body').innerHTML).toBe('<b>hello</b>');
   });
 });

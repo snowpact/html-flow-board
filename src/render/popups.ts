@@ -1,8 +1,10 @@
 import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
-import { toggleScreen } from './screen';
-import { Arrow, Screen, ScreenSize } from '../core/types';
+import { setScreenPreset, toggleScreen } from './screen';
+import { showContextMenu } from './context-menu';
+import { PRESETS } from './presets';
+import { Arrow, PresetId, Screen, ScreenSize } from '../core/types';
 
 export function handlePopupOutsideClick(e: MouseEvent): void {
   if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target as Node)) {
@@ -289,6 +291,27 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
     closeScreenPopup();
   });
   popup.appendChild(hideBtn);
+
+  // -- Modifier le layout (preset) --
+  var layoutBtn = document.createElement('button');
+  layoutBtn.className = 'fb-screen-popup-btn';
+  layoutBtn.textContent = 'Modifier le layout';
+  layoutBtn.addEventListener('click', function (ev: MouseEvent) {
+    ev.stopPropagation();
+    var cx = ev.clientX;
+    var cy = ev.clientY;
+    var current: PresetId = screenData.preset || 'custom';
+    closeScreenPopup();
+    var items = PRESETS.map(function (p) {
+      return {
+        label: p.label,
+        active: p.id === current,
+        onClick: function () { setScreenPreset(screenId, p.id); },
+      };
+    });
+    showContextMenu(cx, cy, items);
+  });
+  popup.appendChild(layoutBtn);
 
   // Position near right-click in wrapper coordinates
   var wrapperRect = state.wrapperEl.getBoundingClientRect();
