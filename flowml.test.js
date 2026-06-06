@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { parse } from './src/flowml/parse';
 import { serialize } from './src/flowml/serialize';
+import { highlight } from './src/flowml/highlight';
+
+// Strip span tags + decode entities → the visible text the user sees.
+const visible = (html) =>
+  html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
 const RICH = {
   project: {
@@ -142,5 +147,39 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
   it('ignores a bare unknown attribute (no title=true)', () => {
     const { project } = parse('a, t\n');
     expect(project.screens[0].title).toBeUndefined();
+  });
+});
+
+describe('flow-ml highlight', () => {
+  it('is layout-preserving: visible text equals the input exactly', () => {
+    const doc = serialize(RICH.project, RICH.positions);
+    expect(visible(highlight(doc))).toBe(doc);
+  });
+
+  it('escapes HTML inside fenced content', () => {
+    const html = highlight('a\n```\n<div class="x">&hi</div>\n```\n');
+    expect(html).toContain('&lt;div');
+    expect(html).not.toContain('<div class="x">'); // raw HTML not injected
+    expect(visible(html)).toContain('<div class="x">&hi</div>');
+  });
+
+  it('tags each construct with a distinct token class', () => {
+    const html = highlight('!name = App\n@auth, t="My Auth", c=#6366f1\nlogin, t=Login, p=form, x=12, h\nlogin -> home\n# note\n');
+    expect(html).toContain('fb-tok-directive');
+    expect(html).toContain('fb-tok-epic');
+    expect(html).toContain('fb-tok-screen');
+    expect(html).toContain('fb-tok-arrow');
+    expect(html).toContain('fb-tok-key');
+    expect(html).toContain('fb-tok-string');
+    expect(html).toContain('fb-tok-num');
+    expect(html).toContain('fb-tok-color');
+    expect(html).toContain('fb-tok-flag');
+    expect(html).toContain('fb-tok-comment');
+  });
+
+  it('does not mistake an arrow inside a quoted value for an operator', () => {
+    const html = highlight('home, t="go -> next"\n');
+    expect(html).toContain('fb-tok-screen'); // it is a screen line
+    expect(html).not.toContain('fb-tok-arrow');
   });
 });

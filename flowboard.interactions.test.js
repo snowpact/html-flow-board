@@ -377,6 +377,19 @@ describe('Flow-ML panel + sync', () => {
     expect(gutter[0]).toBe('1');
   });
 
+  it('renders a syntax-highlighted layer behind the textarea', () => {
+    const code = document.querySelector('.fb-panel-highlight code');
+    expect(code).toBeTruthy();
+    expect(code.querySelector('.fb-tok-screen')).toBeTruthy(); // screen A is colored
+    expect(code.querySelector('.fb-tok-epic')).toBeTruthy();   // epic @e1 is colored
+  });
+
+  it('the ? button toggles the color-coded cheat-sheet', () => {
+    document.querySelector('.fb-panel-help-btn').click();
+    expect(document.querySelector('.fb-panel').classList.contains('fb-help-open')).toBe(true);
+    expect(document.querySelector('.fb-panel-help .fb-tok-screen')).toBeTruthy();
+  });
+
   it('text → diagram: rebuildBoard renders screens from a parsed model', () => {
     const { project, positions } = parse('x1, t=One\nx2, t=Two\nx1 -> x2\n');
     rebuildBoard(project, positions);

@@ -1935,6 +1935,114 @@
     return out.join("\n") + "\n";
   }
 
+  // src/flowml/highlight.ts
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function tok(cls, s) {
+    return '<span class="fb-tok-' + cls + '">' + esc(s) + "</span>";
+  }
+  function hlAttrs(s) {
+    var out = "";
+    var i = 0;
+    var m;
+    while (i < s.length) {
+      var rest = s.slice(i);
+      if (m = /^("(?:\\.|[^"])*")/.exec(rest)) {
+        out += tok("string", m[1]);
+        i += m[1].length;
+        continue;
+      }
+      if (m = /^([A-Za-z][A-Za-z0-9]*)(\s*=\s*)/.exec(rest)) {
+        out += tok("key", m[1]) + tok("punct", m[2]);
+        i += m[0].length;
+        continue;
+      }
+      if (m = /^(#[0-9A-Fa-f]{3,8})\b/.exec(rest)) {
+        out += tok("color", m[1]);
+        i += m[1].length;
+        continue;
+      }
+      if (m = /^(-?\d+(?:\.\d+)?)/.exec(rest)) {
+        out += tok("num", m[1]);
+        i += m[1].length;
+        continue;
+      }
+      if (m = /^(,)/.exec(rest)) {
+        out += tok("punct", m[1]);
+        i += 1;
+        continue;
+      }
+      if (m = /^(\s+)/.exec(rest)) {
+        out += esc(m[1]);
+        i += m[1].length;
+        continue;
+      }
+      if (m = /^([^\s,]+)/.exec(rest)) {
+        out += m[1] === "h" ? tok("flag", m[1]) : tok("value", m[1]);
+        i += m[1].length;
+        continue;
+      }
+      out += esc(rest.charAt(0));
+      i += 1;
+    }
+    return out;
+  }
+  function leading(line) {
+    var m = /^\s*/.exec(line);
+    return m ? m[0] : "";
+  }
+  function highlight(text) {
+    var lines = text.split("\n");
+    var out = [];
+    var fence = null;
+    for (var li = 0; li < lines.length; li++) {
+      var line = lines[li];
+      if (fence !== null) {
+        if (line.trim() === fence) {
+          out.push(tok("fence", line));
+          fence = null;
+        } else out.push(tok("html", line));
+        continue;
+      }
+      if (line.trim() === "") {
+        out.push("");
+        continue;
+      }
+      var lead = leading(line);
+      var body = line.slice(lead.length);
+      var head = esc(lead);
+      var m;
+      if (body.charAt(0) === "#") {
+        out.push(head + tok("comment", body));
+        continue;
+      }
+      if (/^`{3,}$/.test(body)) {
+        out.push(head + tok("fence", body));
+        fence = body;
+        continue;
+      }
+      if (body.charAt(0) === "!") {
+        m = /^(![A-Za-z]+)(\s*=\s*)(.*)$/.exec(body);
+        if (m) out.push(head + tok("directive", m[1]) + tok("punct", m[2]) + tok("value", m[3]));
+        else out.push(head + tok("directive", body));
+        continue;
+      }
+      if (body.charAt(0) !== "@" && (m = /^([^\s,]+)(\s*(?:\.\.>|->)\s*)([^\s,]+)(.*)$/.exec(body))) {
+        out.push(head + tok("ref", m[1]) + tok("arrow", m[2]) + tok("ref", m[3]) + hlAttrs(m[4]));
+        continue;
+      }
+      if (body.charAt(0) === "@") {
+        m = /^(@[^\s,]+)(.*)$/.exec(body);
+        out.push(head + tok("epic", m[1]) + hlAttrs(m[2]));
+        continue;
+      }
+      m = /^([^\s,]+)(.*)$/.exec(body);
+      out.push(head + tok("screen", m[1]) + hlAttrs(m[2]));
+    }
+    return out.join("\n");
+  }
+
   // src/render/panel.ts
   function renderPanel() {
     var panel = document.createElement("div");
@@ -1945,27 +2053,46 @@
     title.className = "fb-panel-title";
     title.textContent = "Flow-ML";
     header.appendChild(title);
+    var actions = document.createElement("div");
+    actions.className = "fb-panel-actions";
+    var helpBtn = document.createElement("button");
+    helpBtn.className = "fb-panel-help-btn";
+    helpBtn.title = "Aide \u2014 syntaxe Flow-ML";
+    helpBtn.textContent = "?";
+    helpBtn.addEventListener("click", togglePanelHelp);
+    actions.appendChild(helpBtn);
     var collapse = document.createElement("button");
     collapse.className = "fb-panel-collapse";
     collapse.title = "R\xE9duire le panneau";
     collapse.textContent = "\u2039";
     collapse.addEventListener("click", togglePanel);
-    header.appendChild(collapse);
+    actions.appendChild(collapse);
+    header.appendChild(actions);
     panel.appendChild(header);
     var editor = document.createElement("div");
     editor.className = "fb-panel-editor";
     var gutter = document.createElement("div");
     gutter.className = "fb-panel-gutter";
     gutter.setAttribute("aria-hidden", "true");
+    var inputWrap = document.createElement("div");
+    inputWrap.className = "fb-panel-input";
+    var pre = document.createElement("pre");
+    pre.className = "fb-panel-highlight";
+    pre.setAttribute("aria-hidden", "true");
+    var code = document.createElement("code");
+    pre.appendChild(code);
     var textarea = document.createElement("textarea");
     textarea.className = "fb-panel-text";
     textarea.spellcheck = false;
     textarea.setAttribute("autocomplete", "off");
     textarea.setAttribute("autocapitalize", "off");
     textarea.setAttribute("wrap", "off");
+    inputWrap.appendChild(pre);
+    inputWrap.appendChild(textarea);
     editor.appendChild(gutter);
-    editor.appendChild(textarea);
+    editor.appendChild(inputWrap);
     panel.appendChild(editor);
+    panel.appendChild(renderPanelHelp());
     var reopen = document.createElement("button");
     reopen.className = "fb-panel-reopen";
     reopen.title = "Ouvrir Flow-ML";
@@ -1975,29 +2102,133 @@
     state.panelEl = panel;
     state.panelTextarea = textarea;
     state.panelGutter = gutter;
-    textarea.addEventListener("input", updateGutter);
-    textarea.addEventListener("scroll", function() {
-      gutter.scrollTop = textarea.scrollTop;
-    });
-    updateGutter();
+    state.panelHighlight = code;
+    state.panelPre = pre;
+    state.panelLineCount = 0;
+    textarea.addEventListener("input", refreshEditor);
+    textarea.addEventListener("scroll", syncScroll);
+    refreshEditor();
     return panel;
+  }
+  function refreshEditor() {
+    updateHighlight();
+    updateGutter();
+  }
+  function updateHighlight() {
+    var ta = state.panelTextarea;
+    var code = state.panelHighlight;
+    if (!ta || !code) return;
+    code.innerHTML = highlight(ta.value);
   }
   function updateGutter() {
     var ta = state.panelTextarea;
     var g = state.panelGutter;
     if (!ta || !g) return;
     var n = ta.value.split("\n").length || 1;
+    if (n === state.panelLineCount) return;
+    state.panelLineCount = n;
     var lines = "";
     for (var i = 1; i <= n; i++) lines += (i > 1 ? "\n" : "") + i;
     g.textContent = lines;
   }
+  function syncScroll() {
+    var ta = state.panelTextarea;
+    if (!ta) return;
+    if (state.panelGutter) state.panelGutter.scrollTop = ta.scrollTop;
+    if (state.panelPre) {
+      state.panelPre.scrollTop = ta.scrollTop;
+      state.panelPre.scrollLeft = ta.scrollLeft;
+    }
+  }
   function togglePanel() {
     if (state.panelEl) state.panelEl.classList.toggle("fb-panel-collapsed");
+  }
+  function togglePanelHelp() {
+    if (state.panelEl) state.panelEl.classList.toggle("fb-help-open");
+  }
+  function renderPanelHelp() {
+    var help = document.createElement("div");
+    help.className = "fb-panel-help";
+    var h = document.createElement("div");
+    h.className = "fb-help-title";
+    h.textContent = "Comment \xE7a marche";
+    help.appendChild(h);
+    var intro = document.createElement("p");
+    intro.className = "fb-help-intro";
+    intro.textContent = "Le texte est la source de v\xE9rit\xE9 : \xE9ditez \xE0 gauche et le diagramme suit \u2014 et tout ce que vous faites sur le diagramme r\xE9\xE9crit le texte (sync bidirectionnelle).";
+    help.appendChild(intro);
+    var rows = [
+      ["!name = Mon app", "nom du projet"],
+      ["@auth, t=Authentification, c=#6366f1", "epic \u2014 un groupe (couleur c=)"],
+      ["login, t=Login, p=form, f=phone, e=auth", "\xE9cran (titre, preset, format, epic)"],
+      ["login, x=120, y=80, h", "position (x,y) \xB7 h = masqu\xE9"],
+      ["login -> home", "fl\xE8che"],
+      ["login ..> home, l=ok", "fl\xE8che pointill\xE9e + label"],
+      ["# un commentaire", "commentaire (ignor\xE9)"]
+    ];
+    var dl = document.createElement("dl");
+    dl.className = "fb-help-grid";
+    rows.forEach(function(r) {
+      var dt = document.createElement("dt");
+      var code = document.createElement("code");
+      code.className = "fb-help-ex";
+      code.innerHTML = highlight(r[0]);
+      dt.appendChild(code);
+      var dd = document.createElement("dd");
+      dd.textContent = r[1];
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+    help.appendChild(dl);
+    var fenceTitle = document.createElement("div");
+    fenceTitle.className = "fb-help-subtitle";
+    fenceTitle.textContent = "HTML personnalis\xE9 (preset par d\xE9faut)";
+    help.appendChild(fenceTitle);
+    var fence = document.createElement("code");
+    fence.className = "fb-help-ex fb-help-block";
+    fence.innerHTML = highlight("home, t=Accueil\n```\n<h1>Bonjour</h1>\n```");
+    help.appendChild(fence);
+    var keysTitle = document.createElement("div");
+    keysTitle.className = "fb-help-subtitle";
+    keysTitle.textContent = "Attributs";
+    help.appendChild(keysTitle);
+    var keys = document.createElement("div");
+    keys.className = "fb-help-keys";
+    var defs = [
+      ["t", "titre"],
+      ["p", "preset"],
+      ["f", "format"],
+      ["e", "epic"],
+      ["n", "note"],
+      ["x y", "position"],
+      ["h", "masqu\xE9"],
+      ["l", "label fl\xE8che"],
+      ["fs ts", "c\xF4t\xE9s fl\xE8che"],
+      ["c", "couleur"]
+    ];
+    defs.forEach(function(d) {
+      var span = document.createElement("span");
+      var b = document.createElement("b");
+      b.textContent = d[0];
+      span.appendChild(b);
+      span.appendChild(document.createTextNode(" " + d[1]));
+      keys.appendChild(span);
+    });
+    help.appendChild(keys);
+    var presetsTitle = document.createElement("div");
+    presetsTitle.className = "fb-help-subtitle";
+    presetsTitle.textContent = "Presets (p=)";
+    help.appendChild(presetsTitle);
+    var presets = document.createElement("div");
+    presets.className = "fb-help-keys";
+    presets.textContent = "custom \xB7 blank \xB7 form \xB7 list \xB7 table \xB7 dashboard \xB7 cardgrid \xB7 detail \xB7 auth \xB7 feed \xB7 settings \xB7 kanban \xB7 modal \xB7 gallery \xB7 nav";
+    help.appendChild(presets);
+    return help;
   }
   function setPanelText(text) {
     if (state.panelTextarea && state.panelTextarea.value !== text) {
       state.panelTextarea.value = text;
-      updateGutter();
+      refreshEditor();
     }
   }
 
