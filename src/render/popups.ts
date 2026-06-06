@@ -1,8 +1,14 @@
 import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
-import { toggleScreen } from './screen';
-import { Arrow, Screen, ScreenSize } from '../core/types';
+import { deleteScreen, setScreenEpic, setScreenFormat, setScreenPreset, toggleScreen } from './screen';
+import { showContextMenu, CtxItem } from './context-menu';
+import { showPresetPicker } from './preset-picker';
+import {
+  ICON_DESKTOP, ICON_EYE, ICON_EYE_OFF, ICON_FLUID, ICON_LAYOUT, ICON_LINE_DASHED,
+  ICON_LINE_SOLID, ICON_PHONE, ICON_SWAP, ICON_TAG, ICON_TRASH,
+} from './icons';
+import { Arrow, Epic, Format, PresetId, Screen } from '../core/types';
 
 export function handlePopupOutsideClick(e: MouseEvent): void {
   if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target as Node)) {
@@ -66,8 +72,9 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Swap direction
   var swapBtn = document.createElement('button');
   swapBtn.className = 'fb-arrow-popup-btn';
-  swapBtn.title = 'Inverser la direction';
-  swapBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+  swapBtn.setAttribute('data-testid', 'arrow-swap');
+  swapBtn.title = 'Reverse direction';
+  swapBtn.innerHTML = ICON_SWAP;
   swapBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     swapArrowDirection(arrowIndex);
@@ -78,12 +85,9 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Toggle dashed/solid
   var styleBtn = document.createElement('button');
   styleBtn.className = 'fb-arrow-popup-btn';
-  styleBtn.title = arrow.dashed ? 'Trait plein' : 'Trait pointillé';
-  if (arrow.dashed) {
-    styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-  } else {
-    styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-  }
+  styleBtn.setAttribute('data-testid', 'arrow-style');
+  styleBtn.title = arrow.dashed ? 'Make solid' : 'Make dashed';
+  styleBtn.innerHTML = arrow.dashed ? ICON_LINE_SOLID : ICON_LINE_DASHED;
   styleBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     toggleArrowStyle(arrowIndex);
@@ -94,8 +98,9 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Delete
   var deleteBtn = document.createElement('button');
   deleteBtn.className = 'fb-arrow-popup-btn fb-arrow-popup-delete';
-  deleteBtn.title = 'Supprimer la flèche';
-  deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  deleteBtn.setAttribute('data-testid', 'arrow-delete');
+  deleteBtn.title = 'Delete arrow';
+  deleteBtn.innerHTML = ICON_TRASH;
   deleteBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     deleteArrow(arrowIndex);
@@ -204,42 +209,25 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   var popup = document.createElement('div');
   popup.className = 'fb-screen-popup';
 
-  // -- Resize section --
-  var sizeLabel = document.createElement('div');
-  sizeLabel.className = 'fb-screen-popup-label';
-  sizeLabel.textContent = 'Taille';
-  popup.appendChild(sizeLabel);
-
-  var sizesRow = document.createElement('div');
-  sizesRow.className = 'fb-screen-popup-sizes';
-  var currentSize: ScreenSize = screenData.size || 'md';
-
-  (['sm', 'md', 'lg', 'xl'] as ScreenSize[]).forEach(function (sz: ScreenSize) {
-    var btn = document.createElement('button');
-    btn.className = 'fb-screen-popup-size' + (sz === currentSize ? ' active' : '');
-    btn.textContent = sz.toUpperCase();
-    btn.addEventListener('click', function (ev: MouseEvent) {
-      ev.stopPropagation();
-      screenData.size = sz;
-      // Update DOM classes
-      el.className = el.className.replace(/fb-size-\w+/, 'fb-size-' + sz);
-      saveArrowMutations();
-      drawArrows();
-      closeScreenPopup();
-    });
-    sizesRow.appendChild(btn);
-  });
-  popup.appendChild(sizesRow);
-
-  // -- Separator --
-  var sep1 = document.createElement('div');
-  sep1.className = 'fb-screen-popup-sep';
-  popup.appendChild(sep1);
+  // Icon + label action button (shared look across the popup).
+  function mkBtn(svg: string, text: string, testid: string, danger?: boolean): HTMLButtonElement {
+    var b = document.createElement('button');
+    b.className = 'fb-screen-popup-btn' + (danger ? ' fb-screen-popup-delete' : '');
+    b.setAttribute('data-testid', testid);
+    var ic = document.createElement('span');
+    ic.className = 'fb-popup-btn-icon';
+    ic.innerHTML = svg;
+    var lb = document.createElement('span');
+    lb.textContent = text;
+    b.appendChild(ic);
+    b.appendChild(lb);
+    return b;
+  }
 
   // -- Title input --
   var titleLabel = document.createElement('div');
   titleLabel.className = 'fb-screen-popup-label';
-  titleLabel.textContent = 'Titre';
+  titleLabel.textContent = 'Title';
   popup.appendChild(titleLabel);
 
   var titleInput = document.createElement('input');
@@ -279,16 +267,97 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   sep2.className = 'fb-screen-popup-sep';
   popup.appendChild(sep2);
 
-  // -- Hide button --
-  var hideBtn = document.createElement('button');
-  hideBtn.className = 'fb-screen-popup-btn';
-  hideBtn.textContent = state.hiddenScreens[screenId] ? 'Afficher' : 'Masquer';
+  // -- Format (device proportions) --
+  var fmtLabel = document.createElement('div');
+  fmtLabel.className = 'fb-screen-popup-label';
+  fmtLabel.textContent = 'Format';
+  popup.appendChild(fmtLabel);
+
+  var fmtRow = document.createElement('div');
+  fmtRow.className = 'fb-screen-popup-formats';
+  var currentFmt = screenData.format || '';
+  var fmtDefs: { id: Format; label: string; icon: string }[] = [
+    { id: 'desktop', label: 'Desktop', icon: ICON_DESKTOP },
+    { id: 'phone', label: 'Phone', icon: ICON_PHONE },
+    { id: 'fluid', label: 'Fluid', icon: ICON_FLUID },
+  ];
+  fmtDefs.forEach(function (def) {
+    var btn = document.createElement('button');
+    btn.className = 'fb-screen-popup-format' + (def.id === currentFmt ? ' active' : '');
+    btn.setAttribute('data-testid', 'fmt-' + def.id);
+    var fic = document.createElement('span');
+    fic.className = 'fb-fmt-icon';
+    fic.innerHTML = def.icon;
+    var flb = document.createElement('span');
+    flb.className = 'fb-fmt-label';
+    flb.textContent = def.label;
+    btn.appendChild(fic);
+    btn.appendChild(flb);
+    btn.addEventListener('click', function (ev: MouseEvent) {
+      ev.stopPropagation();
+      setScreenFormat(screenId, def.id);
+      closeScreenPopup();
+    });
+    fmtRow.appendChild(btn);
+  });
+  popup.appendChild(fmtRow);
+
+  var sep3 = document.createElement('div');
+  sep3.className = 'fb-screen-popup-sep';
+  popup.appendChild(sep3);
+
+  // -- Hide / Show --
+  var hidden = !!state.hiddenScreens[screenId];
+  var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? 'Show' : 'Hide', 'screen-hide');
   hideBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     toggleScreen(screenId);
     closeScreenPopup();
   });
   popup.appendChild(hideBtn);
+
+  // -- Change layout (preset) --
+  var layoutBtn = mkBtn(ICON_LAYOUT, 'Change layout', 'screen-layout');
+  layoutBtn.addEventListener('click', function (ev: MouseEvent) {
+    ev.stopPropagation();
+    var cx = ev.clientX;
+    var cy = ev.clientY;
+    var current: PresetId = screenData.preset || 'custom';
+    closeScreenPopup();
+    showPresetPicker(cx, cy, function (preset) { setScreenPreset(screenId, preset); }, current);
+  });
+  popup.appendChild(layoutBtn);
+
+  // -- Change epic (assign an existing epic, or clear) --
+  var epicBtn = mkBtn(ICON_TAG, 'Change epic', 'screen-epic');
+  epicBtn.addEventListener('click', function (ev: MouseEvent) {
+    ev.stopPropagation();
+    var cx = ev.clientX;
+    var cy = ev.clientY;
+    var cur = screenData.epic;
+    closeScreenPopup();
+    var items: CtxItem[] = (state.project.epics || []).map(function (epic: Epic): CtxItem {
+      return {
+        label: epic.label || epic.id,
+        icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
+        active: cur === epic.id,
+        testid: 'epic-' + epic.id,
+        onClick: function () { setScreenEpic(screenId, epic.id); },
+      };
+    });
+    items.push({ label: 'None', active: !cur, testid: 'epic-none', onClick: function () { setScreenEpic(screenId, null); } });
+    showContextMenu(cx, cy, items);
+  });
+  popup.appendChild(epicBtn);
+
+  // -- Delete --
+  var deleteScreenBtn = mkBtn(ICON_TRASH, 'Delete', 'screen-delete', true);
+  deleteScreenBtn.addEventListener('click', function (ev: MouseEvent) {
+    ev.stopPropagation();
+    closeScreenPopup();
+    if (confirm('Delete this screen and its arrows?')) deleteScreen(screenId);
+  });
+  popup.appendChild(deleteScreenBtn);
 
   // Position near right-click in wrapper coordinates
   var wrapperRect = state.wrapperEl.getBoundingClientRect();

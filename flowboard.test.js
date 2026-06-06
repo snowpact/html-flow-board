@@ -6,6 +6,8 @@ import {
   getBestSides, buildSpreadMap, resolveArrowSides,
 } from './src/arrows';
 import { autoLayout, bfsDepth, centerPositions, layoutByEpics, layoutGrid } from './src/layout';
+import { PRESETS, getPreset, isCustomPreset, skeletonHtml } from './src/render/presets';
+import { renderScreen } from './src/render/screen';
 
 // Reset the shared state singleton between tests (modules are imported directly,
 // so state persists across cases within the file).
@@ -1085,5 +1087,69 @@ describe('toggleSelection', () => {
   it('returns the same selection object', () => {
     var sel = {};
     expect(toggleSelection(sel, 'A')).toBe(sel);
+  });
+});
+
+// ─────────────────────────────────────────────────
+// presets — display-type registry + skeleton bodies
+// ─────────────────────────────────────────────────
+describe('presets', () => {
+  it('has 15 presets including custom', () => {
+    expect(PRESETS).toHaveLength(15);
+    expect(PRESETS.map((p) => p.id)).toContain('custom');
+  });
+
+  it('custom is special: no skeleton html', () => {
+    expect(isCustomPreset('custom')).toBe(true);
+    expect(skeletonHtml('custom')).toBe('');
+  });
+
+  it('absent preset counts as custom', () => {
+    expect(isCustomPreset(undefined)).toBe(true);
+  });
+
+  it('every non-custom preset produces non-empty skeleton html', () => {
+    PRESETS.filter((p) => p.id !== 'custom').forEach((p) => {
+      expect(isCustomPreset(p.id)).toBe(false);
+      expect(skeletonHtml(p.id).length).toBeGreaterThan(0);
+    });
+  });
+
+  it('skeleton html contains only grey shapes, no real text', () => {
+    PRESETS.filter((p) => p.id !== 'custom').forEach((p) => {
+      var html = skeletonHtml(p.id);
+      // strip tags; the remainder must be empty (no text content)
+      expect(html.replace(/<[^>]*>/g, '').trim()).toBe('');
+    });
+  });
+
+  it('every preset has a human label', () => {
+    PRESETS.forEach((p) => expect(typeof p.label).toBe('string'));
+    expect(getPreset('form').label).toBe('Form');
+  });
+});
+
+describe('renderScreen body by preset', () => {
+  beforeEach(() => {
+    setupState([{ id: 'A', title: 'A', epic: 'e1' }], [], { A: { x: 0, y: 0 } });
+  });
+
+  it('custom/absent preset renders the raw content HTML', () => {
+    var el = renderScreen({ id: 'A', title: 'A', epic: 'e1', content: '<b>hi</b>' });
+    expect(el.querySelector('.fb-screen-body').innerHTML).toBe('<b>hi</b>');
+  });
+
+  it('a non-custom preset renders a skeleton and ignores content', () => {
+    var el = renderScreen({ id: 'A', title: 'A', epic: 'e1', preset: 'form', content: '<b>hi</b>' });
+    var body = el.querySelector('.fb-screen-body');
+    expect(body.classList.contains('fb-skeleton')).toBe(true);
+    expect(body.classList.contains('fb-skel-form')).toBe(true);
+    expect(body.innerHTML).not.toContain('hi');
+    expect(body.querySelectorAll('.fb-skel-bar, .fb-skel-box').length).toBeGreaterThan(0);
+  });
+
+  it('the title header is always rendered (preset or not)', () => {
+    var el = renderScreen({ id: 'A', title: 'My Screen', epic: 'e1', preset: 'dashboard' });
+    expect(el.querySelector('.fb-screen-header').textContent).toContain('My Screen');
   });
 });

@@ -4,6 +4,14 @@
 
 export type Side = string; // 'right' | 'left-top' | ... (16 anchor names)
 export type ScreenSize = 'sm' | 'md' | 'lg' | 'xl';
+export type Format = 'desktop' | 'phone' | 'fluid'; // device proportions ('square' = legacy alias of fluid)
+
+// Display preset for a screen's BODY. 'custom' (the default when absent) keeps
+// today's behavior: render the raw `content` HTML. The others render a grey
+// wireframe skeleton instead.
+export type PresetId =
+  | 'custom' | 'blank' | 'form' | 'list' | 'table' | 'dashboard' | 'cardgrid'
+  | 'detail' | 'auth' | 'feed' | 'settings' | 'kanban' | 'modal' | 'gallery' | 'nav';
 
 export interface Epic {
   id: string;
@@ -16,10 +24,18 @@ export interface Screen {
   id: string;
   title?: string;
   epic?: string;
-  size?: ScreenSize;
+  size?: ScreenSize;  // legacy; mapped to a default width for backward-compat
+  format?: Format;    // device proportions (sets base width × height)
+  width?: number;     // explicit body width (px)
+  height?: number;    // explicit body height (px); absent ⇒ content-driven
   notes?: string;
+  hidden?: boolean;   // Flow-ML round-trip of the legend hide toggle
+  content?: string;   // raw HTML body, used when preset is 'custom'
+  preset?: PresetId;  // body display preset; absent ⇒ 'custom'
   [k: string]: any;
 }
+
+export interface Size { width: number; height: number; }
 
 export interface Arrow {
   from: string;

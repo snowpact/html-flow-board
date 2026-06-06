@@ -6,6 +6,14 @@
   var ZOOM_MAX = 2;
   var ZOOM_STEP = 0.1;
   var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
+  var FORMATS = {
+    desktop: { width: 400, height: 240 },
+    // lg width, landscape
+    phone: { width: 240, height: 420 },
+    // sm width, tall portrait
+    fluid: { width: 280, height: 180, fluid: true }
+    // min-w × min-h, content-driven
+  };
   var GAP_X = 100;
   var GAP_Y = 40;
   var ARROW_OFFSET = 60;
@@ -71,7 +79,9 @@
     hiddenScreens: {},
     layoutIndex: 0,
     screenPopup: null,
-    panDrag: null
+    panDrag: null,
+    storageKeyBase: null
+    // pinned localStorage prefix (survives !name edits)
   };
   function getEpic(epicId) {
     if (!state.project || !state.project.epics) return null;
@@ -80,15 +90,57 @@
     }
     return null;
   }
+  function recomputeHiddenEpics() {
+    state.hiddenEpics = {};
+    var screens = state.project && state.project.screens || [];
+    (state.project && state.project.epics || []).forEach(function(epic) {
+      var es = screens.filter(function(s) {
+        return s.epic === epic.id;
+      });
+      if (es.length && es.every(function(s) {
+        return state.hiddenScreens[s.id];
+      })) {
+        state.hiddenEpics[epic.id] = true;
+      }
+    });
+  }
+  function isFluidFormat(s) {
+    return !!(s.format && FORMATS[s.format] && FORMATS[s.format].fluid);
+  }
+  function screenWidth(s) {
+    if (s.format && FORMATS[s.format]) return FORMATS[s.format].width;
+    if (s.width) return s.width;
+    if (s.size && SIZES[s.size]) return SIZES[s.size];
+    return 320;
+  }
+  function screenHeight(s) {
+    if (s.format && FORMATS[s.format]) {
+      var f = FORMATS[s.format];
+      return f.fluid ? null : f.height;
+    }
+    if (s.height) return s.height;
+    return null;
+  }
 
   // src/core/storage.ts
   function storageKey() {
+    if (state.storageKeyBase) return state.storageKeyBase;
     return "fb-" + (state.project ? state.project.name : "default");
   }
   function savePositions() {
+    if (state.commit) state.commit();
+  }
+  function saveDoc(text) {
     try {
-      localStorage.setItem(storageKey() + "-pos", JSON.stringify(state.positions));
+      localStorage.setItem(storageKey() + "-flowml", text);
     } catch (e) {
+    }
+  }
+  function loadDoc() {
+    try {
+      return localStorage.getItem(storageKey() + "-flowml");
+    } catch (e) {
+      return null;
     }
   }
   function loadPositions() {
@@ -118,10 +170,7 @@
     }
   }
   function saveHiddenScreens() {
-    try {
-      localStorage.setItem(storageKey() + "-hidden", JSON.stringify(state.hiddenScreens));
-    } catch (e) {
-    }
+    if (state.commit) state.commit();
   }
   function loadHiddenScreens() {
     try {
@@ -132,10 +181,7 @@
     }
   }
   function saveArrowMutations() {
-    try {
-      localStorage.setItem(storageKey() + "-arrowmods", JSON.stringify(state.project.arrows));
-    } catch (e) {
-    }
+    if (state.commit) state.commit();
   }
   function loadArrowMutations() {
     try {
@@ -331,6 +377,113 @@
     drawArrows();
   }
 
+  // src/render/icons.ts
+  function icon(inner, size) {
+    var s = size || 16;
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + "</svg>";
+  }
+  var ICON_EYE = icon('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>');
+  var ICON_EYE_OFF = icon('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>');
+  var ICON_LAYOUT = icon('<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>');
+  var ICON_TAG = icon('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>');
+  var ICON_TRASH = icon('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>');
+  var ICON_PLUS = icon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>');
+  var ICON_SWAP = icon('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>');
+  var ICON_LINE_SOLID = icon('<line x1="3" y1="12" x2="21" y2="12"/>');
+  var ICON_LINE_DASHED = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
+  var ICON_DESKTOP = icon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>');
+  var ICON_PHONE = icon('<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>');
+  var ICON_FLUID = icon('<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>');
+
+  // src/render/presets.ts
+  var bar = '<i class="fb-skel-bar"></i>';
+  var box = '<i class="fb-skel-box"></i>';
+  var circle = '<i class="fb-skel-circle"></i>';
+  var pill = '<i class="fb-skel-pill"></i>';
+  var rep = (n, s) => s.repeat(n);
+  var PRESETS = [
+    { id: "custom", label: "Custom (HTML)", skeleton: () => "" },
+    { id: "blank", label: "Blank", skeleton: () => box },
+    {
+      id: "form",
+      label: "Form",
+      skeleton: () => rep(3, `<div class="fb-skel-field">${bar}${box}</div>`) + `<div class="fb-skel-foot">${box}</div>`
+    },
+    {
+      id: "list",
+      label: "List",
+      skeleton: () => rep(5, `<div class="fb-skel-listrow">${circle}${bar}</div>`)
+    },
+    {
+      id: "table",
+      label: "Table",
+      skeleton: () => `<div class="fb-skel-thead">${bar}</div><div class="fb-skel-grid">${rep(16, box)}</div>`
+    },
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      skeleton: () => `<div class="fb-skel-tiles">${rep(4, box)}</div><div class="fb-skel-chart">${box}</div>`
+    },
+    {
+      id: "cardgrid",
+      label: "Card grid",
+      skeleton: () => rep(6, box)
+    },
+    {
+      id: "detail",
+      label: "Detail",
+      skeleton: () => `<div class="fb-skel-head">${circle}<div class="fb-skel-lines">${bar}${bar}</div></div><div class="fb-skel-blocks">${box}${box}</div>`
+    },
+    {
+      id: "auth",
+      label: "Auth / Login",
+      skeleton: () => `${circle}${bar}${bar}${box}`
+    },
+    {
+      id: "feed",
+      label: "Feed",
+      skeleton: () => rep(3, `<div class="fb-skel-post">${circle}<div class="fb-skel-lines">${bar}${bar}</div>${box}</div>`)
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      skeleton: () => rep(4, `<div class="fb-skel-setrow">${bar}${pill}</div>`)
+    },
+    {
+      id: "kanban",
+      label: "Kanban",
+      skeleton: () => rep(3, `<div class="fb-skel-kcol">${rep(2, box)}</div>`)
+    },
+    {
+      id: "modal",
+      label: "Modal",
+      skeleton: () => `<div class="fb-skel-dialog">${bar}${box}<div class="fb-skel-dialog-actions">${pill}${pill}</div></div>`
+    },
+    {
+      id: "gallery",
+      label: "Gallery",
+      skeleton: () => rep(6, box)
+    },
+    {
+      id: "nav",
+      label: "Nav / Landing",
+      skeleton: () => `<div class="fb-skel-navbar">${bar}</div><div class="fb-skel-hero">${box}</div><div class="fb-skel-secs">${bar}${bar}</div>`
+    }
+  ];
+  function getPreset(id) {
+    for (var i = 0; i < PRESETS.length; i++) {
+      if (PRESETS[i].id === id) return PRESETS[i];
+    }
+    return void 0;
+  }
+  function isCustomPreset(id) {
+    return !id || id === "custom";
+  }
+  function skeletonHtml(id) {
+    var p = getPreset(id);
+    return p ? p.skeleton() : "";
+  }
+
   // src/render/screen.ts
   function toggleScreen(screenId) {
     if (state.hiddenScreens[screenId]) {
@@ -358,10 +511,18 @@
   function renderScreen(screenData) {
     var epic = getEpic(screenData.epic);
     var color = epic ? epic.color : "#666";
-    var size = screenData.size || "md";
     var el = document.createElement("div");
-    el.className = "fb-screen fb-size-" + size;
+    el.className = "fb-screen";
     el.dataset.screenId = screenData.id;
+    if (isFluidFormat(screenData)) {
+      var ff = FORMATS[screenData.format];
+      el.style.minWidth = ff.width + "px";
+      el.style.minHeight = ff.height + "px";
+    } else {
+      el.style.width = screenWidth(screenData) + "px";
+      var h = screenHeight(screenData);
+      if (h) el.style.height = h + "px";
+    }
     var pos = state.positions[screenData.id] || { x: 100, y: 100 };
     el.style.left = pos.x + "px";
     el.style.top = pos.y + "px";
@@ -371,8 +532,8 @@
     hdr.innerHTML = "<span>" + escapeHtml(screenData.title) + "</span>";
     var toggleBtn = document.createElement("button");
     toggleBtn.className = "fb-screen-toggle";
-    toggleBtn.title = "Masquer cet \xE9cran";
-    toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    toggleBtn.title = "Hide this screen";
+    toggleBtn.innerHTML = ICON_EYE;
     toggleBtn.addEventListener("click", function(e) {
       e.stopPropagation();
       toggleScreen(screenData.id);
@@ -380,8 +541,7 @@
     hdr.appendChild(toggleBtn);
     el.appendChild(hdr);
     var body = document.createElement("div");
-    body.className = "fb-screen-body";
-    body.innerHTML = screenData.content || "";
+    applyScreenBody(body, screenData);
     el.appendChild(body);
     if (screenData.notes) {
       var footer = document.createElement("div");
@@ -410,6 +570,259 @@
     });
     state.screenEls[screenData.id] = el;
     return el;
+  }
+  function applyScreenBody(body, screenData) {
+    body.className = "fb-screen-body";
+    body.innerHTML = "";
+    var preset = screenData.preset || "custom";
+    if (isCustomPreset(preset)) {
+      body.innerHTML = screenData.content || "";
+    } else {
+      body.classList.add("fb-skeleton", "fb-skel-" + preset);
+      body.innerHTML = skeletonHtml(preset);
+    }
+  }
+  function setScreenFormat(screenId, format) {
+    var screens = state.project && state.project.screens || [];
+    var screen = null;
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) {
+        screen = screens[i];
+        break;
+      }
+    }
+    if (!screen) return;
+    screen.format = format;
+    var el = state.screenEls[screenId];
+    if (el) {
+      el.style.width = "";
+      el.style.height = "";
+      el.style.minWidth = "";
+      el.style.minHeight = "";
+      if (isFluidFormat(screen)) {
+        var ff = FORMATS[format];
+        el.style.minWidth = ff.width + "px";
+        el.style.minHeight = ff.height + "px";
+      } else {
+        el.style.width = screenWidth(screen) + "px";
+        var h = screenHeight(screen);
+        if (h) el.style.height = h + "px";
+      }
+    }
+    drawArrows();
+    if (state.commit) state.commit();
+  }
+  function deleteScreen(screenId) {
+    var screens = state.project && state.project.screens || [];
+    var idx = -1;
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) {
+        idx = i;
+        break;
+      }
+    }
+    if (idx === -1) return;
+    screens.splice(idx, 1);
+    var arrows = state.project && state.project.arrows || [];
+    state.project.arrows = arrows.filter(function(a) {
+      return a.from !== screenId && a.to !== screenId;
+    });
+    var el = state.screenEls[screenId];
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    delete state.screenEls[screenId];
+    delete state.hiddenScreens[screenId];
+    delete state.selected[screenId];
+    if (state.positions) delete state.positions[screenId];
+    drawArrows();
+    if (state.commit) state.commit();
+  }
+  function setScreenEpic(screenId, epicId) {
+    var screens = state.project && state.project.screens || [];
+    var screen = null;
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) {
+        screen = screens[i];
+        break;
+      }
+    }
+    if (!screen) return;
+    if (epicId) screen.epic = epicId;
+    else delete screen.epic;
+    var el = state.screenEls[screenId];
+    if (el) {
+      var epic = getEpic(screen.epic);
+      var hdr = el.querySelector(".fb-screen-header");
+      if (hdr) hdr.style.background = epic ? epic.color : "#666";
+    }
+    if (state.commit) state.commit();
+  }
+  function setScreenPreset(screenId, preset) {
+    var screens = state.project && state.project.screens || [];
+    var screen = null;
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) {
+        screen = screens[i];
+        break;
+      }
+    }
+    if (!screen) return;
+    screen.preset = preset;
+    var el = state.screenEls[screenId];
+    if (!el) return;
+    var body = el.querySelector(".fb-screen-body");
+    if (body) applyScreenBody(body, screen);
+    drawArrows();
+    if (state.commit) state.commit();
+  }
+
+  // src/render/context-menu.ts
+  var openRoot = null;
+  var dismiss = null;
+  function closeContextMenu() {
+    if (openRoot && openRoot.parentNode) openRoot.parentNode.removeChild(openRoot);
+    openRoot = null;
+    if (dismiss) {
+      document.removeEventListener("mousedown", dismiss, true);
+      document.removeEventListener("keydown", dismiss, true);
+      dismiss = null;
+    }
+  }
+  function buildMenu(items) {
+    var menu = document.createElement("div");
+    menu.className = "fb-ctx-menu";
+    items.forEach(function(item) {
+      var row = document.createElement("div");
+      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.danger ? " fb-ctx-danger" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
+      if (item.testid) row.setAttribute("data-testid", item.testid);
+      if (item.icon) {
+        var ic = document.createElement("span");
+        ic.className = "fb-ctx-icon";
+        ic.innerHTML = item.icon;
+        row.appendChild(ic);
+      }
+      var label = document.createElement("span");
+      label.className = "fb-ctx-label";
+      label.textContent = item.label;
+      row.appendChild(label);
+      if (item.submenu && item.submenu.length) {
+        var caret = document.createElement("span");
+        caret.className = "fb-ctx-caret";
+        caret.textContent = "\u25B8";
+        row.appendChild(caret);
+        row.addEventListener("mouseenter", function() {
+          var existing = menu.querySelectorAll(".fb-ctx-sub");
+          for (var i = 0; i < existing.length; i++) {
+            var e = existing[i];
+            if (e.parentNode) e.parentNode.removeChild(e);
+          }
+          var sub = buildMenu(item.submenu);
+          sub.classList.add("fb-ctx-sub");
+          row.appendChild(sub);
+          if (sub.getBoundingClientRect().right > window.innerWidth) {
+            sub.classList.add("fb-ctx-sub-left");
+          }
+        });
+        row.addEventListener("mouseleave", function() {
+          var s = row.querySelector(".fb-ctx-sub");
+          if (s && s.parentNode) s.parentNode.removeChild(s);
+        });
+      } else {
+        row.addEventListener("click", function(e) {
+          e.stopPropagation();
+          closeContextMenu();
+          if (item.onClick) item.onClick();
+        });
+      }
+      menu.appendChild(row);
+    });
+    return menu;
+  }
+  function showContextMenu(x, y, items) {
+    closeContextMenu();
+    var menu = buildMenu(items);
+    menu.style.left = x + "px";
+    menu.style.top = y + "px";
+    document.body.appendChild(menu);
+    openRoot = menu;
+    var r = menu.getBoundingClientRect();
+    if (r.width && r.right > window.innerWidth) menu.style.left = Math.max(0, x - r.width) + "px";
+    if (r.height && r.bottom > window.innerHeight) menu.style.top = Math.max(0, y - r.height) + "px";
+    dismiss = function(e) {
+      if (e.type === "keydown") {
+        if (e.key === "Escape") closeContextMenu();
+        return;
+      }
+      if (openRoot && !openRoot.contains(e.target)) closeContextMenu();
+    };
+    var fn = dismiss;
+    setTimeout(function() {
+      if (dismiss !== fn) return;
+      document.addEventListener("mousedown", fn, true);
+      document.addEventListener("keydown", fn, true);
+    }, 0);
+    return menu;
+  }
+
+  // src/render/preset-picker.ts
+  var pickerEl = null;
+  var dismiss2 = null;
+  function closePresetPicker() {
+    if (pickerEl && pickerEl.parentNode) pickerEl.parentNode.removeChild(pickerEl);
+    pickerEl = null;
+    if (dismiss2) {
+      document.removeEventListener("mousedown", dismiss2, true);
+      document.removeEventListener("keydown", dismiss2, true);
+      dismiss2 = null;
+    }
+  }
+  function showPresetPicker(x, y, onPick, current) {
+    closePresetPicker();
+    var picker = document.createElement("div");
+    picker.className = "fb-preset-picker";
+    var grid = document.createElement("div");
+    grid.className = "fb-preset-grid";
+    PRESETS.forEach(function(p) {
+      var tile = document.createElement("button");
+      tile.className = "fb-preset-tile" + (p.id === current ? " active" : "") + (p.id === "custom" ? " fb-preset-custom" : "");
+      tile.title = p.label;
+      var thumb = document.createElement("div");
+      thumb.className = "fb-preset-thumb";
+      if (p.id !== "custom") {
+        var mini = document.createElement("div");
+        mini.className = "fb-screen-body fb-skeleton fb-skel-" + p.id + " fb-preset-mini";
+        mini.innerHTML = skeletonHtml(p.id);
+        thumb.appendChild(mini);
+      }
+      tile.appendChild(thumb);
+      tile.addEventListener("click", function(e) {
+        e.stopPropagation();
+        closePresetPicker();
+        onPick(p.id);
+      });
+      grid.appendChild(tile);
+    });
+    picker.appendChild(grid);
+    picker.style.left = x + "px";
+    picker.style.top = y + "px";
+    document.body.appendChild(picker);
+    pickerEl = picker;
+    var r = picker.getBoundingClientRect();
+    if (r.width && r.right > window.innerWidth) picker.style.left = Math.max(0, x - r.width) + "px";
+    if (r.height && r.bottom > window.innerHeight) picker.style.top = Math.max(0, y - r.height) + "px";
+    dismiss2 = function(e) {
+      if (e.type === "keydown") {
+        if (e.key === "Escape") closePresetPicker();
+        return;
+      }
+      if (pickerEl && !pickerEl.contains(e.target)) closePresetPicker();
+    };
+    var fn = dismiss2;
+    setTimeout(function() {
+      if (dismiss2 !== fn) return;
+      document.addEventListener("mousedown", fn, true);
+      document.addEventListener("keydown", fn, true);
+    }, 0);
+    return picker;
   }
 
   // src/render/popups.ts
@@ -467,8 +880,9 @@
     popup.appendChild(popupSep);
     var swapBtn = document.createElement("button");
     swapBtn.className = "fb-arrow-popup-btn";
-    swapBtn.title = "Inverser la direction";
-    swapBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+    swapBtn.setAttribute("data-testid", "arrow-swap");
+    swapBtn.title = "Reverse direction";
+    swapBtn.innerHTML = ICON_SWAP;
     swapBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       swapArrowDirection(arrowIndex);
@@ -477,12 +891,9 @@
     popup.appendChild(swapBtn);
     var styleBtn = document.createElement("button");
     styleBtn.className = "fb-arrow-popup-btn";
-    styleBtn.title = arrow.dashed ? "Trait plein" : "Trait pointill\xE9";
-    if (arrow.dashed) {
-      styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-    } else {
-      styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-    }
+    styleBtn.setAttribute("data-testid", "arrow-style");
+    styleBtn.title = arrow.dashed ? "Make solid" : "Make dashed";
+    styleBtn.innerHTML = arrow.dashed ? ICON_LINE_SOLID : ICON_LINE_DASHED;
     styleBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       toggleArrowStyle(arrowIndex);
@@ -491,8 +902,9 @@
     popup.appendChild(styleBtn);
     var deleteBtn = document.createElement("button");
     deleteBtn.className = "fb-arrow-popup-btn fb-arrow-popup-delete";
-    deleteBtn.title = "Supprimer la fl\xE8che";
-    deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    deleteBtn.setAttribute("data-testid", "arrow-delete");
+    deleteBtn.title = "Delete arrow";
+    deleteBtn.innerHTML = ICON_TRASH;
     deleteBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       deleteArrow(arrowIndex);
@@ -577,34 +989,22 @@
     if (!el) return;
     var popup = document.createElement("div");
     popup.className = "fb-screen-popup";
-    var sizeLabel = document.createElement("div");
-    sizeLabel.className = "fb-screen-popup-label";
-    sizeLabel.textContent = "Taille";
-    popup.appendChild(sizeLabel);
-    var sizesRow = document.createElement("div");
-    sizesRow.className = "fb-screen-popup-sizes";
-    var currentSize = screenData.size || "md";
-    ["sm", "md", "lg", "xl"].forEach(function(sz) {
-      var btn = document.createElement("button");
-      btn.className = "fb-screen-popup-size" + (sz === currentSize ? " active" : "");
-      btn.textContent = sz.toUpperCase();
-      btn.addEventListener("click", function(ev) {
-        ev.stopPropagation();
-        screenData.size = sz;
-        el.className = el.className.replace(/fb-size-\w+/, "fb-size-" + sz);
-        saveArrowMutations();
-        drawArrows();
-        closeScreenPopup();
-      });
-      sizesRow.appendChild(btn);
-    });
-    popup.appendChild(sizesRow);
-    var sep1 = document.createElement("div");
-    sep1.className = "fb-screen-popup-sep";
-    popup.appendChild(sep1);
+    function mkBtn(svg, text, testid, danger) {
+      var b = document.createElement("button");
+      b.className = "fb-screen-popup-btn" + (danger ? " fb-screen-popup-delete" : "");
+      b.setAttribute("data-testid", testid);
+      var ic = document.createElement("span");
+      ic.className = "fb-popup-btn-icon";
+      ic.innerHTML = svg;
+      var lb = document.createElement("span");
+      lb.textContent = text;
+      b.appendChild(ic);
+      b.appendChild(lb);
+      return b;
+    }
     var titleLabel = document.createElement("div");
     titleLabel.className = "fb-screen-popup-label";
-    titleLabel.textContent = "Titre";
+    titleLabel.textContent = "Title";
     popup.appendChild(titleLabel);
     var titleInput = document.createElement("input");
     titleInput.type = "text";
@@ -642,15 +1042,92 @@
     var sep2 = document.createElement("div");
     sep2.className = "fb-screen-popup-sep";
     popup.appendChild(sep2);
-    var hideBtn = document.createElement("button");
-    hideBtn.className = "fb-screen-popup-btn";
-    hideBtn.textContent = state.hiddenScreens[screenId] ? "Afficher" : "Masquer";
+    var fmtLabel = document.createElement("div");
+    fmtLabel.className = "fb-screen-popup-label";
+    fmtLabel.textContent = "Format";
+    popup.appendChild(fmtLabel);
+    var fmtRow = document.createElement("div");
+    fmtRow.className = "fb-screen-popup-formats";
+    var currentFmt = screenData.format || "";
+    var fmtDefs = [
+      { id: "desktop", label: "Desktop", icon: ICON_DESKTOP },
+      { id: "phone", label: "Phone", icon: ICON_PHONE },
+      { id: "fluid", label: "Fluid", icon: ICON_FLUID }
+    ];
+    fmtDefs.forEach(function(def) {
+      var btn = document.createElement("button");
+      btn.className = "fb-screen-popup-format" + (def.id === currentFmt ? " active" : "");
+      btn.setAttribute("data-testid", "fmt-" + def.id);
+      var fic = document.createElement("span");
+      fic.className = "fb-fmt-icon";
+      fic.innerHTML = def.icon;
+      var flb = document.createElement("span");
+      flb.className = "fb-fmt-label";
+      flb.textContent = def.label;
+      btn.appendChild(fic);
+      btn.appendChild(flb);
+      btn.addEventListener("click", function(ev) {
+        ev.stopPropagation();
+        setScreenFormat(screenId, def.id);
+        closeScreenPopup();
+      });
+      fmtRow.appendChild(btn);
+    });
+    popup.appendChild(fmtRow);
+    var sep3 = document.createElement("div");
+    sep3.className = "fb-screen-popup-sep";
+    popup.appendChild(sep3);
+    var hidden = !!state.hiddenScreens[screenId];
+    var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? "Show" : "Hide", "screen-hide");
     hideBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       toggleScreen(screenId);
       closeScreenPopup();
     });
     popup.appendChild(hideBtn);
+    var layoutBtn = mkBtn(ICON_LAYOUT, "Change layout", "screen-layout");
+    layoutBtn.addEventListener("click", function(ev) {
+      ev.stopPropagation();
+      var cx = ev.clientX;
+      var cy = ev.clientY;
+      var current = screenData.preset || "custom";
+      closeScreenPopup();
+      showPresetPicker(cx, cy, function(preset) {
+        setScreenPreset(screenId, preset);
+      }, current);
+    });
+    popup.appendChild(layoutBtn);
+    var epicBtn = mkBtn(ICON_TAG, "Change epic", "screen-epic");
+    epicBtn.addEventListener("click", function(ev) {
+      ev.stopPropagation();
+      var cx = ev.clientX;
+      var cy = ev.clientY;
+      var cur = screenData.epic;
+      closeScreenPopup();
+      var items = (state.project.epics || []).map(function(epic) {
+        return {
+          label: epic.label || epic.id,
+          icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
+          active: cur === epic.id,
+          testid: "epic-" + epic.id,
+          onClick: function() {
+            setScreenEpic(screenId, epic.id);
+          }
+        };
+      });
+      items.push({ label: "None", active: !cur, testid: "epic-none", onClick: function() {
+        setScreenEpic(screenId, null);
+      } });
+      showContextMenu(cx, cy, items);
+    });
+    popup.appendChild(epicBtn);
+    var deleteScreenBtn = mkBtn(ICON_TRASH, "Delete", "screen-delete", true);
+    deleteScreenBtn.addEventListener("click", function(ev) {
+      ev.stopPropagation();
+      closeScreenPopup();
+      if (confirm("Delete this screen and its arrows?")) deleteScreen(screenId);
+    });
+    popup.appendChild(deleteScreenBtn);
     var wrapperRect = state.wrapperEl.getBoundingClientRect();
     var popupX = e.clientX - wrapperRect.left + 4;
     var popupY = e.clientY - wrapperRect.top + 4;
@@ -997,6 +1474,151 @@
     });
   }
 
+  // src/flowml/parse.ts
+  var FLAGS = { h: true };
+  function unquote(v) {
+    v = v.trim();
+    if (v.length >= 2 && v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') {
+      return v.slice(1, -1).replace(/\\(.)/g, function(_m, c) {
+        return c === "n" ? "\n" : c;
+      });
+    }
+    return v;
+  }
+  function splitAttrs(s) {
+    var parts = [];
+    var cur = "";
+    var inQ = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === '"' && s.charAt(i - 1) !== "\\") inQ = !inQ;
+      if (ch === "," && !inQ) {
+        parts.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    parts.push(cur);
+    return parts.map(function(p) {
+      return p.trim();
+    }).filter(function(p) {
+      return p !== "";
+    });
+  }
+  function parseAttrs(attrParts) {
+    var attrs = {};
+    attrParts.forEach(function(p) {
+      var eq = p.indexOf("=");
+      if (eq === -1) {
+        if (FLAGS[p]) attrs[p] = true;
+      } else attrs[p.slice(0, eq).trim()] = unquote(p.slice(eq + 1));
+    });
+    return attrs;
+  }
+  var ENDPOINT = '"(?:\\\\.|[^"])*"|[^\\s,"]+';
+  var ARROW_RE = new RegExp("^(" + ENDPOINT + ")\\s*(-->|->)\\s*(" + ENDPOINT + ")(?:\\s*,\\s*(.*))?$");
+  function parse(text) {
+    var project = { name: "", epics: [], screens: [], arrows: [] };
+    var positions = {};
+    var errors = [];
+    function addScreen(body) {
+      var sparts = splitAttrs(body);
+      var idRaw = sparts.shift();
+      if (!idRaw) return null;
+      var id = unquote(idRaw);
+      var sa = parseAttrs(sparts);
+      var screen = { id };
+      if (sa.t) screen.title = sa.t;
+      if (sa.p) screen.preset = sa.p;
+      if (sa.f) screen.format = sa.f;
+      if (sa.e) screen.epic = sa.e;
+      if (sa.n) screen.notes = sa.n;
+      if (sa.sz) screen.size = sa.sz;
+      if (sa.w !== void 0) {
+        var w = parseFloat(sa.w);
+        if (!isNaN(w)) screen.width = w;
+      }
+      if (sa.hg !== void 0) {
+        var hh = parseFloat(sa.hg);
+        if (!isNaN(hh)) screen.height = hh;
+      }
+      if (sa.h) screen.hidden = true;
+      if (sa.x !== void 0 || sa.y !== void 0) {
+        positions[id] = { x: parseFloat(sa.x) || 0, y: parseFloat(sa.y) || 0 };
+      }
+      project.screens.push(screen);
+      return screen;
+    }
+    var lines = text.replace(/\r\n?/g, "\n").split("\n");
+    var lastScreen = null;
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i].trim();
+      var lineNo = i + 1;
+      var c0 = line.charAt(0);
+      if (line === "" || c0 === "#") {
+        i++;
+        continue;
+      }
+      if (/^`{3,}$/.test(line)) {
+        var fence = line;
+        var html = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== fence) {
+          html.push(lines[i]);
+          i++;
+        }
+        i++;
+        if (lastScreen) lastScreen.content = html.join("\n");
+        else errors.push({ line: lineNo, msg: "HTML block without a preceding screen" });
+        continue;
+      }
+      if (c0 === "!") {
+        var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
+        if (dm && dm[1] === "name") project.name = unquote(dm[2]);
+        else errors.push({ line: lineNo, msg: "unknown directive" });
+        i++;
+        continue;
+      }
+      if (c0 === ":") {
+        var ps = addScreen(line.slice(1));
+        if (ps) lastScreen = ps;
+        else errors.push({ line: lineNo, msg: "invalid screen" });
+        i++;
+        continue;
+      }
+      if (c0 === "@") {
+        var eparts = splitAttrs(line.slice(1));
+        var epic = { id: unquote(eparts.shift() || ""), label: "", color: "" };
+        var ea = parseAttrs(eparts);
+        if (ea.t) epic.label = ea.t;
+        if (ea.c) epic.color = ea.c;
+        project.epics.push(epic);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      var am = line.match(ARROW_RE);
+      if (am) {
+        var arrow = { from: unquote(am[1]), to: unquote(am[3]) };
+        if (am[2] === "-->") arrow.dashed = true;
+        var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
+        if (aattrs.l) arrow.label = aattrs.l;
+        if (aattrs.fs) arrow.fromSide = aattrs.fs;
+        if (aattrs.ts) arrow.toSide = aattrs.ts;
+        project.arrows.push(arrow);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      errors.push({ line: lineNo, msg: "unrecognized line" });
+      lastScreen = null;
+      i++;
+    }
+    return { project, positions, errors };
+  }
+
   // src/interactions/arrow-drag.ts
   function initArrowDrag() {
     state.canvasEl.addEventListener("mousedown", function(e) {
@@ -1063,6 +1685,60 @@
       updateHandles();
       state.draggingHandle = null;
       state.wrapperEl.classList.remove("fb-dragging-handle");
+    });
+  }
+
+  // src/interactions/create.ts
+  var createCounter = 0;
+  function screenExists(id) {
+    var screens = state.project && state.project.screens || [];
+    for (var i = 0; i < screens.length; i++) if (screens[i].id === id) return true;
+    return false;
+  }
+  function uniqueId() {
+    var id;
+    do {
+      createCounter++;
+      id = "screen-" + createCounter;
+    } while (state.screenEls[id] || screenExists(id));
+    return id;
+  }
+  function createScreen(preset, clientX, clientY) {
+    if (!state.project) return "";
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var x = Math.max(0, Math.min(CANVAS_W - 50, (clientX - wrapperRect.left - state.panX) / state.zoom));
+    var y = Math.max(0, Math.min(CANVAS_H - 50, (clientY - wrapperRect.top - state.panY) / state.zoom));
+    if (!state.project.screens) state.project.screens = [];
+    var id = uniqueId();
+    var screen = { id, title: "Screen " + createCounter, preset, format: "desktop" };
+    state.project.screens.push(screen);
+    state.positions[id] = { x, y };
+    var el = renderScreen(screen);
+    state.canvasEl.appendChild(el);
+    drawArrows();
+    savePositions();
+    return id;
+  }
+  function initCreateMenu() {
+    state.wrapperEl.addEventListener("contextmenu", function(e) {
+      if (state.creatingArrow) return;
+      var target = e.target;
+      if (target.closest(".fb-screen, .fb-arrow-handle, .fb-anchor-dot, .fb-ctx-menu, .fb-screen-popup, .fb-arrow-popup, .fb-mode-switch")) {
+        return;
+      }
+      e.preventDefault();
+      var cx = e.clientX;
+      var cy = e.clientY;
+      showContextMenu(cx, cy, [{
+        label: "Create screen",
+        icon: ICON_PLUS,
+        testid: "create-screen",
+        onClick: function() {
+          showPresetPicker(cx, cy, function(preset) {
+            createScreen(preset, cx, cy);
+          });
+        }
+      }]);
     });
   }
 
@@ -1182,243 +1858,6 @@
     });
   }
 
-  // src/interactions/mode.ts
-  function setMode(mode) {
-    if (mode !== "select") mode = "drag";
-    state.mode = mode;
-    if (mode === "drag") {
-      state.selected = {};
-      updateSelectionStyles();
-    }
-    if (state.wrapperEl) {
-      state.wrapperEl.classList.toggle("fb-mode-select", mode === "select");
-      state.wrapperEl.classList.toggle("fb-mode-drag", mode === "drag");
-    }
-    var sw = state.container && state.container.querySelector(".fb-mode-switch");
-    if (sw) {
-      var btns = sw.querySelectorAll(".fb-mode-btn");
-      for (var i = 0; i < btns.length; i++) {
-        var btn = btns[i];
-        btn.classList.toggle("active", btn.dataset.mode === mode);
-      }
-    }
-  }
-  function initModeKeys() {
-    state.wrapperEl.addEventListener("mouseenter", function() {
-      state.pointerInBoard = true;
-    });
-    state.wrapperEl.addEventListener("mouseleave", function() {
-      state.pointerInBoard = false;
-    });
-    document.addEventListener("keydown", function(e) {
-      if (!state.pointerInBoard) return;
-      var t = e.target;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "v" || e.key === "V") {
-        setMode("select");
-      } else if (e.key === "h" || e.key === "H") {
-        setMode("drag");
-      } else if (e.key === "Escape" && state.mode === "select") {
-        state.selected = {};
-        updateSelectionStyles();
-      }
-    });
-  }
-
-  // src/interactions/transform.ts
-  function setZoom(z) {
-    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
-    if (state.wrapperEl) {
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var mx = wrapperRect.width / 2;
-      var my = wrapperRect.height / 2;
-      var cx = (mx - state.panX) / state.zoom;
-      var cy = (my - state.panY) / state.zoom;
-      state.panX = mx - cx * newZoom;
-      state.panY = my - cy * newZoom;
-    }
-    state.zoom = newZoom;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-  function applyTransform() {
-    if (state.sizerEl) {
-      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
-    }
-    if (state.canvasEl && state._dotZoom !== state.zoom) {
-      state._dotZoom = state.zoom;
-      var sp = DOT_SPACING / state.zoom;
-      var r = DOT_RADIUS / state.zoom;
-      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
-      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
-    }
-  }
-  function fitToContent() {
-    if (!state.wrapperEl || !state.project) return;
-    var screens = state.project.screens || [];
-    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-    var hasVisible = false;
-    screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      hasVisible = true;
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + el.offsetWidth);
-      maxY = Math.max(maxY, pos.y + el.offsetHeight);
-    });
-    if (!hasVisible) return;
-    var wrapperRect = state.wrapperEl.getBoundingClientRect();
-    var viewW = wrapperRect.width;
-    var viewH = wrapperRect.height;
-    var contentW = maxX - minX;
-    var contentH = maxY - minY;
-    var padding = 60;
-    var zoomX = (viewW - padding * 2) / contentW;
-    var zoomY = (viewH - padding * 2) / contentH;
-    var zoom = Math.min(zoomX, zoomY, 1);
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
-    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
-    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
-    state.zoom = zoom;
-    state.panX = panX;
-    state.panY = panY;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-
-  // src/interactions/pan.ts
-  function initPan() {
-    var wrapper = state.wrapperEl;
-    wrapper.addEventListener("wheel", function(e) {
-      closeArrowPopup();
-      closeScreenPopup();
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        var wrapperRect = wrapper.getBoundingClientRect();
-        var mx = e.clientX - wrapperRect.left;
-        var my = e.clientY - wrapperRect.top;
-        var cx = (mx - state.panX) / state.zoom;
-        var cy = (my - state.panY) / state.zoom;
-        var delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-        var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((state.zoom + delta) * 100) / 100));
-        state.panX = mx - cx * newZoom;
-        state.panY = my - cy * newZoom;
-        state.zoom = newZoom;
-        applyTransform();
-        var label = document.getElementById("fb-zoom-label");
-        if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-        saveZoom();
-      } else {
-        e.preventDefault();
-        state.panX -= e.deltaX;
-        state.panY -= e.deltaY;
-        applyTransform();
-        saveZoom();
-      }
-    }, { passive: false });
-    wrapper.addEventListener("mousedown", function(e) {
-      if (state.mode !== "drag") return;
-      if (state.creatingArrow) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
-      if (e.button !== 0) return;
-      closeArrowPopup();
-      closeScreenPopup();
-      state.panDrag = {
-        startX: e.clientX,
-        startY: e.clientY,
-        startPanX: state.panX,
-        startPanY: state.panY
-      };
-      wrapper.classList.add("fb-panning");
-      e.preventDefault();
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.panDrag) return;
-      state.panX = state.panDrag.startPanX + (e.clientX - state.panDrag.startX);
-      state.panY = state.panDrag.startPanY + (e.clientY - state.panDrag.startY);
-      applyTransform();
-    });
-    document.addEventListener("mouseup", function() {
-      if (!state.panDrag) return;
-      state.panDrag = null;
-      wrapper.classList.remove("fb-panning");
-      saveZoom();
-    });
-  }
-
-  // src/interactions/selection.ts
-  function initSelection() {
-    var wrapper = state.wrapperEl;
-    wrapper.addEventListener("mousedown", function(e) {
-      if (state.mode !== "select") return;
-      if (state.creatingArrow) return;
-      if (e.button !== 0) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
-      closeArrowPopup();
-      closeScreenPopup();
-      var additive = e.metaKey || e.ctrlKey || e.shiftKey;
-      var base = {};
-      if (additive) {
-        for (var k in state.selected) base[k] = true;
-      }
-      state.selectBox = { startX: e.clientX, startY: e.clientY, base, additive, moved: false, el: null };
-      e.preventDefault();
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.selectBox) return;
-      var sb = state.selectBox;
-      if (!sb.moved && Math.abs(e.clientX - sb.startX) < SELECT_DRAG_THRESHOLD && Math.abs(e.clientY - sb.startY) < SELECT_DRAG_THRESHOLD) {
-        return;
-      }
-      sb.moved = true;
-      if (!sb.el) {
-        sb.el = document.createElement("div");
-        sb.el.className = "fb-select-rect";
-        state.wrapperEl.appendChild(sb.el);
-      }
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var left = Math.min(e.clientX, sb.startX);
-      var top = Math.min(e.clientY, sb.startY);
-      var right = Math.max(e.clientX, sb.startX);
-      var bottom = Math.max(e.clientY, sb.startY);
-      sb.el.style.left = left - wrapperRect.left + "px";
-      sb.el.style.top = top - wrapperRect.top + "px";
-      sb.el.style.width = right - left + "px";
-      sb.el.style.height = bottom - top + "px";
-      var box = { left, top, right, bottom };
-      var next = {};
-      for (var bk in sb.base) next[bk] = true;
-      var screens = state.project.screens || [];
-      for (var i = 0; i < screens.length; i++) {
-        var id = screens[i].id;
-        if (state.hiddenScreens[id]) continue;
-        var el = state.screenEls[id];
-        if (!el) continue;
-        if (rectsIntersect(box, el.getBoundingClientRect())) next[id] = true;
-      }
-      state.selected = next;
-      updateSelectionStyles();
-    });
-    document.addEventListener("mouseup", function() {
-      if (!state.selectBox) return;
-      var sb = state.selectBox;
-      if (sb.el && sb.el.parentNode) sb.el.parentNode.removeChild(sb.el);
-      if (!sb.moved && !sb.additive) {
-        state.selected = {};
-        updateSelectionStyles();
-      }
-      state.selectBox = null;
-    });
-  }
-
   // src/layout.ts
   function bfsDepth(screens, arrows) {
     var children = {};
@@ -1487,7 +1926,7 @@
       var colScreens = columns[c];
       var maxW = 0;
       colScreens.forEach(function(s) {
-        var w = SIZES[s.size || "md"] || SIZES.md;
+        var w = screenWidth(s);
         if (w > maxW) maxW = w;
       });
       var offsetY = 0;
@@ -1525,7 +1964,7 @@
       });
       var maxW = 0;
       group.forEach(function(s) {
-        var w = SIZES[s.size || "md"] || SIZES.md;
+        var w = screenWidth(s);
         if (w > maxW) maxW = w;
       });
       var offsetY = 0;
@@ -1554,7 +1993,7 @@
         rowMaxH = 0;
       }
       positions[s.id] = { x: offsetX, y: offsetY };
-      var w = SIZES[s.size || "md"] || SIZES.md;
+      var w = screenWidth(s);
       var h = heights && heights[s.id] ? heights[s.id] : 200;
       if (h > rowMaxH) rowMaxH = h;
       offsetX += w + GAP_X;
@@ -1570,29 +2009,464 @@
     { name: "Grid", fn: layoutGrid }
   ];
 
-  // src/render/mode-switch.ts
-  function renderModeSwitch() {
-    var sw = document.createElement("div");
-    sw.className = "fb-mode-switch";
-    var selectBtn = document.createElement("button");
-    selectBtn.className = "fb-mode-btn";
-    selectBtn.dataset.mode = "select";
-    selectBtn.title = "Curseur \u2014 s\xE9lection (V)";
-    selectBtn.innerHTML = ICON_CURSOR;
-    selectBtn.addEventListener("click", function() {
-      setMode("select");
+  // src/flowml/serialize.ts
+  function escVal(s) {
+    return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+  }
+  function q(v) {
+    var s = String(v);
+    return /[\s,"\\]/.test(s) ? '"' + escVal(s) + '"' : s;
+  }
+  function qname(v) {
+    var s = String(v);
+    return /[\n"\\]/.test(s) || /^\s|\s$/.test(s) ? '"' + escVal(s) + '"' : s;
+  }
+  function qtok(v) {
+    var s = String(v);
+    return /[\s,"\\`]/.test(s) || /^[@!#`]/.test(s) ? '"' + escVal(s) + '"' : s;
+  }
+  function fenceFor(content) {
+    var longest = 0;
+    var runs = content.match(/`+/g);
+    if (runs) runs.forEach(function(r) {
+      if (r.length > longest) longest = r.length;
     });
-    sw.appendChild(selectBtn);
-    var dragBtn = document.createElement("button");
-    dragBtn.className = "fb-mode-btn";
-    dragBtn.dataset.mode = "drag";
-    dragBtn.title = "D\xE9placement \u2014 pan (H)";
-    dragBtn.innerHTML = ICON_HAND;
-    dragBtn.addEventListener("click", function() {
-      setMode("drag");
+    var n = Math.max(3, longest + 1);
+    var f = "";
+    for (var i = 0; i < n; i++) f += "`";
+    return f;
+  }
+  function serialize(project, positions) {
+    var out = [];
+    if (project.name) out.push("!name = " + qname(project.name));
+    (project.epics || []).forEach(function(e) {
+      var parts = ["@" + qtok(e.id)];
+      if (e.label) parts.push("t=" + q(e.label));
+      if (e.color) parts.push("c=" + q(e.color));
+      out.push(parts.join(", "));
     });
-    sw.appendChild(dragBtn);
-    return sw;
+    if (out.length) out.push("");
+    (project.screens || []).forEach(function(s) {
+      var parts = [":" + qtok(s.id)];
+      if (s.title) parts.push("t=" + q(s.title));
+      if (s.preset && s.preset !== "custom") parts.push("p=" + s.preset);
+      if (s.format) parts.push("f=" + s.format);
+      if (s.epic) parts.push("e=" + q(s.epic));
+      if (s.notes) parts.push("n=" + q(s.notes));
+      if (s.size) parts.push("sz=" + s.size);
+      if (s.width) parts.push("w=" + Math.round(s.width));
+      if (s.height) parts.push("hg=" + Math.round(s.height));
+      var pos = positions[s.id];
+      if (pos) {
+        parts.push("x=" + Math.round(pos.x));
+        parts.push("y=" + Math.round(pos.y));
+      }
+      if (s.hidden) parts.push("h");
+      out.push(parts.join(", "));
+      if (s.content) {
+        var fence = fenceFor(s.content);
+        out.push(fence);
+        out.push(s.content);
+        out.push(fence);
+      }
+    });
+    if (project.arrows && project.arrows.length) {
+      out.push("");
+      project.arrows.forEach(function(a) {
+        var line = qtok(a.from) + (a.dashed ? " --> " : " -> ") + qtok(a.to);
+        var attrs = [];
+        if (a.label) attrs.push("l=" + q(a.label));
+        if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
+        if (a.toSide) attrs.push("ts=" + q(a.toSide));
+        if (attrs.length) line += ", " + attrs.join(", ");
+        out.push(line);
+      });
+    }
+    return out.join("\n") + "\n";
+  }
+
+  // src/flowml/highlight.ts
+  function esc(s) {
+    if (s.indexOf("&") === -1 && s.indexOf("<") === -1 && s.indexOf(">") === -1) return s;
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function tok(cls, s) {
+    return '<span class="fb-tok-' + cls + '">' + esc(s) + "</span>";
+  }
+  var RE_STR = /"(?:\\.|[^"])*"/y;
+  var RE_KEYEQ = /([A-Za-z][A-Za-z0-9]*)(\s*=\s*)/y;
+  var RE_COLOR = /#[0-9A-Fa-f]{3,8}\b/y;
+  var RE_NUM = /-?\d+(?:\.\d+)?/y;
+  var RE_WS = /\s+/y;
+  var RE_BARE = /[^\s,]+/y;
+  var RE_LEAD = /^\s*/;
+  var RE_FENCE = /^`{3,}$/;
+  var RE_DIRECTIVE = /^(![A-Za-z]+)(\s*=\s*)(.*)$/;
+  var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:-->|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
+  var RE_EPIC = /^(@(?:"(?:\\.|[^"])*"|[^\s,"]+))(.*)$/;
+  var RE_SCREEN = /^("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
+  function hlAttrs(s) {
+    var out = "";
+    var i = 0;
+    var n = s.length;
+    var m;
+    while (i < n) {
+      var ch = s.charAt(i);
+      if (ch === ",") {
+        out += '<span class="fb-tok-punct">,</span>';
+        i++;
+        continue;
+      }
+      if (ch === " " || ch === "	") {
+        RE_WS.lastIndex = i;
+        m = RE_WS.exec(s);
+        out += m[0];
+        i = RE_WS.lastIndex;
+        continue;
+      }
+      if (ch === '"') {
+        RE_STR.lastIndex = i;
+        if (m = RE_STR.exec(s)) {
+          out += tok("string", m[0]);
+          i = RE_STR.lastIndex;
+          continue;
+        }
+      }
+      if (ch === "#") {
+        RE_COLOR.lastIndex = i;
+        if (m = RE_COLOR.exec(s)) {
+          out += tok("color", m[0]);
+          i = RE_COLOR.lastIndex;
+          continue;
+        }
+      }
+      if (ch >= "A" && ch <= "Z" || ch >= "a" && ch <= "z") {
+        RE_KEYEQ.lastIndex = i;
+        if (m = RE_KEYEQ.exec(s)) {
+          out += tok("key", m[1]) + tok("punct", m[2]);
+          i = RE_KEYEQ.lastIndex;
+          continue;
+        }
+      }
+      if (ch === "-" || ch >= "0" && ch <= "9") {
+        RE_NUM.lastIndex = i;
+        if (m = RE_NUM.exec(s)) {
+          out += tok("num", m[0]);
+          i = RE_NUM.lastIndex;
+          continue;
+        }
+      }
+      RE_BARE.lastIndex = i;
+      m = RE_BARE.exec(s);
+      if (m) {
+        out += m[0] === "h" ? tok("flag", m[0]) : tok("value", m[0]);
+        i = RE_BARE.lastIndex;
+        continue;
+      }
+      out += esc(ch);
+      i++;
+    }
+    return out;
+  }
+  function highlight(text) {
+    var lines = text.replace(/\r\n?/g, "\n").split("\n");
+    var out = [];
+    var fence = null;
+    for (var li = 0; li < lines.length; li++) {
+      var line = lines[li];
+      if (fence !== null) {
+        if (line.trim() === fence) {
+          out.push(tok("fence", line));
+          fence = null;
+        } else out.push(tok("html", line));
+        continue;
+      }
+      if (line.trim() === "") {
+        out.push(esc(line));
+        continue;
+      }
+      var lead = RE_LEAD.exec(line)[0];
+      var body = line.slice(lead.length);
+      var head = esc(lead);
+      var m;
+      if (body.charAt(0) === "#") {
+        out.push(head + tok("comment", body));
+        continue;
+      }
+      if (RE_FENCE.test(body)) {
+        out.push(head + tok("fence", body));
+        fence = body;
+        continue;
+      }
+      if (body.charAt(0) === "!") {
+        m = RE_DIRECTIVE.exec(body);
+        if (m) out.push(head + tok("directive", m[1]) + tok("punct", m[2]) + tok("value", m[3]));
+        else out.push(head + tok("directive", body));
+        continue;
+      }
+      if (body.charAt(0) === ":") {
+        m = RE_SCREEN.exec(body.slice(1));
+        if (m) out.push(head + tok("screen", ":" + m[1]) + hlAttrs(m[2]));
+        else out.push(head + tok("screen", body));
+        continue;
+      }
+      if (body.charAt(0) === "@") {
+        m = RE_EPIC.exec(body);
+        if (m) out.push(head + tok("epic", m[1]) + hlAttrs(m[2]));
+        else out.push(head + tok("epic", body));
+        continue;
+      }
+      if (m = RE_ARROW.exec(body)) {
+        out.push(head + tok("ref", m[1]) + tok("arrow", m[2]) + tok("ref", m[3]) + hlAttrs(m[4]));
+        continue;
+      }
+      out.push(head + esc(body));
+    }
+    return out.join("\n");
+  }
+
+  // src/render/panel.ts
+  var LINE_H = 21.25;
+  var PAD_T = 12;
+  var COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  var CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+  function renderPanel() {
+    var panel = document.createElement("div");
+    panel.className = "fb-panel";
+    var header = document.createElement("div");
+    header.className = "fb-panel-header";
+    var title = document.createElement("span");
+    title.className = "fb-panel-title";
+    title.textContent = "Flow-ML";
+    header.appendChild(title);
+    var actions = document.createElement("div");
+    actions.className = "fb-panel-actions";
+    var copyBtn = document.createElement("button");
+    copyBtn.className = "fb-panel-copy-btn";
+    copyBtn.title = "Copy Flow-ML";
+    copyBtn.innerHTML = COPY_ICON;
+    copyBtn.addEventListener("click", function() {
+      copyPanel(copyBtn);
+    });
+    actions.appendChild(copyBtn);
+    var helpBtn = document.createElement("button");
+    helpBtn.className = "fb-panel-help-btn";
+    helpBtn.title = "Help \u2014 Flow-ML syntax";
+    helpBtn.textContent = "?";
+    helpBtn.addEventListener("click", togglePanelHelp);
+    actions.appendChild(helpBtn);
+    var collapse = document.createElement("button");
+    collapse.className = "fb-panel-collapse";
+    collapse.title = "Collapse panel";
+    collapse.textContent = "\u2039";
+    collapse.addEventListener("click", togglePanel);
+    actions.appendChild(collapse);
+    header.appendChild(actions);
+    panel.appendChild(header);
+    var editor = document.createElement("div");
+    editor.className = "fb-panel-editor";
+    var gutter = document.createElement("div");
+    gutter.className = "fb-panel-gutter";
+    gutter.setAttribute("aria-hidden", "true");
+    var inputWrap = document.createElement("div");
+    inputWrap.className = "fb-panel-input";
+    var activeLine = document.createElement("div");
+    activeLine.className = "fb-panel-activeline";
+    activeLine.setAttribute("aria-hidden", "true");
+    inputWrap.appendChild(activeLine);
+    var pre = document.createElement("pre");
+    pre.className = "fb-panel-highlight";
+    pre.setAttribute("aria-hidden", "true");
+    var code = document.createElement("code");
+    pre.appendChild(code);
+    var textarea = document.createElement("textarea");
+    textarea.className = "fb-panel-text";
+    textarea.spellcheck = false;
+    textarea.setAttribute("autocomplete", "off");
+    textarea.setAttribute("autocapitalize", "off");
+    textarea.setAttribute("wrap", "off");
+    inputWrap.appendChild(pre);
+    inputWrap.appendChild(textarea);
+    editor.appendChild(gutter);
+    editor.appendChild(inputWrap);
+    panel.appendChild(editor);
+    panel.appendChild(renderPanelHelp());
+    var reopen = document.createElement("button");
+    reopen.className = "fb-panel-reopen";
+    reopen.title = "Open Flow-ML";
+    reopen.textContent = "\u203A";
+    reopen.addEventListener("click", togglePanel);
+    panel.appendChild(reopen);
+    state.panelEl = panel;
+    state.panelTextarea = textarea;
+    state.panelGutter = gutter;
+    state.panelHighlight = code;
+    state.panelPre = pre;
+    state.panelActiveLine = activeLine;
+    state.panelLineCount = 0;
+    textarea.addEventListener("input", refreshEditor);
+    textarea.addEventListener("scroll", syncScroll);
+    textarea.addEventListener("keyup", updateActiveLine);
+    textarea.addEventListener("click", updateActiveLine);
+    textarea.addEventListener("focus", updateActiveLine);
+    refreshEditor();
+    return panel;
+  }
+  function copyPanel(btn) {
+    var ta = state.panelTextarea;
+    if (!ta) return;
+    var flash = function() {
+      btn.classList.add("fb-copied");
+      btn.innerHTML = CHECK_ICON;
+      setTimeout(function() {
+        btn.classList.remove("fb-copied");
+        btn.innerHTML = COPY_ICON;
+      }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(flash, flash);
+    } else {
+      try {
+        ta.select();
+        document.execCommand("copy");
+      } catch (e) {
+      }
+      flash();
+    }
+  }
+  function updateActiveLine() {
+    var ta = state.panelTextarea;
+    var band = state.panelActiveLine;
+    if (!ta || !band) return;
+    var idx = ta.value.slice(0, ta.selectionStart).split("\n").length - 1;
+    band.style.top = PAD_T + idx * LINE_H - ta.scrollTop + "px";
+  }
+  function refreshEditor() {
+    updateHighlight();
+    updateGutter();
+    syncScroll();
+    updateActiveLine();
+  }
+  function updateHighlight() {
+    var ta = state.panelTextarea;
+    var code = state.panelHighlight;
+    if (!ta || !code) return;
+    code.innerHTML = highlight(ta.value);
+  }
+  function updateGutter() {
+    var ta = state.panelTextarea;
+    var g = state.panelGutter;
+    if (!ta || !g) return;
+    var n = ta.value.split("\n").length || 1;
+    if (n === state.panelLineCount) return;
+    state.panelLineCount = n;
+    var lines = "";
+    for (var i = 1; i <= n; i++) lines += (i > 1 ? "\n" : "") + i;
+    g.textContent = lines;
+  }
+  function syncScroll() {
+    var ta = state.panelTextarea;
+    if (!ta) return;
+    if (state.panelGutter) state.panelGutter.scrollTop = ta.scrollTop;
+    if (state.panelPre) {
+      state.panelPre.scrollTop = ta.scrollTop;
+      state.panelPre.scrollLeft = ta.scrollLeft;
+    }
+    updateActiveLine();
+  }
+  function togglePanel() {
+    if (state.panelEl) state.panelEl.classList.toggle("fb-panel-collapsed");
+  }
+  function togglePanelHelp() {
+    if (state.panelEl) state.panelEl.classList.toggle("fb-help-open");
+  }
+  function renderPanelHelp() {
+    var help = document.createElement("div");
+    help.className = "fb-panel-help";
+    var h = document.createElement("div");
+    h.className = "fb-help-title";
+    h.textContent = "Comment \xE7a marche";
+    help.appendChild(h);
+    var intro = document.createElement("p");
+    intro.className = "fb-help-intro";
+    intro.textContent = "The text is the source of truth: edit on the left and the diagram follows \u2014 and everything you do on the diagram rewrites the text (two-way sync).";
+    help.appendChild(intro);
+    var rows = [
+      ["!name = My app", "project name"],
+      ["@auth, t=Authentication, c=#6366f1", "epic \u2014 a group (color c=)"],
+      [":login, t=Login, p=form, f=phone, e=auth", 'screen \u2014 ":" prefix (title, preset, format, epic)'],
+      [":login, x=120, y=80, h", "position (x,y) \xB7 h = hidden"],
+      ["login -> home", "arrow"],
+      ["login --> home, l=ok", "dashed arrow + label"],
+      ["# a comment", "comment (ignored)"]
+    ];
+    var grid = document.createElement("div");
+    grid.className = "fb-help-grid";
+    rows.forEach(function(r) {
+      var row = document.createElement("div");
+      row.className = "fb-help-row";
+      var desc = document.createElement("div");
+      desc.className = "fb-help-desc";
+      desc.textContent = r[1];
+      var code = document.createElement("code");
+      code.className = "fb-help-ex";
+      code.innerHTML = highlight(r[0]);
+      row.appendChild(desc);
+      row.appendChild(code);
+      grid.appendChild(row);
+    });
+    help.appendChild(grid);
+    var fenceTitle = document.createElement("div");
+    fenceTitle.className = "fb-help-subtitle";
+    fenceTitle.textContent = "Custom HTML (default preset)";
+    help.appendChild(fenceTitle);
+    var fence = document.createElement("code");
+    fence.className = "fb-help-ex fb-help-block";
+    fence.innerHTML = highlight(":home, t=Home\n```\n<h1>Hello</h1>\n```");
+    help.appendChild(fence);
+    function keyGroup(title, defs) {
+      var t = document.createElement("div");
+      t.className = "fb-help-subtitle";
+      t.textContent = title;
+      help.appendChild(t);
+      var keys = document.createElement("div");
+      keys.className = "fb-help-keys";
+      defs.forEach(function(d) {
+        var span = document.createElement("span");
+        var b = document.createElement("b");
+        b.textContent = d[0];
+        span.appendChild(b);
+        span.appendChild(document.createTextNode(" " + d[1]));
+        keys.appendChild(span);
+      });
+      help.appendChild(keys);
+    }
+    keyGroup("Screen attributes", [
+      ["t", "title"],
+      ["p", "preset"],
+      ["f", "format"],
+      ["e", "epic"],
+      ["n", "note"],
+      ["x y", "position"],
+      ["h", "hidden"]
+    ]);
+    keyGroup("Epic attributes", [["t", "title"], ["c", "color"]]);
+    keyGroup("Arrow attributes", [["l", "label"], ["fs", "from side"], ["ts", "to side"]]);
+    var presetsTitle = document.createElement("div");
+    presetsTitle.className = "fb-help-subtitle";
+    presetsTitle.textContent = "Presets (p=)";
+    help.appendChild(presetsTitle);
+    var presets = document.createElement("div");
+    presets.className = "fb-help-keys";
+    presets.textContent = "custom \xB7 blank \xB7 form \xB7 list \xB7 table \xB7 dashboard \xB7 cardgrid \xB7 detail \xB7 auth \xB7 feed \xB7 settings \xB7 kanban \xB7 modal \xB7 gallery \xB7 nav";
+    help.appendChild(presets);
+    return help;
+  }
+  function setPanelText(text) {
+    if (state.panelTextarea && state.panelTextarea.value !== text) {
+      state.panelTextarea.value = text;
+      refreshEditor();
+    }
   }
 
   // src/export.ts
@@ -1721,96 +2595,73 @@
     };
     img.src = url;
   }
-  function doExportConfig() {
-    var projectCopy = {
-      name: state.project.name,
-      epics: JSON.parse(JSON.stringify(state.project.epics || [])),
-      screens: (state.project.screens || []).map(function(s) {
-        var clean = {
-          id: s.id,
-          title: s.title,
-          epic: s.epic,
-          size: s.size
-        };
-        if (s.label) clean.label = s.label;
-        if (s.notes) clean.notes = s.notes;
-        if (s.content) clean.content = s.content;
-        return clean;
-      }),
-      arrows: JSON.parse(JSON.stringify(state.project.arrows))
-    };
-    var stateCopy = {
-      positions: JSON.parse(JSON.stringify(state.positions)),
-      zoom: state.zoom,
-      panX: state.panX,
-      panY: state.panY,
-      hiddenScreens: JSON.parse(JSON.stringify(state.hiddenScreens))
-    };
-    var screenStrs = projectCopy.screens.map(function(s) {
-      var lines = [];
-      lines.push("      {");
-      lines.push("        id: " + JSON.stringify(s.id) + ",");
-      lines.push("        title: " + JSON.stringify(s.title) + ",");
-      lines.push("        epic: " + JSON.stringify(s.epic) + ",");
-      lines.push("        size: " + JSON.stringify(s.size) + ",");
-      if (s.label) lines.push("        label: " + JSON.stringify(s.label) + ",");
-      if (s.notes) lines.push("        notes: " + JSON.stringify(s.notes) + ",");
-      if (s.content) {
-        lines.push("        content: `");
-        lines.push(s.content.replace(/`/g, "\\`"));
-        lines.push("        `");
-      }
-      lines.push("      }");
-      return lines.join("\n");
-    });
-    var arrowStrs = projectCopy.arrows.map(function(a) {
-      var parts = ["from: " + JSON.stringify(a.from), "to: " + JSON.stringify(a.to)];
-      if (a.label) parts.push("label: " + JSON.stringify(a.label));
-      if (a.dashed) parts.push("dashed: true");
-      if (a.fromSide) parts.push("fromSide: " + JSON.stringify(a.fromSide));
-      if (a.toSide) parts.push("toSide: " + JSON.stringify(a.toSide));
-      return "      { " + parts.join(", ") + " }";
-    });
-    var js = "FlowBoard.init({\n";
-    js += "  container: '#app',\n";
-    js += "  project: {\n";
-    js += "    name: " + JSON.stringify(projectCopy.name) + ",\n";
-    js += "    epics: " + JSON.stringify(projectCopy.epics, null, 6).replace(/\n/g, "\n    ") + ",\n";
-    js += "    screens: [\n" + screenStrs.join(",\n") + "\n    ],\n";
-    js += "    arrows: [\n" + arrowStrs.join(",\n") + "\n    ]\n";
-    js += "  },\n";
-    js += "  state: " + JSON.stringify(stateCopy, null, 4).replace(/\n/g, "\n  ") + "\n";
-    js += "});\n";
-    var btn = state.container.querySelector('.fb-action-btn[title*="presse-papier"]');
-    function showFeedback(success) {
-      if (!btn) return;
-      var original = btn.textContent;
-      btn.textContent = success ? "Copied!" : "Error!";
-      setTimeout(function() {
-        btn.textContent = original;
-      }, 2e3);
+
+  // src/interactions/transform.ts
+  function setZoom(z) {
+    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
+    if (state.wrapperEl) {
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var mx = wrapperRect.width / 2;
+      var my = wrapperRect.height / 2;
+      var cx = (mx - state.panX) / state.zoom;
+      var cy = (my - state.panY) / state.zoom;
+      state.panX = mx - cx * newZoom;
+      state.panY = my - cy * newZoom;
     }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(js).then(function() {
-        showFeedback(true);
-      }, function() {
-        showFeedback(false);
-      });
-    } else {
-      var ta = document.createElement("textarea");
-      ta.value = js;
-      ta.style.position = "fixed";
-      ta.style.left = "-9999px";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-        showFeedback(true);
-      } catch (e) {
-        showFeedback(false);
-      }
-      document.body.removeChild(ta);
+    state.zoom = newZoom;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
+  }
+  function applyTransform() {
+    if (state.sizerEl) {
+      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
     }
+    if (state.canvasEl && state._dotZoom !== state.zoom) {
+      state._dotZoom = state.zoom;
+      var sp = DOT_SPACING / state.zoom;
+      var r = DOT_RADIUS / state.zoom;
+      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
+      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
+    }
+  }
+  function fitToContent() {
+    if (!state.wrapperEl || !state.project) return;
+    var screens = state.project.screens || [];
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var hasVisible = false;
+    screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el || !pos) return;
+      hasVisible = true;
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + el.offsetWidth);
+      maxY = Math.max(maxY, pos.y + el.offsetHeight);
+    });
+    if (!hasVisible) return;
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var viewW = wrapperRect.width;
+    var viewH = wrapperRect.height;
+    var contentW = maxX - minX;
+    var contentH = maxY - minY;
+    var padding = 60;
+    var zoomX = (viewW - padding * 2) / contentW;
+    var zoomY = (viewH - padding * 2) / contentH;
+    var zoom = Math.min(zoomX, zoomY, 1);
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
+    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
+    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
+    state.zoom = zoom;
+    state.panX = panX;
+    state.panY = panY;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
   }
 
   // src/render/toolbar.ts
@@ -1821,23 +2672,12 @@
       btn.textContent = "Auto-Layout (" + name + ")";
     }
   }
-  function renderToolbar() {
-    var header = document.createElement("div");
-    header.className = "fb-header";
-    var left = document.createElement("div");
-    left.className = "fb-toolbar-group";
-    var title = document.createElement("span");
-    title.className = "fb-project-title";
-    title.textContent = state.project.name || "FlowBoard";
-    left.appendChild(title);
-    var sep1 = document.createElement("div");
-    sep1.className = "fb-header-separator";
-    left.appendChild(sep1);
+  function renderLegend() {
     var legend = document.createElement("div");
     legend.className = "fb-legend";
     (state.project.epics || []).forEach(function(epic) {
       var label = document.createElement("label");
-      label.className = "fb-legend-item";
+      label.className = "fb-legend-item" + (state.hiddenEpics[epic.id] ? " fb-dimmed" : "");
       var cb = document.createElement("input");
       cb.type = "checkbox";
       cb.checked = !state.hiddenEpics[epic.id];
@@ -1855,7 +2695,28 @@
       label.appendChild(document.createTextNode(epic.label));
       legend.appendChild(label);
     });
-    left.appendChild(legend);
+    return legend;
+  }
+  function syncToolbar() {
+    if (!state.container) return;
+    var title = state.container.querySelector(".fb-project-title");
+    if (title) title.textContent = state.project.name || "FlowBoard";
+    var old = state.container.querySelector(".fb-legend");
+    if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
+  }
+  function renderToolbar() {
+    var header = document.createElement("div");
+    header.className = "fb-header";
+    var left = document.createElement("div");
+    left.className = "fb-toolbar-group";
+    var title = document.createElement("span");
+    title.className = "fb-project-title";
+    title.textContent = state.project.name || "FlowBoard";
+    left.appendChild(title);
+    var sep1 = document.createElement("div");
+    sep1.className = "fb-header-separator";
+    left.appendChild(sep1);
+    left.appendChild(renderLegend());
     header.appendChild(left);
     var right = document.createElement("div");
     right.className = "fb-toolbar-group";
@@ -1901,7 +2762,7 @@
     var layoutBtn = document.createElement("button");
     layoutBtn.className = "fb-action-btn";
     layoutBtn.id = "fb-layout-btn";
-    layoutBtn.title = "Changer la disposition";
+    layoutBtn.title = "Change layout";
     layoutBtn.textContent = "Auto-Layout (" + LAYOUT_STRATEGIES[state.layoutIndex].name + ")";
     layoutBtn.addEventListener("click", cycleLayout);
     right.appendChild(layoutBtn);
@@ -1911,19 +2772,14 @@
     exportBtn.title = "Export as PNG";
     exportBtn.addEventListener("click", doExport);
     right.appendChild(exportBtn);
-    var exportConfigBtn = document.createElement("button");
-    exportConfigBtn.className = "fb-action-btn";
-    exportConfigBtn.textContent = "Copy Init";
-    exportConfigBtn.title = "Copier le code FlowBoard.init() dans le presse-papier";
-    exportConfigBtn.addEventListener("click", doExportConfig);
-    right.appendChild(exportConfigBtn);
     var sep4 = document.createElement("div");
     sep4.className = "fb-header-separator";
     right.appendChild(sep4);
     var resetBtn = document.createElement("button");
     resetBtn.className = "fb-action-btn";
+    resetBtn.setAttribute("data-testid", "toolbar-reset");
     resetBtn.textContent = "Reset";
-    resetBtn.title = "Remettre la disposition par d\xE9faut";
+    resetBtn.title = "Reset to the default layout";
     resetBtn.addEventListener("click", doReset);
     right.appendChild(resetBtn);
     header.appendChild(right);
@@ -1976,6 +2832,266 @@
     drawArrows();
   }
 
+  // src/interactions/sync.ts
+  function rebuildBoard(project, positions) {
+    state.project = project;
+    state.hiddenScreens = {};
+    (project.screens || []).forEach(function(s) {
+      if (s.hidden) state.hiddenScreens[s.id] = true;
+    });
+    recomputeHiddenEpics();
+    var ids = {};
+    (project.screens || []).forEach(function(s) {
+      ids[s.id] = true;
+    });
+    for (var sel in state.selected) {
+      if (!ids[sel]) delete state.selected[sel];
+    }
+    var auto = autoLayout(project.screens || [], project.arrows || []);
+    state.defaultPositions = auto;
+    state.positions = {};
+    (project.screens || []).forEach(function(s) {
+      state.positions[s.id] = positions[s.id] || auto[s.id] || { x: 100, y: 100 };
+    });
+    var olds = state.canvasEl.querySelectorAll(".fb-screen");
+    for (var i = 0; i < olds.length; i++) {
+      if (olds[i].parentNode) olds[i].parentNode.removeChild(olds[i]);
+    }
+    while (state.svgEl.firstChild) state.svgEl.removeChild(state.svgEl.firstChild);
+    state.screenEls = {};
+    var frag = document.createDocumentFragment();
+    (project.screens || []).forEach(function(s) {
+      frag.appendChild(renderScreen(s));
+    });
+    state.canvasEl.appendChild(frag);
+    drawArrows();
+    syncToolbar();
+  }
+  function commit() {
+    if (state.syncing) return;
+    (state.project.screens || []).forEach(function(s) {
+      s.hidden = !!state.hiddenScreens[s.id];
+    });
+    var text = serialize(state.project, state.positions);
+    setPanelText(text);
+    saveDoc(text);
+  }
+  var debounceTimer = null;
+  function initSync() {
+    state.commit = commit;
+    var ta = state.panelTextarea;
+    if (!ta) return;
+    ta.addEventListener("input", function() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        var res = parse(ta.value);
+        if (!res.project.screens || !res.project.screens.length) {
+          saveDoc(ta.value);
+          return;
+        }
+        state.syncing = true;
+        rebuildBoard(res.project, res.positions);
+        state.syncing = false;
+        saveDoc(ta.value);
+      }, 300);
+    });
+    commit();
+  }
+
+  // src/interactions/mode.ts
+  function setMode(mode) {
+    if (mode !== "select") mode = "drag";
+    state.mode = mode;
+    if (mode === "drag") {
+      state.selected = {};
+      updateSelectionStyles();
+    }
+    if (state.wrapperEl) {
+      state.wrapperEl.classList.toggle("fb-mode-select", mode === "select");
+      state.wrapperEl.classList.toggle("fb-mode-drag", mode === "drag");
+    }
+    var sw = state.container && state.container.querySelector(".fb-mode-switch");
+    if (sw) {
+      var btns = sw.querySelectorAll(".fb-mode-btn");
+      for (var i = 0; i < btns.length; i++) {
+        var btn = btns[i];
+        btn.classList.toggle("active", btn.dataset.mode === mode);
+      }
+    }
+  }
+  function initModeKeys() {
+    state.wrapperEl.addEventListener("mouseenter", function() {
+      state.pointerInBoard = true;
+    });
+    state.wrapperEl.addEventListener("mouseleave", function() {
+      state.pointerInBoard = false;
+    });
+    document.addEventListener("keydown", function(e) {
+      if (!state.pointerInBoard) return;
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "v" || e.key === "V") {
+        setMode("select");
+      } else if (e.key === "h" || e.key === "H") {
+        setMode("drag");
+      } else if (e.key === "Escape" && state.mode === "select") {
+        state.selected = {};
+        updateSelectionStyles();
+      }
+    });
+  }
+
+  // src/interactions/pan.ts
+  function initPan() {
+    var wrapper = state.wrapperEl;
+    wrapper.addEventListener("wheel", function(e) {
+      closeArrowPopup();
+      closeScreenPopup();
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        var wrapperRect = wrapper.getBoundingClientRect();
+        var mx = e.clientX - wrapperRect.left;
+        var my = e.clientY - wrapperRect.top;
+        var cx = (mx - state.panX) / state.zoom;
+        var cy = (my - state.panY) / state.zoom;
+        var delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+        var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((state.zoom + delta) * 100) / 100));
+        state.panX = mx - cx * newZoom;
+        state.panY = my - cy * newZoom;
+        state.zoom = newZoom;
+        applyTransform();
+        var label = document.getElementById("fb-zoom-label");
+        if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+        saveZoom();
+      } else {
+        e.preventDefault();
+        state.panX -= e.deltaX;
+        state.panY -= e.deltaY;
+        applyTransform();
+        saveZoom();
+      }
+    }, { passive: false });
+    wrapper.addEventListener("mousedown", function(e) {
+      if (state.mode !== "drag") return;
+      if (state.creatingArrow) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      if (e.button !== 0) return;
+      closeArrowPopup();
+      closeScreenPopup();
+      state.panDrag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startPanX: state.panX,
+        startPanY: state.panY
+      };
+      wrapper.classList.add("fb-panning");
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.panDrag) return;
+      state.panX = state.panDrag.startPanX + (e.clientX - state.panDrag.startX);
+      state.panY = state.panDrag.startPanY + (e.clientY - state.panDrag.startY);
+      applyTransform();
+    });
+    document.addEventListener("mouseup", function() {
+      if (!state.panDrag) return;
+      state.panDrag = null;
+      wrapper.classList.remove("fb-panning");
+      saveZoom();
+    });
+  }
+
+  // src/interactions/selection.ts
+  function initSelection() {
+    var wrapper = state.wrapperEl;
+    wrapper.addEventListener("mousedown", function(e) {
+      if (state.mode !== "select") return;
+      if (state.creatingArrow) return;
+      if (e.button !== 0) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      closeArrowPopup();
+      closeScreenPopup();
+      var additive = e.metaKey || e.ctrlKey || e.shiftKey;
+      var base = {};
+      if (additive) {
+        for (var k in state.selected) base[k] = true;
+      }
+      state.selectBox = { startX: e.clientX, startY: e.clientY, base, additive, moved: false, el: null };
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.selectBox) return;
+      var sb = state.selectBox;
+      if (!sb.moved && Math.abs(e.clientX - sb.startX) < SELECT_DRAG_THRESHOLD && Math.abs(e.clientY - sb.startY) < SELECT_DRAG_THRESHOLD) {
+        return;
+      }
+      sb.moved = true;
+      if (!sb.el) {
+        sb.el = document.createElement("div");
+        sb.el.className = "fb-select-rect";
+        state.wrapperEl.appendChild(sb.el);
+      }
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var left = Math.min(e.clientX, sb.startX);
+      var top = Math.min(e.clientY, sb.startY);
+      var right = Math.max(e.clientX, sb.startX);
+      var bottom = Math.max(e.clientY, sb.startY);
+      sb.el.style.left = left - wrapperRect.left + "px";
+      sb.el.style.top = top - wrapperRect.top + "px";
+      sb.el.style.width = right - left + "px";
+      sb.el.style.height = bottom - top + "px";
+      var box2 = { left, top, right, bottom };
+      var next = {};
+      for (var bk in sb.base) next[bk] = true;
+      var screens = state.project.screens || [];
+      for (var i = 0; i < screens.length; i++) {
+        var id = screens[i].id;
+        if (state.hiddenScreens[id]) continue;
+        var el = state.screenEls[id];
+        if (!el) continue;
+        if (rectsIntersect(box2, el.getBoundingClientRect())) next[id] = true;
+      }
+      state.selected = next;
+      updateSelectionStyles();
+    });
+    document.addEventListener("mouseup", function() {
+      if (!state.selectBox) return;
+      var sb = state.selectBox;
+      if (sb.el && sb.el.parentNode) sb.el.parentNode.removeChild(sb.el);
+      if (!sb.moved && !sb.additive) {
+        state.selected = {};
+        updateSelectionStyles();
+      }
+      state.selectBox = null;
+    });
+  }
+
+  // src/render/mode-switch.ts
+  function renderModeSwitch() {
+    var sw = document.createElement("div");
+    sw.className = "fb-mode-switch";
+    var selectBtn = document.createElement("button");
+    selectBtn.className = "fb-mode-btn";
+    selectBtn.dataset.mode = "select";
+    selectBtn.title = "Cursor \u2014 select (V)";
+    selectBtn.innerHTML = ICON_CURSOR;
+    selectBtn.addEventListener("click", function() {
+      setMode("select");
+    });
+    sw.appendChild(selectBtn);
+    var dragBtn = document.createElement("button");
+    dragBtn.className = "fb-mode-btn";
+    dragBtn.dataset.mode = "drag";
+    dragBtn.title = "Move \u2014 pan (H)";
+    dragBtn.innerHTML = ICON_HAND;
+    dragBtn.addEventListener("click", function() {
+      setMode("drag");
+    });
+    sw.appendChild(dragBtn);
+    return sw;
+  }
+
   // src/board.ts
   function cycleLayout() {
     state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
@@ -2002,7 +3118,7 @@
     fitToContent();
   }
   function doReset() {
-    if (!confirm("Remettre la disposition par d\xE9faut ?")) return;
+    if (!confirm("Reset to the default layout?")) return;
     var key = storageKey();
     try {
       localStorage.removeItem(key + "-pos");
@@ -2011,9 +3127,6 @@
       localStorage.removeItem(key + "-hidden");
       localStorage.removeItem(key + "-arrowmods");
     } catch (e) {
-    }
-    if (state._originalArrows) {
-      state.project.arrows = JSON.parse(JSON.stringify(state._originalArrows));
     }
     state.hiddenScreens = {};
     state.hiddenEpics = {};
@@ -2047,6 +3160,7 @@
     drawArrows();
     freezeArrowSides();
     fitToContent();
+    if (state.commit) state.commit();
   }
   function init(config) {
     if (!config || !config.project) {
@@ -2054,6 +3168,23 @@
       return;
     }
     state.project = config.project;
+    state.storageKeyBase = "fb-" + (config.project.name || "default");
+    var savedDoc = loadDoc();
+    if (savedDoc && !config.state) {
+      var parsedDoc = parse(savedDoc);
+      if (parsedDoc.project.screens.length || parsedDoc.errors.length === 0) {
+        var docHidden = {};
+        parsedDoc.project.screens.forEach(function(s) {
+          if (s.hidden) docHidden[s.id] = true;
+        });
+        config = {
+          container: config.container,
+          project: parsedDoc.project,
+          state: { positions: parsedDoc.positions, hiddenScreens: docHidden, arrows: parsedDoc.project.arrows }
+        };
+        state.project = config.project;
+      }
+    }
     state.showNotes = true;
     state.hiddenScreens = {};
     state.hiddenEpics = {};
@@ -2061,7 +3192,6 @@
     state.creatingArrow = null;
     state.anchorDotsEls = [];
     state.layoutIndex = 0;
-    state._originalArrows = JSON.parse(JSON.stringify(state.project.arrows || []));
     var configState = config.state || null;
     if (configState && configState.arrows) {
       state.project.arrows = JSON.parse(JSON.stringify(configState.arrows));
@@ -2077,17 +3207,7 @@
         state.hiddenScreens = savedHidden;
       }
     }
-    var allScreens = config.project.screens || [];
-    (config.project.epics || []).forEach(function(epic) {
-      var epicScreens = allScreens.filter(function(s) {
-        return s.epic === epic.id;
-      });
-      if (epicScreens.length > 0 && epicScreens.every(function(s) {
-        return state.hiddenScreens[s.id];
-      })) {
-        state.hiddenEpics[epic.id] = true;
-      }
-    });
+    recomputeHiddenEpics();
     var containerEl;
     if (typeof config.container === "string") {
       containerEl = document.querySelector(config.container);
@@ -2120,7 +3240,11 @@
     sizer.appendChild(canvas);
     wrapper.appendChild(sizer);
     wrapper.appendChild(renderModeSwitch());
-    root.appendChild(wrapper);
+    var body = document.createElement("div");
+    body.className = "fb-body";
+    body.appendChild(renderPanel());
+    body.appendChild(wrapper);
+    root.appendChild(body);
     state.wrapperEl = wrapper;
     state.sizerEl = sizer;
     state.canvasEl = canvas;
@@ -2133,7 +3257,9 @@
     var hasSavedPositions = false;
     if (configState && configState.positions) {
       hasSavedPositions = true;
-      state.positions = JSON.parse(JSON.stringify(configState.positions));
+      screens.forEach(function(s) {
+        if (configState.positions[s.id]) state.positions[s.id] = configState.positions[s.id];
+      });
     } else {
       var savedPos = loadPositions();
       if (savedPos) {
@@ -2172,7 +3298,9 @@
     initArrowDrag();
     initSelection();
     initModeKeys();
+    initCreateMenu();
     setMode("drag");
+    initSync();
     requestAnimationFrame(function() {
       var heights = {};
       screens.forEach(function(s) {
@@ -2196,6 +3324,16 @@
       }
       drawArrows();
       freezeArrowSides();
+      if (state.commit) state.commit();
+      if (!savedDoc) {
+        try {
+          var mk = storageKey();
+          localStorage.removeItem(mk + "-pos");
+          localStorage.removeItem(mk + "-hidden");
+          localStorage.removeItem(mk + "-arrowmods");
+        } catch (e) {
+        }
+      }
     });
   }
 

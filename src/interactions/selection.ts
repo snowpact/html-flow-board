@@ -12,7 +12,7 @@ export function initSelection(): void {
     if (state.mode !== 'select') return;
     if (state.creatingArrow) return;
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('.fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend')) return;
+    if ((e.target as HTMLElement).closest('.fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend')) return;
 
     closeArrowPopup();
     closeScreenPopup();

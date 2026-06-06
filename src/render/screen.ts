@@ -1,10 +1,13 @@
-import { Screen, Position } from '../core/types';
+import { Format, PresetId, Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
+import { FORMATS } from '../core/constants';
 import { escapeHtml } from '../core/geometry';
-import { getEpic, state } from '../core/state';
+import { getEpic, isFluidFormat, screenHeight, screenWidth, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
+import { ICON_EYE } from './icons';
 import { showScreenPopup } from './popups';
+import { isCustomPreset, skeletonHtml } from './presets';
 
 export function toggleScreen(screenId: string): void {
   if (state.hiddenScreens[screenId]) {
@@ -36,11 +39,22 @@ export function applyScreenVisibility(screenId: string): void {
 export function renderScreen(screenData: Screen): HTMLElement {
   var epic = getEpic(screenData.epic);
   var color = epic ? epic.color : '#666';
-  var size = screenData.size || 'md';
 
   var el = document.createElement('div');
-  el.className = 'fb-screen fb-size-' + size;
+  el.className = 'fb-screen';
   el.dataset.screenId = screenData.id;
+
+  // Size — fixed formats set width(+height); `fluid` sets only a min so the card
+  // grows with its content.
+  if (isFluidFormat(screenData)) {
+    var ff = FORMATS[screenData.format];
+    el.style.minWidth = ff.width + 'px';
+    el.style.minHeight = ff.height + 'px';
+  } else {
+    el.style.width = screenWidth(screenData) + 'px';
+    var h = screenHeight(screenData);
+    if (h) el.style.height = h + 'px';
+  }
 
   // Position
   var pos: Position = state.positions[screenData.id] || { x: 100, y: 100 };
@@ -55,8 +69,8 @@ export function renderScreen(screenData: Screen): HTMLElement {
 
   var toggleBtn = document.createElement('button');
   toggleBtn.className = 'fb-screen-toggle';
-  toggleBtn.title = 'Masquer cet écran';
-  toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  toggleBtn.title = 'Hide this screen';
+  toggleBtn.innerHTML = ICON_EYE;
   toggleBtn.addEventListener('click', function(e: MouseEvent) {
     e.stopPropagation();
     toggleScreen(screenData.id);
@@ -65,10 +79,9 @@ export function renderScreen(screenData: Screen): HTMLElement {
 
   el.appendChild(hdr);
 
-  // Body
+  // Body — see applyScreenBody.
   var body = document.createElement('div');
-  body.className = 'fb-screen-body';
-  body.innerHTML = screenData.content || '';
+  applyScreenBody(body, screenData);
   el.appendChild(body);
 
   // Footer (notes only)
@@ -106,5 +119,104 @@ export function renderScreen(screenData: Screen): HTMLElement {
 
   state.screenEls[screenData.id] = el;
   return el;
+}
+
+// Render a screen's body for its preset. 'custom' (or absent) renders the raw
+// `content` HTML; other presets render a grey skeleton (content kept in data).
+export function applyScreenBody(body: HTMLElement, screenData: Screen): void {
+  body.className = 'fb-screen-body';
+  body.innerHTML = '';
+  var preset: PresetId = screenData.preset || 'custom';
+  if (isCustomPreset(preset)) {
+    body.innerHTML = screenData.content || '';
+  } else {
+    body.classList.add('fb-skeleton', 'fb-skel-' + preset);
+    body.innerHTML = skeletonHtml(preset);
+  }
+}
+
+// Change a screen's device format (proportions). Resets any free-resize so the
+// new format's base dimensions apply.
+export function setScreenFormat(screenId: string, format: Format): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var screen: Screen = null;
+  for (var i = 0; i < screens.length; i++) {
+    if (screens[i].id === screenId) { screen = screens[i]; break; }
+  }
+  if (!screen) return;
+  screen.format = format;
+  var el = state.screenEls[screenId];
+  if (el) {
+    el.style.width = ''; el.style.height = ''; el.style.minWidth = ''; el.style.minHeight = '';
+    if (isFluidFormat(screen)) {
+      var ff = FORMATS[format];
+      el.style.minWidth = ff.width + 'px';
+      el.style.minHeight = ff.height + 'px';
+    } else {
+      el.style.width = screenWidth(screen) + 'px';
+      var h = screenHeight(screen);
+      if (h) el.style.height = h + 'px';
+    }
+  }
+  drawArrows();
+  if (state.commit) state.commit();
+}
+
+// Delete a screen: remove it, the arrows touching it, its DOM node, and its
+// bookkeeping; then redraw + re-serialize.
+export function deleteScreen(screenId: string): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var idx = -1;
+  for (var i = 0; i < screens.length; i++) { if (screens[i].id === screenId) { idx = i; break; } }
+  if (idx === -1) return;
+  screens.splice(idx, 1);
+
+  var arrows = (state.project && state.project.arrows) || [];
+  state.project.arrows = arrows.filter(function (a) { return a.from !== screenId && a.to !== screenId; });
+
+  var el = state.screenEls[screenId];
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+  delete state.screenEls[screenId];
+  delete state.hiddenScreens[screenId];
+  delete state.selected[screenId];
+  if (state.positions) delete state.positions[screenId];
+
+  drawArrows();
+  if (state.commit) state.commit();
+}
+
+// Assign a screen to an epic (or null to clear); recolor its header + re-serialize.
+export function setScreenEpic(screenId: string, epicId: string | null): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var screen: Screen = null;
+  for (var i = 0; i < screens.length; i++) {
+    if (screens[i].id === screenId) { screen = screens[i]; break; }
+  }
+  if (!screen) return;
+  if (epicId) screen.epic = epicId; else delete screen.epic;
+  var el = state.screenEls[screenId];
+  if (el) {
+    var epic = getEpic(screen.epic);
+    var hdr = el.querySelector('.fb-screen-header') as HTMLElement;
+    if (hdr) hdr.style.background = epic ? epic.color : '#666';
+  }
+  if (state.commit) state.commit();
+}
+
+// Change a screen's preset and re-render its body in place.
+export function setScreenPreset(screenId: string, preset: PresetId): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var screen: Screen = null;
+  for (var i = 0; i < screens.length; i++) {
+    if (screens[i].id === screenId) { screen = screens[i]; break; }
+  }
+  if (!screen) return;
+  screen.preset = preset;
+  var el = state.screenEls[screenId];
+  if (!el) return;
+  var body = el.querySelector('.fb-screen-body') as HTMLElement;
+  if (body) applyScreenBody(body, screen);
+  drawArrows();
+  if (state.commit) state.commit();
 }
 

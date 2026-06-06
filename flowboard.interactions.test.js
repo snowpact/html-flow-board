@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { init } from './src/board';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { init, doReset } from './src/board';
 import { state } from './src/core/state';
+import { showContextMenu, closeContextMenu } from './src/render/context-menu';
+import { createScreen } from './src/interactions/create';
+import { setScreenPreset, setScreenFormat, toggleScreen, deleteScreen, setScreenEpic } from './src/render/screen';
+import { closePresetPicker } from './src/render/preset-picker';
+import { rebuildBoard, commit } from './src/interactions/sync';
+import { parse } from './src/flowml/parse';
+import { loadDoc } from './src/core/storage';
 
 // Modules are imported directly and share one `state` singleton, so reset it
 // between tests (init repopulates most of it, but not every transient field).
@@ -210,8 +217,7 @@ describe('mode switch + selection', () => {
     window.confirm = function () { return true; };
     selectMode();
     mdown(state.screenEls['A']); mup();
-    const btns = state.container.querySelectorAll('.fb-action-btn');
-    const resetBtn = Array.prototype.find.call(btns, function (b) { return b.textContent === 'Reset'; });
+    const resetBtn = state.container.querySelector('[data-testid="toolbar-reset"]');
     resetBtn.click();
     expect(state.selected).toEqual({});
     expect(state.screenEls['A'].classList.contains('fb-selected')).toBe(false);
@@ -228,5 +234,317 @@ describe('mode switch + selection', () => {
     zoomIn.click();
     expect(state.zoom).toBeGreaterThan(1);
     expect(sizePx() * state.zoom).toBeCloseTo(onScreen);
+  });
+});
+
+describe('context menu', () => {
+  beforeEach(() => { document.body.innerHTML = ''; closeContextMenu(); });
+
+  it('renders a menu at the given position', () => {
+    showContextMenu(10, 20, [{ label: 'A' }, { label: 'B' }]);
+    const menu = document.querySelector('.fb-ctx-menu');
+    expect(menu).toBeTruthy();
+    expect(menu.querySelectorAll('.fb-ctx-item').length).toBe(2);
+  });
+
+  it('clicking a leaf item runs onClick and closes the menu', () => {
+    let clicked = false;
+    showContextMenu(0, 0, [{ label: 'Go', onClick: () => { clicked = true; } }]);
+    document.querySelector('.fb-ctx-item').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(clicked).toBe(true);
+    expect(document.querySelector('.fb-ctx-menu')).toBeNull();
+  });
+
+  it('a submenu item reveals its children on hover', () => {
+    showContextMenu(0, 0, [{ label: 'Create', submenu: [{ label: 'form' }, { label: 'list' }] }]);
+    const item = document.querySelector('.fb-ctx-item.fb-ctx-has-sub');
+    expect(item).toBeTruthy();
+    item.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: false }));
+    const sub = item.querySelector('.fb-ctx-sub');
+    expect(sub).toBeTruthy();
+    expect(sub.querySelectorAll('.fb-ctx-item').length).toBe(2);
+  });
+
+  it('showing a new menu closes the previous one', () => {
+    showContextMenu(0, 0, [{ label: 'A' }]);
+    showContextMenu(0, 0, [{ label: 'B' }]);
+    expect(document.querySelectorAll('.fb-ctx-menu').length).toBe(1);
+  });
+});
+
+describe('preset create + modify', () => {
+  beforeEach(() => { closeContextMenu(); closePresetPicker(); initBoard(); });
+
+  it('right-click → "Create screen" → preset picker (preview grid)', () => {
+    state.wrapperEl.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
+    const menu = document.querySelector('.fb-ctx-menu');
+    expect(menu).toBeTruthy();
+    expect(menu.querySelector('[data-testid="create-screen"]')).toBeTruthy();
+    menu.querySelector('[data-testid="create-screen"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    const picker = document.querySelector('.fb-preset-picker');
+    expect(picker).toBeTruthy();
+    expect(picker.querySelectorAll('.fb-preset-tile').length).toBe(15); // 14 presets + custom
+    expect(picker.textContent.trim()).toBe(''); // no preset labels (previews only)
+  });
+
+  it('createScreen adds a positioned preset screen and renders its skeleton', () => {
+    const before = state.project.screens.length;
+    const id = createScreen('form', 40, 60);
+    expect(state.project.screens.length).toBe(before + 1);
+    const s = state.project.screens.find((x) => x.id === id);
+    expect(s.preset).toBe('form');
+    expect(s.title).toBe('Screen ' + id.replace('screen-', '')); // title number aligns with id
+    expect(state.positions[id]).toBeTruthy();
+    expect(state.screenEls[id].querySelector('.fb-skel-form')).toBeTruthy();
+  });
+
+  it('created ids are unique', () => {
+    expect(createScreen('list', 0, 0)).not.toBe(createScreen('list', 0, 0));
+  });
+
+  it('setScreenPreset swaps the body but keeps content in data (reversible)', () => {
+    const sA = state.project.screens.find((x) => x.id === 'A');
+    sA.content = '<b>hello</b>';
+    setScreenPreset('A', 'dashboard');
+    expect(sA.preset).toBe('dashboard');
+    expect(state.screenEls['A'].querySelector('.fb-screen-body').classList.contains('fb-skel-dashboard')).toBe(true);
+    expect(sA.content).toBe('<b>hello</b>'); // non-destructive
+    setScreenPreset('A', 'custom'); // back to custom restores the HTML
+    expect(state.screenEls['A'].querySelector('.fb-screen-body').innerHTML).toBe('<b>hello</b>');
+  });
+
+  it('created screens default to the desktop format', () => {
+    const id = createScreen('blank', 0, 0);
+    const s = state.project.screens.find((x) => x.id === id);
+    expect(s.format).toBe('desktop');
+    expect(state.screenEls[id].style.width).toBe('400px');
+    expect(state.screenEls[id].style.height).toBe('240px');
+  });
+
+  it('setScreenFormat applies the format dimensions', () => {
+    setScreenFormat('A', 'phone');
+    const sA = state.project.screens.find((x) => x.id === 'A');
+    expect(sA.format).toBe('phone');
+    expect(state.screenEls['A'].style.width).toBe('240px');
+    expect(state.screenEls['A'].style.height).toBe('420px');
+  });
+
+  it('the screen popup offers the 3 device formats', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    expect(state.container.querySelectorAll('.fb-screen-popup-format').length).toBe(3);
+    ['fmt-desktop', 'fmt-phone', 'fmt-fluid'].forEach((id) => {
+      expect(state.container.querySelector('[data-testid="' + id + '"]')).toBeTruthy();
+    });
+  });
+
+  it('a mousedown inside the popup does not start a pan that closes it', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    const fmtBtn = state.container.querySelector('.fb-screen-popup-format');
+    fmtBtn.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    expect(state.panDrag).toBeFalsy(); // pan handler excluded the popup
+    expect(state.container.querySelector('.fb-screen-popup')).toBeTruthy(); // popup still open
+  });
+
+  it('the popup "Change layout" button opens the preset picker', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    const layoutBtn = state.container.querySelector('[data-testid="screen-layout"]');
+    expect(layoutBtn).toBeTruthy();
+    layoutBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
+    expect(document.querySelector('.fb-preset-picker')).toBeTruthy();
+  });
+});
+
+describe('Flow-ML panel + sync', () => {
+  beforeEach(() => { initBoard(); });
+
+  it('renders the panel filled with the board as Flow-ML', () => {
+    expect(document.querySelector('.fb-panel')).toBeTruthy();
+    const text = state.panelTextarea.value;
+    expect(text).toContain('@e1'); // epic
+    expect(text).toContain('A,'); // screen A
+  });
+
+  it('the collapse button toggles the panel', () => {
+    document.querySelector('.fb-panel-collapse').click();
+    expect(document.querySelector('.fb-panel').classList.contains('fb-panel-collapsed')).toBe(true);
+  });
+
+  it('the gutter has one line number per Flow-ML line', () => {
+    const lines = state.panelTextarea.value.split('\n').length;
+    const gutter = document.querySelector('.fb-panel-gutter').textContent.split('\n');
+    expect(gutter.length).toBe(lines);
+    expect(gutter[0]).toBe('1');
+  });
+
+  it('renders a syntax-highlighted layer behind the textarea', () => {
+    const code = document.querySelector('.fb-panel-highlight code');
+    expect(code).toBeTruthy();
+    expect(code.querySelector('.fb-tok-screen')).toBeTruthy(); // screen A is colored
+    expect(code.querySelector('.fb-tok-epic')).toBeTruthy();   // epic @e1 is colored
+  });
+
+  it('the ? button toggles the color-coded cheat-sheet', () => {
+    document.querySelector('.fb-panel-help-btn').click();
+    expect(document.querySelector('.fb-panel').classList.contains('fb-help-open')).toBe(true);
+    expect(document.querySelector('.fb-panel-help .fb-tok-screen')).toBeTruthy();
+  });
+
+  it('text → diagram: rebuildBoard renders screens from a parsed model', () => {
+    const { project, positions } = parse(':x1, t=One\n:x2, t=Two\nx1 -> x2\n');
+    rebuildBoard(project, positions);
+    expect(Object.keys(state.screenEls).sort()).toEqual(['x1', 'x2']);
+    expect(state.canvasEl.querySelectorAll('.fb-screen').length).toBe(2);
+  });
+
+  it('diagram → text: a mutation re-serializes into the panel', () => {
+    setScreenFormat('A', 'phone'); // routes through commit()
+    expect(state.panelTextarea.value).toContain('f=phone');
+  });
+
+  it('anti-loop: commit is a no-op while syncing', () => {
+    state.panelTextarea.value = 'SENTINEL';
+    state.syncing = true;
+    commit();
+    expect(state.panelTextarea.value).toBe('SENTINEL'); // not overwritten
+    state.syncing = false;
+  });
+
+  it('persists to Flow-ML and reloads from it (source of truth)', () => {
+    const id = createScreen('blank', 200, 200); // → commit → saveDoc
+    expect(loadDoc()).toContain(id);
+    // Re-init WITHOUT clearing localStorage (same project name) → loads the doc,
+    // even though the passed config has no screens.
+    document.body.innerHTML = '<div id="app"></div>';
+    init({ container: document.getElementById('app'), project: { name: 'Smoke', epics: [], screens: [], arrows: [] } });
+    expect(state.project.screens.some((s) => s.id === id)).toBe(true);
+  });
+});
+
+describe('Flow-ML sync hardening', () => {
+  beforeEach(() => { initBoard(); });
+
+  function typePanel(text) {
+    state.panelTextarea.value = text;
+    state.panelTextarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+  }
+
+  it('an emptied / whitespace panel does not wipe the board', () => {
+    vi.useFakeTimers();
+    typePanel('   ');
+    vi.advanceTimersByTime(300);
+    vi.useRealTimers();
+    expect(state.canvasEl.querySelectorAll('.fb-screen').length).toBe(3); // A,B,C intact
+  });
+
+  it('editing !name keeps writing to the original (pinned) storage key', () => {
+    vi.useFakeTimers();
+    typePanel('!name = Renamed\n:A, t=A\n');
+    vi.advanceTimersByTime(300);
+    vi.useRealTimers();
+    expect(loadDoc()).toContain('Renamed');                              // pinned key fb-Smoke
+    expect(window.localStorage.getItem('fb-Renamed-flowml')).toBeNull(); // no orphan key
+  });
+
+  it('changing epics in the text rebuilds the toolbar legend', () => {
+    const { project, positions } = parse('@e2, t=New, c=#0f0\n:x1, t=One, e=e2\n');
+    state.syncing = true; rebuildBoard(project, positions); state.syncing = false;
+    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e2"]')).toBeTruthy();
+    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e1"]')).toBeFalsy();
+  });
+
+  it('rebuild prunes selection entries for deleted screens', () => {
+    state.selected = { A: true, GONE: true };
+    const { project, positions } = parse(':A, t=A\n');
+    state.syncing = true; rebuildBoard(project, positions); state.syncing = false;
+    expect(state.selected.GONE).toBeUndefined();
+  });
+
+  it('an explicit config.state wins over a saved doc', () => {
+    createScreen('blank', 100, 100); // saves a doc under fb-Smoke
+    document.body.innerHTML = '<div id="app"></div>';
+    init({
+      container: document.getElementById('app'),
+      project: { name: 'Smoke', epics: [], screens: [{ id: 'Z', title: 'Z' }], arrows: [] },
+      state: { positions: { Z: { x: 10, y: 10 } }, hiddenScreens: {}, arrows: [] },
+    });
+    expect(state.project.screens.map((s) => s.id)).toEqual(['Z']);
+  });
+
+  it('Reset clears visibility and re-serializes, keeping screens from the text', () => {
+    window.confirm = () => true;
+    toggleScreen('A');
+    expect(state.hiddenScreens.A).toBe(true);
+    doReset();
+    expect(state.hiddenScreens.A).toBeFalsy();
+    expect(loadDoc()).toContain('A,'); // committed, screens preserved
+  });
+});
+
+describe('Flow-ML UX additions', () => {
+  beforeEach(() => { initBoard(); });
+
+  it('deleteScreen removes the screen, its arrows, and re-serializes', () => {
+    state.project.arrows = [{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }];
+    deleteScreen('A');
+    expect(state.screenEls.A).toBeUndefined();
+    expect(state.project.screens.some((s) => s.id === 'A')).toBe(false);
+    expect(state.project.arrows).toEqual([{ from: 'B', to: 'C' }]); // A->B dropped
+    expect(loadDoc()).not.toContain('\nA,');
+  });
+
+  it('the Copy Init toolbar button is gone', () => {
+    const labels = [...document.querySelectorAll('.fb-action-btn')].map((b) => b.textContent);
+    expect(labels).not.toContain('Copy Init');
+  });
+
+  it('the fluid format sets a min size (not a fixed width)', () => {
+    setScreenFormat('A', 'fluid');
+    const el = state.screenEls.A;
+    expect(el.style.minWidth).toBe('280px');
+    expect(el.style.minHeight).toBe('180px');
+    expect(el.style.width).toBe('');
+    expect(state.panelTextarea.value).toContain('f=fluid');
+  });
+
+  it('the panel copy button writes the doc to the clipboard', async () => {
+    let captured = null;
+    const orig = navigator.clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: (t) => { captured = t; return Promise.resolve(); } }, configurable: true,
+    });
+    document.querySelector('.fb-panel-copy-btn').click();
+    await Promise.resolve();
+    expect(captured).toBe(state.panelTextarea.value);
+    Object.defineProperty(navigator, 'clipboard', { value: orig, configurable: true });
+  });
+
+  it('the active-line indicator follows the caret line', () => {
+    const ta = state.panelTextarea;
+    const band = document.querySelector('.fb-panel-activeline');
+    ta.selectionStart = 0;
+    ta.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true }));
+    expect(band.style.top).toBe('12px');
+    ta.selectionStart = ta.value.indexOf('\n') + 1; // start of line 2
+    ta.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true }));
+    expect(band.style.top).toBe('33.25px'); // 12 + 1 × 21.25
+  });
+
+  it('setScreenEpic assigns / clears the epic and re-serializes', () => {
+    setScreenEpic('A', null);
+    expect(state.project.screens.find((s) => s.id === 'A').epic).toBeUndefined();
+    setScreenEpic('A', 'e1');
+    expect(state.project.screens.find((s) => s.id === 'A').epic).toBe('e1');
+    expect(loadDoc()).toContain('e=e1');
+  });
+
+  it('the screen popup "Change epic" opens a menu of epics', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    const epicBtn = state.container.querySelector('[data-testid="screen-epic"]');
+    expect(epicBtn).toBeTruthy();
+    epicBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
+    const menu = document.querySelector('.fb-ctx-menu');
+    expect(menu).toBeTruthy();
+    expect(menu.querySelector('[data-testid="epic-none"]')).toBeTruthy(); // clear option
+    expect(menu.querySelector('[data-testid="epic-e1"]')).toBeTruthy();   // the project's epic
   });
 });

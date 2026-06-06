@@ -3,7 +3,7 @@ import { cycleLayout, doReset } from '../board';
 import { ZOOM_STEP } from '../core/constants';
 import { state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
-import { doExport, doExportConfig } from '../export';
+import { doExport } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
 import { applyScreenVisibility } from './screen';
@@ -15,6 +15,45 @@ export function updateLayoutButton(): void {
     var name = LAYOUT_STRATEGIES[state.layoutIndex].name;
     btn.textContent = 'Auto-Layout (' + name + ')';
   }
+}
+
+// Build the epic legend (checkbox + color dot + label) from the current project.
+export function renderLegend(): HTMLElement {
+  var legend = document.createElement('div');
+  legend.className = 'fb-legend';
+  (state.project.epics || []).forEach(function (epic: Epic) {
+    var label = document.createElement('label');
+    label.className = 'fb-legend-item' + (state.hiddenEpics[epic.id] ? ' fb-dimmed' : '');
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !state.hiddenEpics[epic.id];
+    cb.className = 'fb-legend-checkbox';
+    cb.style.accentColor = epic.color;
+    cb.dataset.epicId = epic.id;
+    cb.addEventListener('change', function () {
+      toggleEpic(epic.id);
+    });
+    label.appendChild(cb);
+
+    var dot = document.createElement('span');
+    dot.className = 'fb-legend-dot';
+    dot.style.background = epic.color;
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(epic.label));
+    legend.appendChild(label);
+  });
+  return legend;
+}
+
+// Refresh the toolbar pieces that depend on the project model (title + legend),
+// used after a text → diagram rebuild changes epics/name. No-op before init.
+export function syncToolbar(): void {
+  if (!state.container) return;
+  var title = state.container.querySelector('.fb-project-title');
+  if (title) title.textContent = state.project.name || 'FlowBoard';
+  var old = state.container.querySelector('.fb-legend');
+  if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
 }
 
 // -- Get epic by id --
@@ -37,31 +76,7 @@ export function renderToolbar(): HTMLElement {
   left.appendChild(sep1);
 
   // Legend with checkboxes
-  var legend = document.createElement('div');
-  legend.className = 'fb-legend';
-  (state.project.epics || []).forEach(function (epic: Epic) {
-    var label = document.createElement('label');
-    label.className = 'fb-legend-item';
-
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !state.hiddenEpics[epic.id];
-    cb.className = 'fb-legend-checkbox';
-    cb.style.accentColor = epic.color;
-    cb.dataset.epicId = epic.id;
-    cb.addEventListener('change', function () {
-      toggleEpic(epic.id);
-    });
-    label.appendChild(cb);
-
-    var dot = document.createElement('span');
-    dot.className = 'fb-legend-dot';
-    dot.style.background = epic.color;
-    label.appendChild(dot);
-    label.appendChild(document.createTextNode(epic.label));
-    legend.appendChild(label);
-  });
-  left.appendChild(legend);
+  left.appendChild(renderLegend());
 
   header.appendChild(left);
 
@@ -120,7 +135,7 @@ export function renderToolbar(): HTMLElement {
   var layoutBtn = document.createElement('button');
   layoutBtn.className = 'fb-action-btn';
   layoutBtn.id = 'fb-layout-btn';
-  layoutBtn.title = 'Changer la disposition';
+  layoutBtn.title = 'Change layout';
   layoutBtn.textContent = 'Auto-Layout (' + LAYOUT_STRATEGIES[state.layoutIndex].name + ')';
   layoutBtn.addEventListener('click', cycleLayout);
   right.appendChild(layoutBtn);
@@ -133,14 +148,6 @@ export function renderToolbar(): HTMLElement {
   exportBtn.addEventListener('click', doExport);
   right.appendChild(exportBtn);
 
-  // Export Config
-  var exportConfigBtn = document.createElement('button');
-  exportConfigBtn.className = 'fb-action-btn';
-  exportConfigBtn.textContent = 'Copy Init';
-  exportConfigBtn.title = 'Copier le code FlowBoard.init() dans le presse-papier';
-  exportConfigBtn.addEventListener('click', doExportConfig);
-  right.appendChild(exportConfigBtn);
-
   // Separator
   var sep4 = document.createElement('div');
   sep4.className = 'fb-header-separator';
@@ -149,8 +156,9 @@ export function renderToolbar(): HTMLElement {
   // Reset
   var resetBtn = document.createElement('button');
   resetBtn.className = 'fb-action-btn';
+  resetBtn.setAttribute('data-testid', 'toolbar-reset');
   resetBtn.textContent = 'Reset';
-  resetBtn.title = 'Remettre la disposition par défaut';
+  resetBtn.title = 'Reset to the default layout';
   resetBtn.addEventListener('click', doReset);
   right.appendChild(resetBtn);
 
