@@ -1,13 +1,14 @@
 import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
-import { deleteScreen, setScreenFormat, setScreenPreset, toggleScreen } from './screen';
+import { deleteScreen, setScreenEpic, setScreenFormat, setScreenPreset, toggleScreen } from './screen';
+import { showContextMenu, CtxItem } from './context-menu';
 import { showPresetPicker } from './preset-picker';
 import {
   ICON_DESKTOP, ICON_EYE, ICON_EYE_OFF, ICON_FLUID, ICON_LAYOUT, ICON_LINE_DASHED,
-  ICON_LINE_SOLID, ICON_PHONE, ICON_SWAP, ICON_TRASH,
+  ICON_LINE_SOLID, ICON_PHONE, ICON_SWAP, ICON_TAG, ICON_TRASH,
 } from './icons';
-import { Arrow, Format, PresetId, Screen } from '../core/types';
+import { Arrow, Epic, Format, PresetId, Screen } from '../core/types';
 
 export function handlePopupOutsideClick(e: MouseEvent): void {
   if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target as Node)) {
@@ -321,6 +322,27 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
     showPresetPicker(cx, cy, function (preset) { setScreenPreset(screenId, preset); }, current);
   });
   popup.appendChild(layoutBtn);
+
+  // -- Change epic (assign an existing epic, or clear) --
+  var epicBtn = mkBtn(ICON_TAG, 'Change epic');
+  epicBtn.addEventListener('click', function (ev: MouseEvent) {
+    ev.stopPropagation();
+    var cx = ev.clientX;
+    var cy = ev.clientY;
+    var cur = screenData.epic;
+    closeScreenPopup();
+    var items: CtxItem[] = (state.project.epics || []).map(function (epic: Epic): CtxItem {
+      return {
+        label: epic.label || epic.id,
+        icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
+        active: cur === epic.id,
+        onClick: function () { setScreenEpic(screenId, epic.id); },
+      };
+    });
+    items.push({ label: 'None', active: !cur, onClick: function () { setScreenEpic(screenId, null); } });
+    showContextMenu(cx, cy, items);
+  });
+  popup.appendChild(epicBtn);
 
   // -- Delete --
   var deleteScreenBtn = mkBtn(ICON_TRASH, 'Delete', true);

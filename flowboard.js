@@ -636,6 +636,26 @@
     drawArrows();
     if (state.commit) state.commit();
   }
+  function setScreenEpic(screenId, epicId) {
+    var screens = state.project && state.project.screens || [];
+    var screen = null;
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) {
+        screen = screens[i];
+        break;
+      }
+    }
+    if (!screen) return;
+    if (epicId) screen.epic = epicId;
+    else delete screen.epic;
+    var el = state.screenEls[screenId];
+    if (el) {
+      var epic = getEpic(screen.epic);
+      var hdr = el.querySelector(".fb-screen-header");
+      if (hdr) hdr.style.background = epic ? epic.color : "#666";
+    }
+    if (state.commit) state.commit();
+  }
   function setScreenPreset(screenId, preset) {
     var screens = state.project && state.project.screens || [];
     var screen = null;
@@ -655,16 +675,103 @@
     if (state.commit) state.commit();
   }
 
-  // src/render/preset-picker.ts
-  var pickerEl = null;
+  // src/render/context-menu.ts
+  var openRoot = null;
   var dismiss = null;
-  function closePresetPicker() {
-    if (pickerEl && pickerEl.parentNode) pickerEl.parentNode.removeChild(pickerEl);
-    pickerEl = null;
+  function closeContextMenu() {
+    if (openRoot && openRoot.parentNode) openRoot.parentNode.removeChild(openRoot);
+    openRoot = null;
     if (dismiss) {
       document.removeEventListener("mousedown", dismiss, true);
       document.removeEventListener("keydown", dismiss, true);
       dismiss = null;
+    }
+  }
+  function buildMenu(items) {
+    var menu = document.createElement("div");
+    menu.className = "fb-ctx-menu";
+    items.forEach(function(item) {
+      var row = document.createElement("div");
+      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.danger ? " fb-ctx-danger" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
+      if (item.icon) {
+        var ic = document.createElement("span");
+        ic.className = "fb-ctx-icon";
+        ic.innerHTML = item.icon;
+        row.appendChild(ic);
+      }
+      var label = document.createElement("span");
+      label.className = "fb-ctx-label";
+      label.textContent = item.label;
+      row.appendChild(label);
+      if (item.submenu && item.submenu.length) {
+        var caret = document.createElement("span");
+        caret.className = "fb-ctx-caret";
+        caret.textContent = "\u25B8";
+        row.appendChild(caret);
+        row.addEventListener("mouseenter", function() {
+          var existing = menu.querySelectorAll(".fb-ctx-sub");
+          for (var i = 0; i < existing.length; i++) {
+            var e = existing[i];
+            if (e.parentNode) e.parentNode.removeChild(e);
+          }
+          var sub = buildMenu(item.submenu);
+          sub.classList.add("fb-ctx-sub");
+          row.appendChild(sub);
+          if (sub.getBoundingClientRect().right > window.innerWidth) {
+            sub.classList.add("fb-ctx-sub-left");
+          }
+        });
+        row.addEventListener("mouseleave", function() {
+          var s = row.querySelector(".fb-ctx-sub");
+          if (s && s.parentNode) s.parentNode.removeChild(s);
+        });
+      } else {
+        row.addEventListener("click", function(e) {
+          e.stopPropagation();
+          closeContextMenu();
+          if (item.onClick) item.onClick();
+        });
+      }
+      menu.appendChild(row);
+    });
+    return menu;
+  }
+  function showContextMenu(x, y, items) {
+    closeContextMenu();
+    var menu = buildMenu(items);
+    menu.style.left = x + "px";
+    menu.style.top = y + "px";
+    document.body.appendChild(menu);
+    openRoot = menu;
+    var r = menu.getBoundingClientRect();
+    if (r.width && r.right > window.innerWidth) menu.style.left = Math.max(0, x - r.width) + "px";
+    if (r.height && r.bottom > window.innerHeight) menu.style.top = Math.max(0, y - r.height) + "px";
+    dismiss = function(e) {
+      if (e.type === "keydown") {
+        if (e.key === "Escape") closeContextMenu();
+        return;
+      }
+      if (openRoot && !openRoot.contains(e.target)) closeContextMenu();
+    };
+    var fn = dismiss;
+    setTimeout(function() {
+      if (dismiss !== fn) return;
+      document.addEventListener("mousedown", fn, true);
+      document.addEventListener("keydown", fn, true);
+    }, 0);
+    return menu;
+  }
+
+  // src/render/preset-picker.ts
+  var pickerEl = null;
+  var dismiss2 = null;
+  function closePresetPicker() {
+    if (pickerEl && pickerEl.parentNode) pickerEl.parentNode.removeChild(pickerEl);
+    pickerEl = null;
+    if (dismiss2) {
+      document.removeEventListener("mousedown", dismiss2, true);
+      document.removeEventListener("keydown", dismiss2, true);
+      dismiss2 = null;
     }
   }
   function showPresetPicker(x, y, onPick, current) {
@@ -701,16 +808,16 @@
     var r = picker.getBoundingClientRect();
     if (r.width && r.right > window.innerWidth) picker.style.left = Math.max(0, x - r.width) + "px";
     if (r.height && r.bottom > window.innerHeight) picker.style.top = Math.max(0, y - r.height) + "px";
-    dismiss = function(e) {
+    dismiss2 = function(e) {
       if (e.type === "keydown") {
         if (e.key === "Escape") closePresetPicker();
         return;
       }
       if (pickerEl && !pickerEl.contains(e.target)) closePresetPicker();
     };
-    var fn = dismiss;
+    var fn = dismiss2;
     setTimeout(function() {
-      if (dismiss !== fn) return;
+      if (dismiss2 !== fn) return;
       document.addEventListener("mousedown", fn, true);
       document.addEventListener("keydown", fn, true);
     }, 0);
@@ -984,6 +1091,29 @@
       }, current);
     });
     popup.appendChild(layoutBtn);
+    var epicBtn = mkBtn(ICON_TAG, "Change epic");
+    epicBtn.addEventListener("click", function(ev) {
+      ev.stopPropagation();
+      var cx = ev.clientX;
+      var cy = ev.clientY;
+      var cur = screenData.epic;
+      closeScreenPopup();
+      var items = (state.project.epics || []).map(function(epic) {
+        return {
+          label: epic.label || epic.id,
+          icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
+          active: cur === epic.id,
+          onClick: function() {
+            setScreenEpic(screenId, epic.id);
+          }
+        };
+      });
+      items.push({ label: "None", active: !cur, onClick: function() {
+        setScreenEpic(screenId, null);
+      } });
+      showContextMenu(cx, cy, items);
+    });
+    popup.appendChild(epicBtn);
     var deleteScreenBtn = mkBtn(ICON_TRASH, "Delete", true);
     deleteScreenBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
@@ -1549,93 +1679,6 @@
       state.draggingHandle = null;
       state.wrapperEl.classList.remove("fb-dragging-handle");
     });
-  }
-
-  // src/render/context-menu.ts
-  var openRoot = null;
-  var dismiss2 = null;
-  function closeContextMenu() {
-    if (openRoot && openRoot.parentNode) openRoot.parentNode.removeChild(openRoot);
-    openRoot = null;
-    if (dismiss2) {
-      document.removeEventListener("mousedown", dismiss2, true);
-      document.removeEventListener("keydown", dismiss2, true);
-      dismiss2 = null;
-    }
-  }
-  function buildMenu(items) {
-    var menu = document.createElement("div");
-    menu.className = "fb-ctx-menu";
-    items.forEach(function(item) {
-      var row = document.createElement("div");
-      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.danger ? " fb-ctx-danger" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
-      if (item.icon) {
-        var ic = document.createElement("span");
-        ic.className = "fb-ctx-icon";
-        ic.innerHTML = item.icon;
-        row.appendChild(ic);
-      }
-      var label = document.createElement("span");
-      label.className = "fb-ctx-label";
-      label.textContent = item.label;
-      row.appendChild(label);
-      if (item.submenu && item.submenu.length) {
-        var caret = document.createElement("span");
-        caret.className = "fb-ctx-caret";
-        caret.textContent = "\u25B8";
-        row.appendChild(caret);
-        row.addEventListener("mouseenter", function() {
-          var existing = menu.querySelectorAll(".fb-ctx-sub");
-          for (var i = 0; i < existing.length; i++) {
-            var e = existing[i];
-            if (e.parentNode) e.parentNode.removeChild(e);
-          }
-          var sub = buildMenu(item.submenu);
-          sub.classList.add("fb-ctx-sub");
-          row.appendChild(sub);
-          if (sub.getBoundingClientRect().right > window.innerWidth) {
-            sub.classList.add("fb-ctx-sub-left");
-          }
-        });
-        row.addEventListener("mouseleave", function() {
-          var s = row.querySelector(".fb-ctx-sub");
-          if (s && s.parentNode) s.parentNode.removeChild(s);
-        });
-      } else {
-        row.addEventListener("click", function(e) {
-          e.stopPropagation();
-          closeContextMenu();
-          if (item.onClick) item.onClick();
-        });
-      }
-      menu.appendChild(row);
-    });
-    return menu;
-  }
-  function showContextMenu(x, y, items) {
-    closeContextMenu();
-    var menu = buildMenu(items);
-    menu.style.left = x + "px";
-    menu.style.top = y + "px";
-    document.body.appendChild(menu);
-    openRoot = menu;
-    var r = menu.getBoundingClientRect();
-    if (r.width && r.right > window.innerWidth) menu.style.left = Math.max(0, x - r.width) + "px";
-    if (r.height && r.bottom > window.innerHeight) menu.style.top = Math.max(0, y - r.height) + "px";
-    dismiss2 = function(e) {
-      if (e.type === "keydown") {
-        if (e.key === "Escape") closeContextMenu();
-        return;
-      }
-      if (openRoot && !openRoot.contains(e.target)) closeContextMenu();
-    };
-    var fn = dismiss2;
-    setTimeout(function() {
-      if (dismiss2 !== fn) return;
-      document.addEventListener("mousedown", fn, true);
-      document.addEventListener("keydown", fn, true);
-    }, 0);
-    return menu;
   }
 
   // src/interactions/create.ts

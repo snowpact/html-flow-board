@@ -3,7 +3,7 @@ import { init, doReset } from './src/board';
 import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
-import { setScreenPreset, setScreenFormat, toggleScreen, deleteScreen } from './src/render/screen';
+import { setScreenPreset, setScreenFormat, toggleScreen, deleteScreen, setScreenEpic } from './src/render/screen';
 import { closePresetPicker } from './src/render/preset-picker';
 import { rebuildBoard, commit } from './src/interactions/sync';
 import { parse } from './src/flowml/parse';
@@ -528,5 +528,25 @@ describe('Flow-ML UX additions', () => {
     ta.selectionStart = ta.value.indexOf('\n') + 1; // start of line 2
     ta.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true }));
     expect(band.style.top).toBe('33.25px'); // 12 + 1 × 21.25
+  });
+
+  it('setScreenEpic assigns / clears the epic and re-serializes', () => {
+    setScreenEpic('A', null);
+    expect(state.project.screens.find((s) => s.id === 'A').epic).toBeUndefined();
+    setScreenEpic('A', 'e1');
+    expect(state.project.screens.find((s) => s.id === 'A').epic).toBe('e1');
+    expect(loadDoc()).toContain('e=e1');
+  });
+
+  it('the screen popup "Change epic" opens a menu of epics', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    const btns = state.container.querySelectorAll('.fb-screen-popup-btn');
+    const epicBtn = Array.prototype.find.call(btns, (b) => b.textContent === 'Change epic');
+    expect(epicBtn).toBeTruthy();
+    epicBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
+    const menu = document.querySelector('.fb-ctx-menu');
+    expect(menu).toBeTruthy();
+    expect(menu.textContent).toContain('None'); // clear option
+    expect(menu.textContent).toContain('E');    // epic e1's label
   });
 });

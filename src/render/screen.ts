@@ -185,6 +185,24 @@ export function deleteScreen(screenId: string): void {
   if (state.commit) state.commit();
 }
 
+// Assign a screen to an epic (or null to clear); recolor its header + re-serialize.
+export function setScreenEpic(screenId: string, epicId: string | null): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var screen: Screen = null;
+  for (var i = 0; i < screens.length; i++) {
+    if (screens[i].id === screenId) { screen = screens[i]; break; }
+  }
+  if (!screen) return;
+  if (epicId) screen.epic = epicId; else delete screen.epic;
+  var el = state.screenEls[screenId];
+  if (el) {
+    var epic = getEpic(screen.epic);
+    var hdr = el.querySelector('.fb-screen-header') as HTMLElement;
+    if (hdr) hdr.style.background = epic ? epic.color : '#666';
+  }
+  if (state.commit) state.commit();
+}
+
 // Change a screen's preset and re-render its body in place.
 export function setScreenPreset(screenId: string, preset: PresetId): void {
   var screens: Screen[] = (state.project && state.project.screens) || [];
