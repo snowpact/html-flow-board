@@ -28,7 +28,7 @@ login, t=Login, p=form, f=phone, e=auth, x=120, y=80
 home,  t=Dashboard, p=dashboard, f=desktop, e=auth, x=560, y=80
 
 login -> home, l=Login OK
-login ..> home          # dashed = secondary path
+login --> home          # dashed = secondary path
 ```
 
 ---
@@ -101,7 +101,7 @@ short, comma-separated attributes.
 | `login, t=Login, p=form, f=phone, e=auth` | **Screen** |
 | ` ``` ` … ` ``` ` (fenced block under a screen) | Raw HTML body (rendered when preset is `custom`) |
 | `login -> home, l=ok` | **Arrow** (solid) |
-| `login ..> home` | **Arrow** (dashed) |
+| `login --> home` | **Arrow** (dashed) |
 | `# anything` | Comment (ignored) |
 
 ### Screen attributes
@@ -125,7 +125,7 @@ A screen line starts with its **id**, followed by `key=value` attributes (any or
 
 ### Arrows
 
-`from -> to` (solid) or `from ..> to` (dashed), with optional attributes:
+`from -> to` (solid) or `from --> to` (dashed; legacy `..>` still accepted), with optional attributes:
 
 | Key | Meaning |
 |---|---|

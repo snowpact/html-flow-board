@@ -1351,7 +1351,7 @@
   }
   function hasUnquotedArrow(line) {
     var bare = line.replace(/"(?:\\.|[^"])*"/g, "");
-    return /(\.\.>|->)/.test(bare);
+    return /(\.\.>|-+>)/.test(bare);
   }
   function parse(text) {
     var project = { name: "", epics: [], screens: [], arrows: [] };
@@ -1391,10 +1391,10 @@
         i++;
         continue;
       }
-      var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
+      var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(-->|\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
       if (am) {
         var arrow = { from: unquote(am[1]), to: unquote(am[3]) };
-        if (am[2] === "..>") arrow.dashed = true;
+        if (am[2] === "-->" || am[2] === "..>") arrow.dashed = true;
         var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
         if (aattrs.l) arrow.label = aattrs.l;
         if (aattrs.fs) arrow.fromSide = aattrs.fs;
@@ -1989,7 +1989,7 @@
     if (project.arrows && project.arrows.length) {
       out.push("");
       project.arrows.forEach(function(a) {
-        var line = qtok(a.from) + (a.dashed ? " ..> " : " -> ") + qtok(a.to);
+        var line = qtok(a.from) + (a.dashed ? " --> " : " -> ") + qtok(a.to);
         var attrs = [];
         if (a.label) attrs.push("l=" + q(a.label));
         if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
@@ -2018,7 +2018,7 @@
   var RE_LEAD = /^\s*/;
   var RE_FENCE = /^`{3,}$/;
   var RE_DIRECTIVE = /^(![A-Za-z]+)(\s*=\s*)(.*)$/;
-  var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:\.\.>|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
+  var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:-->|\.\.>|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
   var RE_EPIC = /^(@(?:"(?:\\.|[^"])*"|[^\s,"]+))(.*)$/;
   var RE_SCREEN = /^("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
   function hlAttrs(s) {
@@ -2309,23 +2309,25 @@
       ["login, t=Login, p=form, f=phone, e=auth", "\xE9cran (titre, preset, format, epic)"],
       ["login, x=120, y=80, h", "position (x,y) \xB7 h = masqu\xE9"],
       ["login -> home", "fl\xE8che"],
-      ["login ..> home, l=ok", "fl\xE8che pointill\xE9e + label"],
+      ["login --> home, l=ok", "fl\xE8che pointill\xE9e + label"],
       ["# un commentaire", "commentaire (ignor\xE9)"]
     ];
-    var dl = document.createElement("dl");
-    dl.className = "fb-help-grid";
+    var grid = document.createElement("div");
+    grid.className = "fb-help-grid";
     rows.forEach(function(r) {
-      var dt = document.createElement("dt");
+      var row = document.createElement("div");
+      row.className = "fb-help-row";
+      var desc = document.createElement("div");
+      desc.className = "fb-help-desc";
+      desc.textContent = r[1];
       var code = document.createElement("code");
       code.className = "fb-help-ex";
       code.innerHTML = highlight(r[0]);
-      dt.appendChild(code);
-      var dd = document.createElement("dd");
-      dd.textContent = r[1];
-      dl.appendChild(dt);
-      dl.appendChild(dd);
+      row.appendChild(desc);
+      row.appendChild(code);
+      grid.appendChild(row);
     });
-    help.appendChild(dl);
+    help.appendChild(grid);
     var fenceTitle = document.createElement("div");
     fenceTitle.className = "fb-help-subtitle";
     fenceTitle.textContent = "HTML personnalis\xE9 (preset par d\xE9faut)";

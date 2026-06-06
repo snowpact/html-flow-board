@@ -34,7 +34,7 @@ describe('flow-ml serialize', () => {
     expect(out).toContain('prefs, t="Mes réglages", x=920, y=80'); // custom → no p=, quoted title
     expect(out).toContain('<div>x</div>'); // fenced custom HTML
     expect(out).toContain('home -> prefs, l=ouvrir');
-    expect(out).toContain('login ..> prefs'); // dashed
+    expect(out).toContain('login --> prefs'); // dashed
   });
 });
 
@@ -174,6 +174,15 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
 
   it('migrates the legacy square format to fluid', () => {
     expect(parse('a, f=square\n').project.screens[0].format).toBe('fluid');
+  });
+
+  it('uses --> for dashed arrows (legacy ..> still accepted on input)', () => {
+    expect(parse('a --> b\n').project.arrows[0].dashed).toBe(true);
+    expect(parse('a ..> b\n').project.arrows[0].dashed).toBe(true); // back-compat
+    expect(parse('a -> b\n').project.arrows[0].dashed).toBeUndefined();
+    const out = serialize({ screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', dashed: true }] }, {});
+    expect(out).toContain('a --> b');
+    expect(out).not.toContain('..>');
   });
 
   it('round-trips and is idempotent over adversarial ids (fuzz)', () => {

@@ -209,23 +209,25 @@ function renderPanelHelp(): HTMLElement {
     ['login, t=Login, p=form, f=phone, e=auth', 'écran (titre, preset, format, epic)'],
     ['login, x=120, y=80, h', 'position (x,y) · h = masqué'],
     ['login -> home', 'flèche'],
-    ['login ..> home, l=ok', 'flèche pointillée + label'],
+    ['login --> home, l=ok', 'flèche pointillée + label'],
     ['# un commentaire', 'commentaire (ignoré)'],
   ];
-  var dl = document.createElement('dl');
-  dl.className = 'fb-help-grid';
+  var grid = document.createElement('div');
+  grid.className = 'fb-help-grid';
   rows.forEach(function (r) {
-    var dt = document.createElement('dt');
-    var code = document.createElement('code');
+    var row = document.createElement('div');
+    row.className = 'fb-help-row';
+    var desc = document.createElement('div'); // explanation first
+    desc.className = 'fb-help-desc';
+    desc.textContent = r[1];
+    var code = document.createElement('code');  // then the code
     code.className = 'fb-help-ex';
     code.innerHTML = highlight(r[0]);
-    dt.appendChild(code);
-    var dd = document.createElement('dd');
-    dd.textContent = r[1];
-    dl.appendChild(dt);
-    dl.appendChild(dd);
+    row.appendChild(desc);
+    row.appendChild(code);
+    grid.appendChild(row);
   });
-  help.appendChild(dl);
+  help.appendChild(grid);
 
   var fenceTitle = document.createElement('div');
   fenceTitle.className = 'fb-help-subtitle';

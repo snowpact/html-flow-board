@@ -50,7 +50,7 @@ function parseAttrs(attrParts: string[]): Record<string, any> {
 // flag a malformed arrow vs. a title that merely contains "->".)
 function hasUnquotedArrow(line: string): boolean {
   var bare = line.replace(/"(?:\\.|[^"])*"/g, '');
-  return /(\.\.>|->)/.test(bare);
+  return /(\.\.>|-+>)/.test(bare);
 }
 
 // Parse Flow-ML text to the board model. Tolerant: bad lines are recorded in
@@ -99,12 +99,12 @@ export function parse(text: string): ParseResult {
       i++; continue;
     }
 
-    // Arrow: a -> b  /  a ..> b   (optional ", attrs"). Endpoints may be quoted
-    // (so ids with spaces/commas/specials survive).
-    var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
+    // Arrow: a -> b (solid) / a --> b (dashed; legacy ..> still accepted on input).
+    // Endpoints may be quoted (so ids with spaces/commas/specials survive).
+    var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(-->|\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
     if (am) {
       var arrow: Arrow = { from: unquote(am[1]), to: unquote(am[3]) };
-      if (am[2] === '..>') arrow.dashed = true;
+      if (am[2] === '-->' || am[2] === '..>') arrow.dashed = true;
       var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
       if (aattrs.l) arrow.label = aattrs.l;
       if (aattrs.fs) arrow.fromSide = aattrs.fs;

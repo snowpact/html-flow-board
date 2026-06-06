@@ -1345,9 +1345,10 @@
   font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
   color: #9aa3af; margin: 16px 0 8px;
 }
-.fb-help-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 0; }
-.fb-help-grid dt { margin: 0; }
-.fb-help-grid dd { margin: 2px 0 0; color: #8a93a0; font-size: 11px; }
+.fb-help-grid { margin: 0; }
+.fb-help-row { margin-bottom: 16px; }       /* breathing room between each duo */
+.fb-help-row:last-child { margin-bottom: 0; }
+.fb-help-desc { margin-bottom: 5px; color: #6b7480; font-size: 11px; } /* explanation above the code */
 .fb-help-ex {
   display: block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

@@ -89,7 +89,7 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
   if (project.arrows && project.arrows.length) {
     out.push('');
     project.arrows.forEach(function (a: Arrow) {
-      var line = qtok(a.from) + (a.dashed ? ' ..> ' : ' -> ') + qtok(a.to);
+      var line = qtok(a.from) + (a.dashed ? ' --> ' : ' -> ') + qtok(a.to);
       var attrs: string[] = [];
       if (a.label) attrs.push('l=' + q(a.label));
       if (a.fromSide) attrs.push('fs=' + q(a.fromSide));
