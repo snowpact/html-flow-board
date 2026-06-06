@@ -1,7 +1,8 @@
 import { Format, PresetId, Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
+import { FORMATS } from '../core/constants';
 import { escapeHtml } from '../core/geometry';
-import { getEpic, screenHeight, screenWidth, state } from '../core/state';
+import { getEpic, isFluidFormat, screenHeight, screenWidth, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { showScreenPopup } from './popups';
@@ -42,10 +43,17 @@ export function renderScreen(screenData: Screen): HTMLElement {
   el.className = 'fb-screen';
   el.dataset.screenId = screenData.id;
 
-  // Size — explicit width; height stays content-driven unless resized.
-  el.style.width = screenWidth(screenData) + 'px';
-  var h = screenHeight(screenData);
-  if (h) el.style.height = h + 'px';
+  // Size — fixed formats set width(+height); `fluid` sets only a min so the card
+  // grows with its content.
+  if (isFluidFormat(screenData)) {
+    var ff = FORMATS[screenData.format];
+    el.style.minWidth = ff.width + 'px';
+    el.style.minHeight = ff.height + 'px';
+  } else {
+    el.style.width = screenWidth(screenData) + 'px';
+    var h = screenHeight(screenData);
+    if (h) el.style.height = h + 'px';
+  }
 
   // Position
   var pos: Position = state.positions[screenData.id] || { x: 100, y: 100 };
@@ -138,10 +146,40 @@ export function setScreenFormat(screenId: string, format: Format): void {
   screen.format = format;
   var el = state.screenEls[screenId];
   if (el) {
-    el.style.width = screenWidth(screen) + 'px';
-    var h = screenHeight(screen);
-    el.style.height = h ? (h + 'px') : '';
+    el.style.width = ''; el.style.height = ''; el.style.minWidth = ''; el.style.minHeight = '';
+    if (isFluidFormat(screen)) {
+      var ff = FORMATS[format];
+      el.style.minWidth = ff.width + 'px';
+      el.style.minHeight = ff.height + 'px';
+    } else {
+      el.style.width = screenWidth(screen) + 'px';
+      var h = screenHeight(screen);
+      if (h) el.style.height = h + 'px';
+    }
   }
+  drawArrows();
+  if (state.commit) state.commit();
+}
+
+// Delete a screen: remove it, the arrows touching it, its DOM node, and its
+// bookkeeping; then redraw + re-serialize.
+export function deleteScreen(screenId: string): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var idx = -1;
+  for (var i = 0; i < screens.length; i++) { if (screens[i].id === screenId) { idx = i; break; } }
+  if (idx === -1) return;
+  screens.splice(idx, 1);
+
+  var arrows = (state.project && state.project.arrows) || [];
+  state.project.arrows = arrows.filter(function (a) { return a.from !== screenId && a.to !== screenId; });
+
+  var el = state.screenEls[screenId];
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+  delete state.screenEls[screenId];
+  delete state.hiddenScreens[screenId];
+  delete state.selected[screenId];
+  if (state.positions) delete state.positions[screenId];
+
   drawArrows();
   if (state.commit) state.commit();
 }

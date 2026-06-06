@@ -3,7 +3,7 @@ import { init, doReset } from './src/board';
 import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
-import { setScreenPreset, setScreenFormat, toggleScreen } from './src/render/screen';
+import { setScreenPreset, setScreenFormat, toggleScreen, deleteScreen } from './src/render/screen';
 import { closePresetPicker } from './src/render/preset-picker';
 import { rebuildBoard, commit } from './src/interactions/sync';
 import { parse } from './src/flowml/parse';
@@ -334,7 +334,7 @@ describe('preset create + modify', () => {
     state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
     const btns = state.container.querySelectorAll('.fb-screen-popup-format');
     expect(btns.length).toBe(3);
-    expect(Array.prototype.map.call(btns, (b) => b.textContent)).toEqual(['Desktop', 'Phone', 'Square']);
+    expect(Array.prototype.map.call(btns, (b) => b.textContent)).toEqual(['Desktop', 'Phone', 'Fluide']);
   });
 
   it('a mousedown inside the popup does not start a pan that closes it', () => {
@@ -478,5 +478,55 @@ describe('Flow-ML sync hardening', () => {
     doReset();
     expect(state.hiddenScreens.A).toBeFalsy();
     expect(loadDoc()).toContain('A,'); // committed, screens preserved
+  });
+});
+
+describe('Flow-ML UX additions', () => {
+  beforeEach(() => { initBoard(); });
+
+  it('deleteScreen removes the screen, its arrows, and re-serializes', () => {
+    state.project.arrows = [{ from: 'A', to: 'B' }, { from: 'B', to: 'C' }];
+    deleteScreen('A');
+    expect(state.screenEls.A).toBeUndefined();
+    expect(state.project.screens.some((s) => s.id === 'A')).toBe(false);
+    expect(state.project.arrows).toEqual([{ from: 'B', to: 'C' }]); // A->B dropped
+    expect(loadDoc()).not.toContain('\nA,');
+  });
+
+  it('the Copy Init toolbar button is gone', () => {
+    const labels = [...document.querySelectorAll('.fb-action-btn')].map((b) => b.textContent);
+    expect(labels).not.toContain('Copy Init');
+  });
+
+  it('the fluid format sets a min size (not a fixed width)', () => {
+    setScreenFormat('A', 'fluid');
+    const el = state.screenEls.A;
+    expect(el.style.minWidth).toBe('280px');
+    expect(el.style.minHeight).toBe('180px');
+    expect(el.style.width).toBe('');
+    expect(state.panelTextarea.value).toContain('f=fluid');
+  });
+
+  it('the panel copy button writes the doc to the clipboard', async () => {
+    let captured = null;
+    const orig = navigator.clipboard;
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: (t) => { captured = t; return Promise.resolve(); } }, configurable: true,
+    });
+    document.querySelector('.fb-panel-copy-btn').click();
+    await Promise.resolve();
+    expect(captured).toBe(state.panelTextarea.value);
+    Object.defineProperty(navigator, 'clipboard', { value: orig, configurable: true });
+  });
+
+  it('the active-line indicator follows the caret line', () => {
+    const ta = state.panelTextarea;
+    const band = document.querySelector('.fb-panel-activeline');
+    ta.selectionStart = 0;
+    ta.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true }));
+    expect(band.style.top).toBe('12px');
+    ta.selectionStart = ta.value.indexOf('\n') + 1; // start of line 2
+    ta.dispatchEvent(new window.KeyboardEvent('keyup', { bubbles: true }));
+    expect(band.style.top).toBe('33.25px'); // 12 + 1 × 21.25
   });
 });

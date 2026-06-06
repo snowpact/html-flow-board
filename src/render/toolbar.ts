@@ -3,7 +3,7 @@ import { cycleLayout, doReset } from '../board';
 import { ZOOM_STEP } from '../core/constants';
 import { state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
-import { doExport, doExportConfig } from '../export';
+import { doExport } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
 import { applyScreenVisibility } from './screen';
@@ -147,14 +147,6 @@ export function renderToolbar(): HTMLElement {
   exportBtn.title = 'Export as PNG';
   exportBtn.addEventListener('click', doExport);
   right.appendChild(exportBtn);
-
-  // Export Config
-  var exportConfigBtn = document.createElement('button');
-  exportConfigBtn.className = 'fb-action-btn';
-  exportConfigBtn.textContent = 'Copy Init';
-  exportConfigBtn.title = 'Copier le code FlowBoard.init() dans le presse-papier';
-  exportConfigBtn.addEventListener('click', doExportConfig);
-  right.appendChild(exportConfigBtn);
 
   // Separator
   var sep4 = document.createElement('div');

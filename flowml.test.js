@@ -148,6 +148,33 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
     const { project } = parse('a, t\n');
     expect(project.screens[0].title).toBeUndefined();
   });
+
+  it('round-trips ids with spaces, commas, quotes, and leading specials', () => {
+    for (const id of ['a b', 'a,b', 'a"b', '@weird', '#home', '!bang', '`tick']) {
+      const s = rt({ screens: [{ id, title: 'X' }] });
+      expect(s.id).toBe(id);
+      expect(s.title).toBe('X');
+    }
+  });
+
+  it('round-trips an arrow whose endpoints need quoting', () => {
+    const { project } = parse(serialize(
+      { screens: [{ id: 'a b' }, { id: '#c' }], arrows: [{ from: 'a b', to: '#c', label: 'go' }] }, {}));
+    expect(project.screens.map((s) => s.id).sort()).toEqual(['#c', 'a b']);
+    expect(project.arrows).toEqual([{ from: 'a b', to: '#c', label: 'go' }]);
+  });
+
+  it('round-trips an epic id and a project name needing quoting', () => {
+    const { project } = parse(serialize(
+      { name: 'a\nb', epics: [{ id: 'e x', label: 'L', color: '#fff' }], screens: [{ id: 's', epic: 'e x' }] }, {}));
+    expect(project.name).toBe('a\nb');
+    expect(project.epics[0].id).toBe('e x');
+    expect(project.screens[0].epic).toBe('e x');
+  });
+
+  it('migrates the legacy square format to fluid', () => {
+    expect(parse('a, f=square\n').project.screens[0].format).toBe('fluid');
+  });
 });
 
 describe('flow-ml highlight', () => {
@@ -181,5 +208,12 @@ describe('flow-ml highlight', () => {
     const html = highlight('home, t="go -> next"\n');
     expect(html).toContain('fb-tok-screen'); // it is a screen line
     expect(html).not.toContain('fb-tok-arrow');
+  });
+
+  it('never throws and stays layout-preserving on edge lines', () => {
+    for (const x of ['@', '@ ', '@,', '  @', 'login\nhome\n@', ',foo', '   ', '\t\t', ' \t ', 'x\r', 'a\r\nb', '']) {
+      expect(() => highlight(x)).not.toThrow();
+      expect(visible(highlight(x))).toBe(x.replace(/\r\n?/g, '\n')); // CRLF normalized like parse()
+    }
   });
 });

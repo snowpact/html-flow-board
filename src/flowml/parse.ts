@@ -99,10 +99,11 @@ export function parse(text: string): ParseResult {
       i++; continue;
     }
 
-    // Arrow: a -> b  /  a ..> b   (optional ", attrs")
-    var am = line.match(/^(\S+)\s*(\.\.>|->)\s*(\S+?)(?:\s*,\s*(.*))?$/);
+    // Arrow: a -> b  /  a ..> b   (optional ", attrs"). Endpoints may be quoted
+    // (so ids with spaces/commas/specials survive).
+    var am = line.match(/^("(?:\\.|[^"])*"|[^\s,]+)\s*(\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,]+)(?:\s*,\s*(.*))?$/);
     if (am) {
-      var arrow: Arrow = { from: am[1], to: am[3] };
+      var arrow: Arrow = { from: unquote(am[1]), to: unquote(am[3]) };
       if (am[2] === '..>') arrow.dashed = true;
       var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
       if (aattrs.l) arrow.label = aattrs.l;
@@ -124,7 +125,7 @@ export function parse(text: string): ParseResult {
     // Epic: @id, attrs
     if (line.charAt(0) === '@') {
       var eparts = splitAttrs(line.slice(1));
-      var epic: Epic = { id: eparts.shift() || '', label: '', color: '' };
+      var epic: Epic = { id: unquote(eparts.shift() || ''), label: '', color: '' };
       var ea = parseAttrs(eparts);
       if (ea.t) epic.label = ea.t;
       if (ea.c) epic.color = ea.c;
@@ -135,13 +136,14 @@ export function parse(text: string): ParseResult {
 
     // Screen: id, attrs
     var sparts = splitAttrs(line);
-    var id = sparts.shift();
-    if (!id) { errors.push({ line: lineNo, msg: 'invalid line' }); i++; continue; }
+    var idRaw = sparts.shift();
+    if (!idRaw) { errors.push({ line: lineNo, msg: 'invalid line' }); i++; continue; }
+    var id = unquote(idRaw);
     var sa = parseAttrs(sparts);
     var screen: Screen = { id: id };
     if (sa.t) screen.title = sa.t;
     if (sa.p) screen.preset = sa.p as PresetId;
-    if (sa.f) screen.format = sa.f;
+    if (sa.f) screen.format = (sa.f === 'square' ? 'fluid' : sa.f); // legacy migration
     if (sa.e) screen.epic = sa.e;
     if (sa.n) screen.notes = sa.n;
     if (sa.sz) screen.size = sa.sz as ScreenSize;

@@ -60,7 +60,9 @@ function hlAttrs(s: string): string {
 
 // Highlight a whole Flow-ML document to HTML (line structure preserved).
 export function highlight(text: string): string {
-  var lines = text.split('\n');
+  // Normalize line endings to match parse(); a trailing \r otherwise breaks the
+  // line-level regexes ('.' / '$' don't span \r).
+  var lines = text.replace(/\r\n?/g, '\n').split('\n');
   var out: string[] = [];
   var fence: string | null = null; // open content fence, or null
 
@@ -73,7 +75,8 @@ export function highlight(text: string): string {
       continue;
     }
 
-    if (line.trim() === '') { out.push(''); continue; }
+    // Blank / whitespace-only line: emit verbatim (keeps the byte-for-byte invariant).
+    if (line.trim() === '') { out.push(esc(line)); continue; }
 
     var lead = RE_LEAD.exec(line)[0];
     var body = line.slice(lead.length);
@@ -99,13 +102,15 @@ export function highlight(text: string): string {
 
     if (body.charAt(0) === '@') {
       m = RE_EPIC.exec(body);
-      out.push(head + tok('epic', m[1]) + hlAttrs(m[2]));
+      if (m) out.push(head + tok('epic', m[1]) + hlAttrs(m[2]));
+      else out.push(head + tok('epic', body)); // bare "@" mid-edit — never throw
       continue;
     }
 
     // Screen: id, attrs
     m = RE_SCREEN.exec(body);
-    out.push(head + tok('screen', m[1]) + hlAttrs(m[2]));
+    if (m) out.push(head + tok('screen', m[1]) + hlAttrs(m[2]));
+    else out.push(head + esc(body)); // unclassifiable (e.g. leading comma) — plain
   }
 
   return out.join('\n');

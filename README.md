@@ -99,7 +99,7 @@ short, comma-separated attributes.
 | `!name = My App` | Project name (directive) |
 | `@auth, t=Authentication, c=#6366f1` | **Epic** — a group, with a color |
 | `login, t=Login, p=form, f=phone, e=auth` | **Screen** |
-| ` ``` ` … ` ``` ` (fenced block under a screen) | Raw HTML body (the `custom` preset) |
+| ` ``` ` … ` ``` ` (fenced block under a screen) | Raw HTML body (rendered when preset is `custom`) |
 | `login -> home, l=ok` | **Arrow** (solid) |
 | `login ..> home` | **Arrow** (dashed) |
 | `# anything` | Comment (ignored) |
@@ -178,9 +178,13 @@ HTML you authored — it is kept in the model and reused if you switch back to `
 
 | Format | Size (w × h) |
 |---|---|
-| `desktop` | 400 × 240 |
-| `phone` | 240 × 420 |
-| `square` | 320 × 320 |
+| `desktop` | 400 × 240 (fixed) |
+| `phone` | 240 × 420 (fixed) |
+| `fluid` | min 280 × 180, grows with content |
+
+`fluid` is the right pick for `custom` HTML bodies: it sets only a minimum and lets the
+card size to its content (so nothing is clipped). The legacy `square` value is migrated to
+`fluid` automatically.
 
 ---
 
@@ -192,12 +196,14 @@ HTML you authored — it is kept in the model and reused if you switch back to `
 - **Drag screens** — free repositioning; positions live in the Flow-ML text.
 - **Anchor dots** — hover a screen to reveal anchors, click-drag to create a new arrow.
 - **Arrow popup** (click a handle) — swap direction, toggle dashed, edit label, delete.
-- **Screen popup** (right-click) — change layout/format, edit title, hide/show.
+- **Screen popup** (right-click) — change layout/format, edit title, hide/show, **delete**.
 - **Legend** (toolbar) — toggle epic visibility with accent-colored checkboxes.
 - **Auto-layout** — cycle Flow (BFS columns) / Epics (grouped) / Grid.
 - **Dotted grid** — constant on-screen size at any zoom; excluded from PNG export.
-- **Export PNG** · **Copy Init** (clipboard `FlowBoard.init({…})` preserving all state) · **Reset**
-  (restores the default layout + visibility; your text stays the source of truth).
+- **Code panel** — syntax highlighting, line-number gutter, current-line indicator, a
+  copy-to-clipboard button, and a `?` cheat-sheet.
+- **Export PNG** · **Reset** (restores the default layout + visibility; your text stays the
+  source of truth).
 
 ---
 
@@ -236,7 +242,7 @@ HTML you authored — it is kept in the model and reused if you switch back to `
 | `title` | `string` | Header title |
 | `epic` | `string` | Epic id (drives the header color) |
 | `preset` | `PresetId` | Body skeleton; absent ⇒ `custom` |
-| `format` | `"desktop" \| "phone" \| "square"` | Proportions |
+| `format` | `"desktop" \| "phone" \| "fluid"` | Proportions (`fluid` = min-size, content-driven) |
 | `notes` | `string` | Footer annotation (togglable) |
 | `content` | `string` | Raw HTML body (used by the `custom` preset) |
 | `hidden` | `boolean` | Hidden via the legend/eye toggle |
@@ -253,7 +259,7 @@ HTML you authored — it is kept in the model and reused if you switch back to `
 
 ### `config.state`
 
-Restore a previously exported board (via the **Copy Init** toolbar button).
+Restore a specific board snapshot. When passed, it takes priority over any saved Flow-ML doc.
 
 | Field | Type | Description |
 |---|---|---|

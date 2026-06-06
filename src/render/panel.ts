@@ -1,6 +1,14 @@
 import { state } from '../core/state';
 import { highlight } from '../flowml/highlight';
 
+// Must mirror flowboard.css .fb-panel-highlight/.fb-panel-text (line-height ×
+// font-size, and padding-top) so the active-line band aligns with the text.
+var LINE_H = 21.25; // 12.5px × 1.7
+var PAD_T = 12;
+
+var COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+var CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+
 // Left Flow-ML editor: header + a line-number gutter next to a code area. The
 // code area layers a syntax-highlighted <pre> behind a transparent <textarea>
 // (scroll-synced), so editing stays plain-textarea simple but reads in color.
@@ -18,6 +26,12 @@ export function renderPanel(): HTMLElement {
 
   var actions = document.createElement('div');
   actions.className = 'fb-panel-actions';
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'fb-panel-copy-btn';
+  copyBtn.title = 'Copier le Flow-ML';
+  copyBtn.innerHTML = COPY_ICON;
+  copyBtn.addEventListener('click', function () { copyPanel(copyBtn); });
+  actions.appendChild(copyBtn);
   var helpBtn = document.createElement('button');
   helpBtn.className = 'fb-panel-help-btn';
   helpBtn.title = 'Aide — syntaxe Flow-ML';
@@ -40,9 +54,14 @@ export function renderPanel(): HTMLElement {
   gutter.className = 'fb-panel-gutter';
   gutter.setAttribute('aria-hidden', 'true');
 
-  // Input stack: highlighted <pre> under a transparent <textarea>.
+  // Input stack: active-line band, highlighted <pre>, transparent <textarea>.
   var inputWrap = document.createElement('div');
   inputWrap.className = 'fb-panel-input';
+
+  var activeLine = document.createElement('div');
+  activeLine.className = 'fb-panel-activeline';
+  activeLine.setAttribute('aria-hidden', 'true');
+  inputWrap.appendChild(activeLine);
 
   var pre = document.createElement('pre');
   pre.className = 'fb-panel-highlight';
@@ -78,19 +97,53 @@ export function renderPanel(): HTMLElement {
   state.panelGutter = gutter;
   state.panelHighlight = code;
   state.panelPre = pre;
+  state.panelActiveLine = activeLine;
   state.panelLineCount = 0;
 
   textarea.addEventListener('input', refreshEditor);
   textarea.addEventListener('scroll', syncScroll);
+  // Keep the active-line indicator following the caret.
+  textarea.addEventListener('keyup', updateActiveLine);
+  textarea.addEventListener('click', updateActiveLine);
+  textarea.addEventListener('focus', updateActiveLine);
   refreshEditor();
 
   return panel;
 }
 
-// Re-highlight + refresh the gutter from the textarea content.
+// Copy the whole document to the clipboard, with a brief ✓ on the button.
+function copyPanel(btn: HTMLElement): void {
+  var ta = state.panelTextarea;
+  if (!ta) return;
+  var flash = function () {
+    btn.classList.add('fb-copied');
+    btn.innerHTML = CHECK_ICON;
+    setTimeout(function () { btn.classList.remove('fb-copied'); btn.innerHTML = COPY_ICON; }, 1200);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ta.value).then(flash, flash);
+  } else {
+    try { ta.select(); document.execCommand('copy'); } catch (e) { /* ignore */ }
+    flash();
+  }
+}
+
+// Move the active-line band to the caret's line.
+function updateActiveLine(): void {
+  var ta = state.panelTextarea;
+  var band = state.panelActiveLine;
+  if (!ta || !band) return;
+  var idx = ta.value.slice(0, ta.selectionStart).split('\n').length - 1;
+  band.style.top = (PAD_T + idx * LINE_H - ta.scrollTop) + 'px';
+}
+
+// Re-highlight + refresh the gutter from the textarea content, then re-align the
+// overlay scroll (a programmatic value change does not fire 'scroll').
 function refreshEditor(): void {
   updateHighlight();
   updateGutter();
+  syncScroll();
+  updateActiveLine();
 }
 
 function updateHighlight(): void {
@@ -122,6 +175,7 @@ function syncScroll(): void {
     state.panelPre.scrollTop = ta.scrollTop;
     state.panelPre.scrollLeft = ta.scrollLeft;
   }
+  updateActiveLine();
 }
 
 export function togglePanel(): void {

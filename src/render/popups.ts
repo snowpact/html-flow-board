@@ -1,7 +1,7 @@
 import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
-import { setScreenFormat, setScreenPreset, toggleScreen } from './screen';
+import { deleteScreen, setScreenFormat, setScreenPreset, toggleScreen } from './screen';
 import { showPresetPicker } from './preset-picker';
 import { Arrow, Format, PresetId, Screen } from '../core/types';
 
@@ -256,9 +256,9 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
 
   var fmtRow = document.createElement('div');
   fmtRow.className = 'fb-screen-popup-formats';
-  var currentFmt = screenData.format || '';
-  var fmtNames: Record<Format, string> = { desktop: 'Desktop', phone: 'Phone', square: 'Square' };
-  (['desktop', 'phone', 'square'] as Format[]).forEach(function (fmt: Format) {
+  var currentFmt = ((screenData.format as string) === 'square') ? 'fluid' : (screenData.format || '');
+  var fmtNames: Record<Format, string> = { desktop: 'Desktop', phone: 'Phone', fluid: 'Fluide' };
+  (['desktop', 'phone', 'fluid'] as Format[]).forEach(function (fmt: Format) {
     var btn = document.createElement('button');
     btn.className = 'fb-screen-popup-format' + (fmt === currentFmt ? ' active' : '');
     btn.textContent = fmtNames[fmt];
@@ -299,6 +299,17 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
     showPresetPicker(cx, cy, function (preset) { setScreenPreset(screenId, preset); }, current);
   });
   popup.appendChild(layoutBtn);
+
+  // -- Delete --
+  var deleteScreenBtn = document.createElement('button');
+  deleteScreenBtn.className = 'fb-screen-popup-btn fb-screen-popup-delete';
+  deleteScreenBtn.textContent = 'Supprimer';
+  deleteScreenBtn.addEventListener('click', function (ev: MouseEvent) {
+    ev.stopPropagation();
+    closeScreenPopup();
+    if (confirm('Supprimer cet écran et ses flèches ?')) deleteScreen(screenId);
+  });
+  popup.appendChild(deleteScreenBtn);
 
   // Position near right-click in wrapper coordinates
   var wrapperRect = state.wrapperEl.getBoundingClientRect();
