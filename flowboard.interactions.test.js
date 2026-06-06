@@ -369,6 +369,13 @@ describe('Flow-ML panel + sync', () => {
     expect(document.querySelector('.fb-panel').classList.contains('fb-panel-collapsed')).toBe(true);
   });
 
+  it('the gutter has one line number per Flow-ML line', () => {
+    const lines = state.panelTextarea.value.split('\n').length;
+    const gutter = document.querySelector('.fb-panel-gutter').textContent.split('\n');
+    expect(gutter.length).toBe(lines);
+    expect(gutter[0]).toBe('1');
+  });
+
   it('text → diagram: rebuildBoard renders screens from a parsed model', () => {
     const { project, positions } = parse('x1, t=One\nx2, t=Two\nx1 -> x2\n');
     rebuildBoard(project, positions);

@@ -1891,12 +1891,20 @@
     collapse.addEventListener("click", togglePanel);
     header.appendChild(collapse);
     panel.appendChild(header);
+    var editor = document.createElement("div");
+    editor.className = "fb-panel-editor";
+    var gutter = document.createElement("div");
+    gutter.className = "fb-panel-gutter";
+    gutter.setAttribute("aria-hidden", "true");
     var textarea = document.createElement("textarea");
     textarea.className = "fb-panel-text";
     textarea.spellcheck = false;
     textarea.setAttribute("autocomplete", "off");
     textarea.setAttribute("autocapitalize", "off");
-    panel.appendChild(textarea);
+    textarea.setAttribute("wrap", "off");
+    editor.appendChild(gutter);
+    editor.appendChild(textarea);
+    panel.appendChild(editor);
     var reopen = document.createElement("button");
     reopen.className = "fb-panel-reopen";
     reopen.title = "Ouvrir Flow-ML";
@@ -1905,7 +1913,22 @@
     panel.appendChild(reopen);
     state.panelEl = panel;
     state.panelTextarea = textarea;
+    state.panelGutter = gutter;
+    textarea.addEventListener("input", updateGutter);
+    textarea.addEventListener("scroll", function() {
+      gutter.scrollTop = textarea.scrollTop;
+    });
+    updateGutter();
     return panel;
+  }
+  function updateGutter() {
+    var ta = state.panelTextarea;
+    var g = state.panelGutter;
+    if (!ta || !g) return;
+    var n = ta.value.split("\n").length || 1;
+    var lines = "";
+    for (var i = 1; i <= n; i++) lines += (i > 1 ? "\n" : "") + i;
+    g.textContent = lines;
   }
   function togglePanel() {
     if (state.panelEl) state.panelEl.classList.toggle("fb-panel-collapsed");
@@ -1913,6 +1936,7 @@
   function setPanelText(text) {
     if (state.panelTextarea && state.panelTextarea.value !== text) {
       state.panelTextarea.value = text;
+      updateGutter();
     }
   }
 

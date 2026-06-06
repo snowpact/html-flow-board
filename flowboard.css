@@ -1160,54 +1160,81 @@
   background: repeating-linear-gradient(45deg, #fafbfc 0 6px, #eef1f4 6px 12px);
 }
 
-/* --- Flow-ML panel --- */
+/* --- Flow-ML panel (code editor with line-number gutter) --- */
 .fb-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 
 .fb-panel {
   flex: none;
-  width: 320px;
+  width: 340px;
   display: flex;
   flex-direction: column;
-  background: #fbfcfd;
-  border-right: 1px solid #ddd;
+  background: #fff;
+  border-right: 1px solid #e5e8ec;
 }
 .fb-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex: none;
-  padding: 8px 12px;
-  border-bottom: 1px solid #e5e8ec;
-  font-weight: 600;
-  font-size: 13px;
-  color: #2b3138;
+  height: 38px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid #eef1f4;
+  background: #fbfcfd;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #8a93a0;
 }
 .fb-panel-collapse, .fb-panel-reopen {
   border: none;
   background: transparent;
   cursor: pointer;
-  color: #5a6472;
+  color: #9aa3af;
   font-size: 18px;
   line-height: 1;
-  padding: 0 4px;
+  padding: 4px 6px;
+  border-radius: 6px;
 }
-.fb-panel-collapse:hover, .fb-panel-reopen:hover { color: #2b3138; }
+.fb-panel-collapse:hover, .fb-panel-reopen:hover { color: #2b3138; background: #eef1f4; }
+
+.fb-panel-editor { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+
+/* gutter + textarea MUST share font-size / line-height / padding-top to align */
+.fb-panel-gutter {
+  flex: none;
+  min-width: 26px;
+  padding: 12px 8px 12px 12px;
+  text-align: right;
+  background: #fafbfc;
+  color: #c2c9d2;
+  border-right: 1px solid #eef1f4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre;
+  overflow: hidden;
+  user-select: none;
+}
 .fb-panel-text {
   flex: 1;
+  margin: 0;
   border: none;
   outline: none;
   resize: none;
-  padding: 10px 12px;
-  background: #fbfcfd;
-  color: #2b3138;
+  padding: 12px 14px;
+  background: #fff;
+  color: #36404a;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12.5px;
-  line-height: 1.5;
+  line-height: 1.7;
   tab-size: 2;
   white-space: pre;
+  overflow: auto;
 }
+
 .fb-panel-reopen { display: none; }
-.fb-panel-collapsed { width: 22px; }
+.fb-panel-collapsed { width: 24px; }
 .fb-panel-collapsed .fb-panel-header,
-.fb-panel-collapsed .fb-panel-text { display: none; }
-.fb-panel-collapsed .fb-panel-reopen { display: block; width: 100%; height: 36px; font-size: 16px; }
+.fb-panel-collapsed .fb-panel-editor { display: none; }
+.fb-panel-collapsed .fb-panel-reopen { display: block; width: 100%; height: 40px; font-size: 16px; }
