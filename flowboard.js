@@ -693,6 +693,7 @@
     items.forEach(function(item) {
       var row = document.createElement("div");
       row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.danger ? " fb-ctx-danger" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
+      if (item.testid) row.setAttribute("data-testid", item.testid);
       if (item.icon) {
         var ic = document.createElement("span");
         ic.className = "fb-ctx-icon";
@@ -879,6 +880,7 @@
     popup.appendChild(popupSep);
     var swapBtn = document.createElement("button");
     swapBtn.className = "fb-arrow-popup-btn";
+    swapBtn.setAttribute("data-testid", "arrow-swap");
     swapBtn.title = "Reverse direction";
     swapBtn.innerHTML = ICON_SWAP;
     swapBtn.addEventListener("click", function(ev) {
@@ -889,6 +891,7 @@
     popup.appendChild(swapBtn);
     var styleBtn = document.createElement("button");
     styleBtn.className = "fb-arrow-popup-btn";
+    styleBtn.setAttribute("data-testid", "arrow-style");
     styleBtn.title = arrow.dashed ? "Make solid" : "Make dashed";
     styleBtn.innerHTML = arrow.dashed ? ICON_LINE_SOLID : ICON_LINE_DASHED;
     styleBtn.addEventListener("click", function(ev) {
@@ -899,6 +902,7 @@
     popup.appendChild(styleBtn);
     var deleteBtn = document.createElement("button");
     deleteBtn.className = "fb-arrow-popup-btn fb-arrow-popup-delete";
+    deleteBtn.setAttribute("data-testid", "arrow-delete");
     deleteBtn.title = "Delete arrow";
     deleteBtn.innerHTML = ICON_TRASH;
     deleteBtn.addEventListener("click", function(ev) {
@@ -985,9 +989,10 @@
     if (!el) return;
     var popup = document.createElement("div");
     popup.className = "fb-screen-popup";
-    function mkBtn(svg, text, danger) {
+    function mkBtn(svg, text, testid, danger) {
       var b = document.createElement("button");
       b.className = "fb-screen-popup-btn" + (danger ? " fb-screen-popup-delete" : "");
+      b.setAttribute("data-testid", testid);
       var ic = document.createElement("span");
       ic.className = "fb-popup-btn-icon";
       ic.innerHTML = svg;
@@ -1052,6 +1057,7 @@
     fmtDefs.forEach(function(def) {
       var btn = document.createElement("button");
       btn.className = "fb-screen-popup-format" + (def.id === currentFmt ? " active" : "");
+      btn.setAttribute("data-testid", "fmt-" + def.id);
       var fic = document.createElement("span");
       fic.className = "fb-fmt-icon";
       fic.innerHTML = def.icon;
@@ -1072,14 +1078,14 @@
     sep3.className = "fb-screen-popup-sep";
     popup.appendChild(sep3);
     var hidden = !!state.hiddenScreens[screenId];
-    var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? "Show" : "Hide");
+    var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? "Show" : "Hide", "screen-hide");
     hideBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       toggleScreen(screenId);
       closeScreenPopup();
     });
     popup.appendChild(hideBtn);
-    var layoutBtn = mkBtn(ICON_LAYOUT, "Change layout");
+    var layoutBtn = mkBtn(ICON_LAYOUT, "Change layout", "screen-layout");
     layoutBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       var cx = ev.clientX;
@@ -1091,7 +1097,7 @@
       }, current);
     });
     popup.appendChild(layoutBtn);
-    var epicBtn = mkBtn(ICON_TAG, "Change epic");
+    var epicBtn = mkBtn(ICON_TAG, "Change epic", "screen-epic");
     epicBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       var cx = ev.clientX;
@@ -1103,18 +1109,19 @@
           label: epic.label || epic.id,
           icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
           active: cur === epic.id,
+          testid: "epic-" + epic.id,
           onClick: function() {
             setScreenEpic(screenId, epic.id);
           }
         };
       });
-      items.push({ label: "None", active: !cur, onClick: function() {
+      items.push({ label: "None", active: !cur, testid: "epic-none", onClick: function() {
         setScreenEpic(screenId, null);
       } });
       showContextMenu(cx, cy, items);
     });
     popup.appendChild(epicBtn);
-    var deleteScreenBtn = mkBtn(ICON_TRASH, "Delete", true);
+    var deleteScreenBtn = mkBtn(ICON_TRASH, "Delete", "screen-delete", true);
     deleteScreenBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       closeScreenPopup();
@@ -1598,8 +1605,8 @@
         if (am[2] === "-->") arrow.dashed = true;
         var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
         if (aattrs.l) arrow.label = aattrs.l;
-        if (aattrs.fs) arrow.fromSide = aattrs.fs;
-        if (aattrs.ts) arrow.toSide = aattrs.ts;
+        if (aattrs.from) arrow.fromSide = aattrs.from;
+        if (aattrs.to) arrow.toSide = aattrs.to;
         project.arrows.push(arrow);
         lastScreen = null;
         i++;
@@ -1725,6 +1732,7 @@
       showContextMenu(cx, cy, [{
         label: "Create screen",
         icon: ICON_PLUS,
+        testid: "create-screen",
         onClick: function() {
           showPresetPicker(cx, cy, function(preset) {
             createScreen(preset, cx, cy);
@@ -2068,8 +2076,8 @@
         var line = qtok(a.from) + (a.dashed ? " --> " : " -> ") + qtok(a.to);
         var attrs = [];
         if (a.label) attrs.push("l=" + q(a.label));
-        if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
-        if (a.toSide) attrs.push("ts=" + q(a.toSide));
+        if (a.fromSide) attrs.push("from=" + q(a.fromSide));
+        if (a.toSide) attrs.push("to=" + q(a.toSide));
         if (attrs.length) line += ", " + attrs.join(", ");
         out.push(line);
       });
@@ -2416,33 +2424,34 @@
     fence.className = "fb-help-ex fb-help-block";
     fence.innerHTML = highlight(":home, t=Home\n```\n<h1>Hello</h1>\n```");
     help.appendChild(fence);
-    var keysTitle = document.createElement("div");
-    keysTitle.className = "fb-help-subtitle";
-    keysTitle.textContent = "Attributes";
-    help.appendChild(keysTitle);
-    var keys = document.createElement("div");
-    keys.className = "fb-help-keys";
-    var defs = [
+    function keyGroup(title, defs) {
+      var t = document.createElement("div");
+      t.className = "fb-help-subtitle";
+      t.textContent = title;
+      help.appendChild(t);
+      var keys = document.createElement("div");
+      keys.className = "fb-help-keys";
+      defs.forEach(function(d) {
+        var span = document.createElement("span");
+        var b = document.createElement("b");
+        b.textContent = d[0];
+        span.appendChild(b);
+        span.appendChild(document.createTextNode(" " + d[1]));
+        keys.appendChild(span);
+      });
+      help.appendChild(keys);
+    }
+    keyGroup("Screen attributes", [
       ["t", "title"],
       ["p", "preset"],
       ["f", "format"],
       ["e", "epic"],
       ["n", "note"],
       ["x y", "position"],
-      ["h", "hidden"],
-      ["l", "arrow label"],
-      ["fs ts", "arrow sides"],
-      ["c", "color"]
-    ];
-    defs.forEach(function(d) {
-      var span = document.createElement("span");
-      var b = document.createElement("b");
-      b.textContent = d[0];
-      span.appendChild(b);
-      span.appendChild(document.createTextNode(" " + d[1]));
-      keys.appendChild(span);
-    });
-    help.appendChild(keys);
+      ["h", "hidden"]
+    ]);
+    keyGroup("Epic attributes", [["t", "label"], ["c", "color"]]);
+    keyGroup("Arrow attributes", [["l", "label"], ["from", "from side"], ["to", "to side"]]);
     var presetsTitle = document.createElement("div");
     presetsTitle.className = "fb-help-subtitle";
     presetsTitle.textContent = "Presets (p=)";
@@ -2768,6 +2777,7 @@
     right.appendChild(sep4);
     var resetBtn = document.createElement("button");
     resetBtn.className = "fb-action-btn";
+    resetBtn.setAttribute("data-testid", "toolbar-reset");
     resetBtn.textContent = "Reset";
     resetBtn.title = "Reset to the default layout";
     resetBtn.addEventListener("click", doReset);

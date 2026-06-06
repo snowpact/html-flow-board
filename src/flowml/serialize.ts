@@ -92,8 +92,8 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
       var line = qtok(a.from) + (a.dashed ? ' --> ' : ' -> ') + qtok(a.to);
       var attrs: string[] = [];
       if (a.label) attrs.push('l=' + q(a.label));
-      if (a.fromSide) attrs.push('fs=' + q(a.fromSide));
-      if (a.toSide) attrs.push('ts=' + q(a.toSide));
+      if (a.fromSide) attrs.push('from=' + q(a.fromSide));
+      if (a.toSide) attrs.push('to=' + q(a.toSide));
       if (attrs.length) line += ', ' + attrs.join(', ');
       out.push(line);
     });

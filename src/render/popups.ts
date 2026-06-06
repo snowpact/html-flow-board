@@ -72,6 +72,7 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Swap direction
   var swapBtn = document.createElement('button');
   swapBtn.className = 'fb-arrow-popup-btn';
+  swapBtn.setAttribute('data-testid', 'arrow-swap');
   swapBtn.title = 'Reverse direction';
   swapBtn.innerHTML = ICON_SWAP;
   swapBtn.addEventListener('click', function (ev: MouseEvent) {
@@ -84,6 +85,7 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Toggle dashed/solid
   var styleBtn = document.createElement('button');
   styleBtn.className = 'fb-arrow-popup-btn';
+  styleBtn.setAttribute('data-testid', 'arrow-style');
   styleBtn.title = arrow.dashed ? 'Make solid' : 'Make dashed';
   styleBtn.innerHTML = arrow.dashed ? ICON_LINE_SOLID : ICON_LINE_DASHED;
   styleBtn.addEventListener('click', function (ev: MouseEvent) {
@@ -96,6 +98,7 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Delete
   var deleteBtn = document.createElement('button');
   deleteBtn.className = 'fb-arrow-popup-btn fb-arrow-popup-delete';
+  deleteBtn.setAttribute('data-testid', 'arrow-delete');
   deleteBtn.title = 'Delete arrow';
   deleteBtn.innerHTML = ICON_TRASH;
   deleteBtn.addEventListener('click', function (ev: MouseEvent) {
@@ -207,9 +210,10 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   popup.className = 'fb-screen-popup';
 
   // Icon + label action button (shared look across the popup).
-  function mkBtn(svg: string, text: string, danger?: boolean): HTMLButtonElement {
+  function mkBtn(svg: string, text: string, testid: string, danger?: boolean): HTMLButtonElement {
     var b = document.createElement('button');
     b.className = 'fb-screen-popup-btn' + (danger ? ' fb-screen-popup-delete' : '');
+    b.setAttribute('data-testid', testid);
     var ic = document.createElement('span');
     ic.className = 'fb-popup-btn-icon';
     ic.innerHTML = svg;
@@ -280,6 +284,7 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   fmtDefs.forEach(function (def) {
     var btn = document.createElement('button');
     btn.className = 'fb-screen-popup-format' + (def.id === currentFmt ? ' active' : '');
+    btn.setAttribute('data-testid', 'fmt-' + def.id);
     var fic = document.createElement('span');
     fic.className = 'fb-fmt-icon';
     fic.innerHTML = def.icon;
@@ -303,7 +308,7 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
 
   // -- Hide / Show --
   var hidden = !!state.hiddenScreens[screenId];
-  var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? 'Show' : 'Hide');
+  var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? 'Show' : 'Hide', 'screen-hide');
   hideBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     toggleScreen(screenId);
@@ -312,7 +317,7 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   popup.appendChild(hideBtn);
 
   // -- Change layout (preset) --
-  var layoutBtn = mkBtn(ICON_LAYOUT, 'Change layout');
+  var layoutBtn = mkBtn(ICON_LAYOUT, 'Change layout', 'screen-layout');
   layoutBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     var cx = ev.clientX;
@@ -324,7 +329,7 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   popup.appendChild(layoutBtn);
 
   // -- Change epic (assign an existing epic, or clear) --
-  var epicBtn = mkBtn(ICON_TAG, 'Change epic');
+  var epicBtn = mkBtn(ICON_TAG, 'Change epic', 'screen-epic');
   epicBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     var cx = ev.clientX;
@@ -336,16 +341,17 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
         label: epic.label || epic.id,
         icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
         active: cur === epic.id,
+        testid: 'epic-' + epic.id,
         onClick: function () { setScreenEpic(screenId, epic.id); },
       };
     });
-    items.push({ label: 'None', active: !cur, onClick: function () { setScreenEpic(screenId, null); } });
+    items.push({ label: 'None', active: !cur, testid: 'epic-none', onClick: function () { setScreenEpic(screenId, null); } });
     showContextMenu(cx, cy, items);
   });
   popup.appendChild(epicBtn);
 
   // -- Delete --
-  var deleteScreenBtn = mkBtn(ICON_TRASH, 'Delete', true);
+  var deleteScreenBtn = mkBtn(ICON_TRASH, 'Delete', 'screen-delete', true);
   deleteScreenBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     closeScreenPopup();

@@ -179,6 +179,14 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
     expect(project.screens[0].epic).toBe('e x');
   });
 
+  it('round-trips arrow side attributes as from= / to=', () => {
+    const out = serialize(
+      { screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', fromSide: 'right', toSide: 'left' }] }, {});
+    expect(out).toContain('from=right');
+    expect(out).toContain('to=left');
+    expect(parse(out).project.arrows[0]).toEqual({ from: 'a', to: 'b', fromSide: 'right', toSide: 'left' });
+  });
+
   it('uses --> for dashed arrows; ..> is no longer accepted', () => {
     expect(parse('a --> b\n').project.arrows[0].dashed).toBe(true);
     expect(parse('a -> b\n').project.arrows[0].dashed).toBeUndefined();

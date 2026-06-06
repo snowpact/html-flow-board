@@ -133,8 +133,8 @@ A screen line starts with `:` then its **id**, followed by `key=value` attribute
 | Key | Meaning |
 |---|---|
 | `l` | Label on the arrow |
-| `fs` | Source anchor side (see [Anchors](#arrow-anchor-points)) |
-| `ts` | Target anchor side |
+| `from` | Source anchor side (see [Anchors](#arrow-anchor-points)) |
+| `to` | Target anchor side |
 
 ### Custom HTML content
 
@@ -295,7 +295,7 @@ Notes:
 ## Arrow anchor points
 
 Each screen exposes 16 anchor points. By default FlowBoard picks the best side; drag an arrow
-endpoint handle (or set `fs=`/`ts=` in Flow-ML) to pin one.
+endpoint handle (or set `from=`/`to=` in Flow-ML) to pin one.
 
 - **Left / right** — 5 positions each at 1/6…5/6 of the height: `left-top`, `left-upper`,
   `left-middle`, `left-lower`, `left-bottom` (same for `right-*`). `left` / `right` ⇒ the middle.

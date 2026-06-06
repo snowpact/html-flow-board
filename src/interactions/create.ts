@@ -62,6 +62,7 @@ export function initCreateMenu(): void {
     showContextMenu(cx, cy, [{
       label: 'Create screen',
       icon: ICON_PLUS,
+      testid: 'create-screen',
       onClick: function () {
         showPresetPicker(cx, cy, function (preset) { createScreen(preset, cx, cy); });
       },

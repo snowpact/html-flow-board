@@ -238,26 +238,31 @@ function renderPanelHelp(): HTMLElement {
   fence.innerHTML = highlight(':home, t=Home\n```\n<h1>Hello</h1>\n```');
   help.appendChild(fence);
 
-  var keysTitle = document.createElement('div');
-  keysTitle.className = 'fb-help-subtitle';
-  keysTitle.textContent = 'Attributes';
-  help.appendChild(keysTitle);
-  var keys = document.createElement('div');
-  keys.className = 'fb-help-keys';
-  var defs: [string, string][] = [
+  // One labelled group of "key = meaning" chips (attributes per entity type).
+  function keyGroup(title: string, defs: [string, string][]): void {
+    var t = document.createElement('div');
+    t.className = 'fb-help-subtitle';
+    t.textContent = title;
+    help.appendChild(t);
+    var keys = document.createElement('div');
+    keys.className = 'fb-help-keys';
+    defs.forEach(function (d) {
+      var span = document.createElement('span');
+      var b = document.createElement('b');
+      b.textContent = d[0];
+      span.appendChild(b);
+      span.appendChild(document.createTextNode(' ' + d[1]));
+      keys.appendChild(span);
+    });
+    help.appendChild(keys);
+  }
+
+  keyGroup('Screen attributes', [
     ['t', 'title'], ['p', 'preset'], ['f', 'format'], ['e', 'epic'],
     ['n', 'note'], ['x y', 'position'], ['h', 'hidden'],
-    ['l', 'arrow label'], ['fs ts', 'arrow sides'], ['c', 'color'],
-  ];
-  defs.forEach(function (d) {
-    var span = document.createElement('span');
-    var b = document.createElement('b');
-    b.textContent = d[0];
-    span.appendChild(b);
-    span.appendChild(document.createTextNode(' ' + d[1]));
-    keys.appendChild(span);
-  });
-  help.appendChild(keys);
+  ]);
+  keyGroup('Epic attributes', [['t', 'label'], ['c', 'color']]);
+  keyGroup('Arrow attributes', [['l', 'label'], ['from', 'from side'], ['to', 'to side']]);
 
   var presetsTitle = document.createElement('div');
   presetsTitle.className = 'fb-help-subtitle';

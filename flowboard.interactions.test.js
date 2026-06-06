@@ -217,8 +217,7 @@ describe('mode switch + selection', () => {
     window.confirm = function () { return true; };
     selectMode();
     mdown(state.screenEls['A']); mup();
-    const btns = state.container.querySelectorAll('.fb-action-btn');
-    const resetBtn = Array.prototype.find.call(btns, function (b) { return b.textContent === 'Reset'; });
+    const resetBtn = state.container.querySelector('[data-testid="toolbar-reset"]');
     resetBtn.click();
     expect(state.selected).toEqual({});
     expect(state.screenEls['A'].classList.contains('fb-selected')).toBe(false);
@@ -280,8 +279,8 @@ describe('preset create + modify', () => {
     state.wrapperEl.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
     const menu = document.querySelector('.fb-ctx-menu');
     expect(menu).toBeTruthy();
-    expect(menu.textContent).toContain('Create screen');
-    menu.querySelector('.fb-ctx-item').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(menu.querySelector('[data-testid="create-screen"]')).toBeTruthy();
+    menu.querySelector('[data-testid="create-screen"]').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     const picker = document.querySelector('.fb-preset-picker');
     expect(picker).toBeTruthy();
     expect(picker.querySelectorAll('.fb-preset-tile').length).toBe(15); // 14 presets + custom
@@ -332,9 +331,10 @@ describe('preset create + modify', () => {
 
   it('the screen popup offers the 3 device formats', () => {
     state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
-    const btns = state.container.querySelectorAll('.fb-screen-popup-format');
-    expect(btns.length).toBe(3);
-    expect(Array.prototype.map.call(btns, (b) => b.textContent)).toEqual(['Desktop', 'Phone', 'Fluid']);
+    expect(state.container.querySelectorAll('.fb-screen-popup-format').length).toBe(3);
+    ['fmt-desktop', 'fmt-phone', 'fmt-fluid'].forEach((id) => {
+      expect(state.container.querySelector('[data-testid="' + id + '"]')).toBeTruthy();
+    });
   });
 
   it('a mousedown inside the popup does not start a pan that closes it', () => {
@@ -347,8 +347,7 @@ describe('preset create + modify', () => {
 
   it('the popup "Change layout" button opens the preset picker', () => {
     state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
-    const btns = state.container.querySelectorAll('.fb-screen-popup-btn');
-    const layoutBtn = Array.prototype.find.call(btns, (b) => b.textContent === 'Change layout');
+    const layoutBtn = state.container.querySelector('[data-testid="screen-layout"]');
     expect(layoutBtn).toBeTruthy();
     layoutBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
     expect(document.querySelector('.fb-preset-picker')).toBeTruthy();
@@ -540,13 +539,12 @@ describe('Flow-ML UX additions', () => {
 
   it('the screen popup "Change epic" opens a menu of epics', () => {
     state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
-    const btns = state.container.querySelectorAll('.fb-screen-popup-btn');
-    const epicBtn = Array.prototype.find.call(btns, (b) => b.textContent === 'Change epic');
+    const epicBtn = state.container.querySelector('[data-testid="screen-epic"]');
     expect(epicBtn).toBeTruthy();
     epicBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
     const menu = document.querySelector('.fb-ctx-menu');
     expect(menu).toBeTruthy();
-    expect(menu.textContent).toContain('None'); // clear option
-    expect(menu.textContent).toContain('E');    // epic e1's label
+    expect(menu.querySelector('[data-testid="epic-none"]')).toBeTruthy(); // clear option
+    expect(menu.querySelector('[data-testid="epic-e1"]')).toBeTruthy();   // the project's epic
   });
 });

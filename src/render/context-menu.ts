@@ -9,6 +9,7 @@ export interface CtxItem {
   active?: boolean;
   icon?: string;     // inline SVG (see icons.ts)
   danger?: boolean;  // red styling for destructive actions
+  testid?: string;   // stable data-testid for tests
 }
 
 var openRoot: HTMLElement | null = null;
@@ -34,6 +35,7 @@ function buildMenu(items: CtxItem[]): HTMLElement {
       + (item.active ? ' fb-ctx-active' : '')
       + (item.danger ? ' fb-ctx-danger' : '')
       + (item.submenu ? ' fb-ctx-has-sub' : '');
+    if (item.testid) row.setAttribute('data-testid', item.testid);
 
     if (item.icon) {
       var ic = document.createElement('span');

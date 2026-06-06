@@ -156,6 +156,7 @@ export function renderToolbar(): HTMLElement {
   // Reset
   var resetBtn = document.createElement('button');
   resetBtn.className = 'fb-action-btn';
+  resetBtn.setAttribute('data-testid', 'toolbar-reset');
   resetBtn.textContent = 'Reset';
   resetBtn.title = 'Reset to the default layout';
   resetBtn.addEventListener('click', doReset);
