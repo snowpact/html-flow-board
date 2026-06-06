@@ -7,6 +7,12 @@ export var ZOOM_MIN = 0.2;
 export var ZOOM_MAX = 2;
 export var ZOOM_STEP = 0.1;
 export var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
+// Device formats → base body dimensions (px). Resize adjusts ±30% around these.
+export var FORMATS: Record<string, { width: number; height: number }> = {
+  desktop: { width: 380, height: 214 }, // ~16:9
+  phone: { width: 180, height: 380 },   // ~1:2.1
+  square: { width: 280, height: 280 },  // 1:1
+};
 export var GAP_X = 100;
 export var GAP_Y = 40;
 export var ARROW_OFFSET = 60;

@@ -166,6 +166,7 @@ export function doExportConfig(): void {
       if (s.notes) clean.notes = s.notes;
       if (s.content) clean.content = s.content;
       if (s.preset && s.preset !== 'custom') clean.preset = s.preset;
+      if (s.format) clean.format = s.format;
       return clean;
     }),
     arrows: JSON.parse(JSON.stringify(state.project.arrows))
@@ -188,6 +189,7 @@ export function doExportConfig(): void {
     lines.push('        title: ' + JSON.stringify(s.title) + ',');
     lines.push('        epic: ' + JSON.stringify(s.epic) + ',');
     if (s.preset && s.preset !== 'custom') lines.push('        preset: ' + JSON.stringify(s.preset) + ',');
+    if (s.format) lines.push('        format: ' + JSON.stringify(s.format) + ',');
     if (s.label) lines.push('        label: ' + JSON.stringify(s.label) + ',');
     if (s.notes) lines.push('        notes: ' + JSON.stringify(s.notes) + ',');
     if (s.content) {

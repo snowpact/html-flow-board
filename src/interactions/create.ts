@@ -35,7 +35,7 @@ export function createScreen(preset: PresetId, clientX: number, clientY: number)
 
   if (!state.project.screens) state.project.screens = [];
   var id = uniqueId(); // bumps createCounter; title shares the same number as the id
-  var screen: Screen = { id: id, title: 'Écran ' + createCounter, preset: preset };
+  var screen: Screen = { id: id, title: 'Écran ' + createCounter, preset: preset, format: 'desktop' };
 
   state.project.screens.push(screen);
   state.positions[id] = { x: x, y: y };

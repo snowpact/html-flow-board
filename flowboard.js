@@ -6,6 +6,14 @@
   var ZOOM_MAX = 2;
   var ZOOM_STEP = 0.1;
   var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
+  var FORMATS = {
+    desktop: { width: 380, height: 214 },
+    // ~16:9
+    phone: { width: 180, height: 380 },
+    // ~1:2.1
+    square: { width: 280, height: 280 }
+    // 1:1
+  };
   var GAP_X = 100;
   var GAP_Y = 40;
   var ARROW_OFFSET = 60;
@@ -82,9 +90,15 @@
     return null;
   }
   function baseWidth(s) {
+    if (s.format && FORMATS[s.format]) return FORMATS[s.format].width;
     if (s.width) return s.width;
     if (s.size && SIZES[s.size]) return SIZES[s.size];
     return 320;
+  }
+  function baseHeight(s) {
+    if (s.format && FORMATS[s.format]) return FORMATS[s.format].height;
+    if (s.height) return s.height;
+    return null;
   }
   function screenWidth(s) {
     var sz = state.sizes[s.id];
@@ -94,8 +108,7 @@
   function screenHeight(s) {
     var sz = state.sizes[s.id];
     if (sz && sz.height) return sz.height;
-    if (s.height) return s.height;
-    return null;
+    return baseHeight(s);
   }
 
   // src/core/storage.ts
@@ -546,6 +559,27 @@
       body.innerHTML = skeletonHtml(preset);
     }
   }
+  function setScreenFormat(screenId, format) {
+    var screens = state.project && state.project.screens || [];
+    var screen = null;
+    for (var i = 0; i < screens.length; i++) {
+      if (screens[i].id === screenId) {
+        screen = screens[i];
+        break;
+      }
+    }
+    if (!screen) return;
+    screen.format = format;
+    delete state.sizes[screenId];
+    var el = state.screenEls[screenId];
+    if (el) {
+      el.style.width = screenWidth(screen) + "px";
+      var h = screenHeight(screen);
+      el.style.height = h ? h + "px" : "";
+    }
+    saveSizes();
+    drawArrows();
+  }
   function setScreenPreset(screenId, preset) {
     var screens = state.project && state.project.screens || [];
     var screen = null;
@@ -850,6 +884,29 @@
     var sep2 = document.createElement("div");
     sep2.className = "fb-screen-popup-sep";
     popup.appendChild(sep2);
+    var fmtLabel = document.createElement("div");
+    fmtLabel.className = "fb-screen-popup-label";
+    fmtLabel.textContent = "Format";
+    popup.appendChild(fmtLabel);
+    var fmtRow = document.createElement("div");
+    fmtRow.className = "fb-screen-popup-formats";
+    var currentFmt = screenData.format || "";
+    var fmtNames = { desktop: "Desktop", phone: "Phone", square: "Square" };
+    ["desktop", "phone", "square"].forEach(function(fmt) {
+      var btn = document.createElement("button");
+      btn.className = "fb-screen-popup-format" + (fmt === currentFmt ? " active" : "");
+      btn.textContent = fmtNames[fmt];
+      btn.addEventListener("click", function(ev) {
+        ev.stopPropagation();
+        setScreenFormat(screenId, fmt);
+        closeScreenPopup();
+      });
+      fmtRow.appendChild(btn);
+    });
+    popup.appendChild(fmtRow);
+    var sep3 = document.createElement("div");
+    sep3.className = "fb-screen-popup-sep";
+    popup.appendChild(sep3);
     var hideBtn = document.createElement("button");
     hideBtn.className = "fb-screen-popup-btn";
     hideBtn.textContent = state.hiddenScreens[screenId] ? "Afficher" : "Masquer";
@@ -1317,7 +1374,7 @@
     var y = Math.max(0, Math.min(CANVAS_H - 50, (clientY - wrapperRect.top - state.panY) / state.zoom));
     if (!state.project.screens) state.project.screens = [];
     var id = uniqueId();
-    var screen = { id, title: "\xC9cran " + createCounter, preset };
+    var screen = { id, title: "\xC9cran " + createCounter, preset, format: "desktop" };
     state.project.screens.push(screen);
     state.positions[id] = { x, y };
     var el = renderScreen(screen);
@@ -1485,10 +1542,13 @@
       e.stopPropagation();
       e.preventDefault();
       var baseW = baseWidth(screen);
-      var prevH = screenEl.style.height;
-      screenEl.style.height = "";
-      var baseH = screenEl.offsetHeight;
-      screenEl.style.height = prevH;
+      var baseH = baseHeight(screen);
+      if (baseH == null) {
+        var prevH = screenEl.style.height;
+        screenEl.style.height = "";
+        baseH = screenEl.offsetHeight;
+        screenEl.style.height = prevH;
+      }
       var minW = baseW * MIN_FACTOR, maxW = baseW * MAX_FACTOR;
       var minH = baseH * MIN_FACTOR, maxH = baseH * MAX_FACTOR;
       var startX = e.clientX, startY = e.clientY;
@@ -2066,6 +2126,7 @@
         if (s.notes) clean.notes = s.notes;
         if (s.content) clean.content = s.content;
         if (s.preset && s.preset !== "custom") clean.preset = s.preset;
+        if (s.format) clean.format = s.format;
         return clean;
       }),
       arrows: JSON.parse(JSON.stringify(state.project.arrows))
@@ -2085,6 +2146,7 @@
       lines.push("        title: " + JSON.stringify(s.title) + ",");
       lines.push("        epic: " + JSON.stringify(s.epic) + ",");
       if (s.preset && s.preset !== "custom") lines.push("        preset: " + JSON.stringify(s.preset) + ",");
+      if (s.format) lines.push("        format: " + JSON.stringify(s.format) + ",");
       if (s.label) lines.push("        label: " + JSON.stringify(s.label) + ",");
       if (s.notes) lines.push("        notes: " + JSON.stringify(s.notes) + ",");
       if (s.content) {

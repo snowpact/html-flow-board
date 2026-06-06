@@ -1,5 +1,5 @@
 import { drawArrows } from '../arrows';
-import { baseWidth, state } from '../core/state';
+import { baseHeight, baseWidth, state } from '../core/state';
 import { saveSizes } from '../core/storage';
 import { Screen } from '../core/types';
 
@@ -30,12 +30,16 @@ export function initResize(): void {
     e.stopPropagation();
     e.preventDefault();
 
-    // Base (unresized) dimensions → the clamp bounds.
+    // Base (unresized) dimensions → the clamp bounds. Format gives an explicit
+    // base height; otherwise measure the natural content height.
     var baseW = baseWidth(screen);
-    var prevH = screenEl.style.height;
-    screenEl.style.height = ''; // measure natural content height
-    var baseH = screenEl.offsetHeight;
-    screenEl.style.height = prevH;
+    var baseH = baseHeight(screen);
+    if (baseH == null) {
+      var prevH = screenEl.style.height;
+      screenEl.style.height = '';
+      baseH = screenEl.offsetHeight;
+      screenEl.style.height = prevH;
+    }
 
     var minW = baseW * MIN_FACTOR, maxW = baseW * MAX_FACTOR;
     var minH = baseH * MIN_FACTOR, maxH = baseH * MAX_FACTOR;

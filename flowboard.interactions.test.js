@@ -3,7 +3,7 @@ import { init } from './src/board';
 import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
-import { setScreenPreset } from './src/render/screen';
+import { setScreenPreset, setScreenFormat } from './src/render/screen';
 
 // Modules are imported directly and share one `state` singleton, so reset it
 // between tests (init repopulates most of it, but not every transient field).
@@ -303,5 +303,30 @@ describe('preset create + modify', () => {
     expect(sA.content).toBe('<b>hello</b>'); // non-destructive
     setScreenPreset('A', 'custom'); // back to custom restores the HTML
     expect(state.screenEls['A'].querySelector('.fb-screen-body').innerHTML).toBe('<b>hello</b>');
+  });
+
+  it('created screens default to the desktop format', () => {
+    const id = createScreen('blank', 0, 0);
+    const s = state.project.screens.find((x) => x.id === id);
+    expect(s.format).toBe('desktop');
+    expect(state.screenEls[id].style.width).toBe('380px');
+    expect(state.screenEls[id].style.height).toBe('214px');
+  });
+
+  it('setScreenFormat applies the format dimensions and resets any free-resize', () => {
+    state.sizes['A'] = { width: 999, height: 999 }; // a prior resize
+    setScreenFormat('A', 'phone');
+    const sA = state.project.screens.find((x) => x.id === 'A');
+    expect(sA.format).toBe('phone');
+    expect(state.sizes['A']).toBeUndefined(); // resize cleared
+    expect(state.screenEls['A'].style.width).toBe('180px');
+    expect(state.screenEls['A'].style.height).toBe('380px');
+  });
+
+  it('the screen popup offers the 3 device formats', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    const btns = state.container.querySelectorAll('.fb-screen-popup-format');
+    expect(btns.length).toBe(3);
+    expect(Array.prototype.map.call(btns, (b) => b.textContent)).toEqual(['Desktop', 'Phone', 'Square']);
   });
 });

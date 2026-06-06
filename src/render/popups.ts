@@ -1,10 +1,10 @@
 import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
-import { setScreenPreset, toggleScreen } from './screen';
+import { setScreenFormat, setScreenPreset, toggleScreen } from './screen';
 import { showContextMenu } from './context-menu';
 import { PRESETS } from './presets';
-import { Arrow, PresetId, Screen } from '../core/types';
+import { Arrow, Format, PresetId, Screen } from '../core/types';
 
 export function handlePopupOutsideClick(e: MouseEvent): void {
   if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target as Node)) {
@@ -248,6 +248,33 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   var sep2 = document.createElement('div');
   sep2.className = 'fb-screen-popup-sep';
   popup.appendChild(sep2);
+
+  // -- Format (device proportions) --
+  var fmtLabel = document.createElement('div');
+  fmtLabel.className = 'fb-screen-popup-label';
+  fmtLabel.textContent = 'Format';
+  popup.appendChild(fmtLabel);
+
+  var fmtRow = document.createElement('div');
+  fmtRow.className = 'fb-screen-popup-formats';
+  var currentFmt = screenData.format || '';
+  var fmtNames: Record<Format, string> = { desktop: 'Desktop', phone: 'Phone', square: 'Square' };
+  (['desktop', 'phone', 'square'] as Format[]).forEach(function (fmt: Format) {
+    var btn = document.createElement('button');
+    btn.className = 'fb-screen-popup-format' + (fmt === currentFmt ? ' active' : '');
+    btn.textContent = fmtNames[fmt];
+    btn.addEventListener('click', function (ev: MouseEvent) {
+      ev.stopPropagation();
+      setScreenFormat(screenId, fmt);
+      closeScreenPopup();
+    });
+    fmtRow.appendChild(btn);
+  });
+  popup.appendChild(fmtRow);
+
+  var sep3 = document.createElement('div');
+  sep3.className = 'fb-screen-popup-sep';
+  popup.appendChild(sep3);
 
   // -- Hide button --
   var hideBtn = document.createElement('button');

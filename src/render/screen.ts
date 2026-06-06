@@ -1,8 +1,8 @@
-import { PresetId, Screen, Position } from '../core/types';
+import { Format, PresetId, Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
 import { escapeHtml } from '../core/geometry';
 import { getEpic, screenHeight, screenWidth, state } from '../core/state';
-import { saveHiddenScreens } from '../core/storage';
+import { saveHiddenScreens, saveSizes } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { showScreenPopup } from './popups';
 import { isCustomPreset, skeletonHtml } from './presets';
@@ -129,6 +129,27 @@ export function applyScreenBody(body: HTMLElement, screenData: Screen): void {
     body.classList.add('fb-skeleton', 'fb-skel-' + preset);
     body.innerHTML = skeletonHtml(preset);
   }
+}
+
+// Change a screen's device format (proportions). Resets any free-resize so the
+// new format's base dimensions apply.
+export function setScreenFormat(screenId: string, format: Format): void {
+  var screens: Screen[] = (state.project && state.project.screens) || [];
+  var screen: Screen = null;
+  for (var i = 0; i < screens.length; i++) {
+    if (screens[i].id === screenId) { screen = screens[i]; break; }
+  }
+  if (!screen) return;
+  screen.format = format;
+  delete state.sizes[screenId];
+  var el = state.screenEls[screenId];
+  if (el) {
+    el.style.width = screenWidth(screen) + 'px';
+    var h = screenHeight(screen);
+    el.style.height = h ? (h + 'px') : '';
+  }
+  saveSizes();
+  drawArrows();
 }
 
 // Change a screen's preset and re-render its body in place.

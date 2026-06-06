@@ -435,12 +435,12 @@
   color: #888;
 }
 
-.fb-screen-popup-sizes {
+.fb-screen-popup-formats {
   display: flex;
   gap: 4px;
 }
 
-.fb-screen-popup-size {
+.fb-screen-popup-format {
   flex: 1;
   height: 28px;
   border: 1px solid #ddd;
@@ -453,18 +453,14 @@
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.fb-screen-popup-size:hover {
+.fb-screen-popup-format:hover {
   background: #f0f0f0;
 }
 
-.fb-screen-popup-size.active {
-  background: #2A9D8F;
+.fb-screen-popup-format.active {
+  background: #2d7ef7;
   color: #fff;
-  border-color: #2A9D8F;
-}
-
-.fb-screen-popup-size.active:hover {
-  background: #238a7e;
+  border-color: #2d7ef7;
 }
 
 .fb-screen-popup-sep {

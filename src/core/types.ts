@@ -4,6 +4,7 @@
 
 export type Side = string; // 'right' | 'left-top' | ... (16 anchor names)
 export type ScreenSize = 'sm' | 'md' | 'lg' | 'xl';
+export type Format = 'desktop' | 'phone' | 'square'; // device proportions
 
 // Display preset for a screen's BODY. 'custom' (the default when absent) keeps
 // today's behavior: render the raw `content` HTML. The others render a grey
@@ -24,6 +25,7 @@ export interface Screen {
   title?: string;
   epic?: string;
   size?: ScreenSize;  // legacy; mapped to a default width for backward-compat
+  format?: Format;    // device proportions (sets base width × height)
   width?: number;     // explicit body width (px)
   height?: number;    // explicit body height (px); absent ⇒ content-driven
   notes?: string;
