@@ -331,6 +331,95 @@
     drawArrows();
   }
 
+  // src/render/presets.ts
+  var bar = '<i class="fb-skel-bar"></i>';
+  var box = '<i class="fb-skel-box"></i>';
+  var circle = '<i class="fb-skel-circle"></i>';
+  var pill = '<i class="fb-skel-pill"></i>';
+  var rep = (n, s) => s.repeat(n);
+  var PRESETS = [
+    { id: "custom", label: "Custom (HTML)", skeleton: () => "" },
+    { id: "blank", label: "Blank", skeleton: () => box },
+    {
+      id: "form",
+      label: "Form",
+      skeleton: () => rep(3, `<div class="fb-skel-field">${bar}${box}</div>`) + `<div class="fb-skel-foot">${box}</div>`
+    },
+    {
+      id: "list",
+      label: "List",
+      skeleton: () => rep(5, `<div class="fb-skel-listrow">${circle}${bar}</div>`)
+    },
+    {
+      id: "table",
+      label: "Table",
+      skeleton: () => `<div class="fb-skel-thead">${bar}</div><div class="fb-skel-grid">${rep(16, box)}</div>`
+    },
+    {
+      id: "dashboard",
+      label: "Dashboard",
+      skeleton: () => `<div class="fb-skel-tiles">${rep(4, box)}</div><div class="fb-skel-chart">${box}</div>`
+    },
+    {
+      id: "cardgrid",
+      label: "Card grid",
+      skeleton: () => `<div class="fb-skel-cards">${rep(6, box)}</div>`
+    },
+    {
+      id: "detail",
+      label: "Detail",
+      skeleton: () => `<div class="fb-skel-head">${circle}<div class="fb-skel-lines">${bar}${bar}</div></div><div class="fb-skel-blocks">${box}${box}</div>`
+    },
+    {
+      id: "auth",
+      label: "Auth / Login",
+      skeleton: () => `${circle}${bar}${bar}${box}`
+    },
+    {
+      id: "feed",
+      label: "Feed",
+      skeleton: () => rep(3, `<div class="fb-skel-post">${circle}<div class="fb-skel-lines">${bar}${bar}</div>${box}</div>`)
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      skeleton: () => rep(4, `<div class="fb-skel-setrow">${bar}${pill}</div>`)
+    },
+    {
+      id: "kanban",
+      label: "Kanban",
+      skeleton: () => rep(3, `<div class="fb-skel-kcol">${rep(2, box)}</div>`)
+    },
+    {
+      id: "modal",
+      label: "Modal",
+      skeleton: () => `<div class="fb-skel-dialog">${bar}${box}<div class="fb-skel-dialog-actions">${pill}${pill}</div></div>`
+    },
+    {
+      id: "gallery",
+      label: "Gallery",
+      skeleton: () => rep(6, box)
+    },
+    {
+      id: "nav",
+      label: "Nav / Landing",
+      skeleton: () => `<div class="fb-skel-navbar">${bar}</div><div class="fb-skel-hero">${box}</div><div class="fb-skel-secs">${bar}${bar}</div>`
+    }
+  ];
+  function getPreset(id) {
+    for (var i = 0; i < PRESETS.length; i++) {
+      if (PRESETS[i].id === id) return PRESETS[i];
+    }
+    return void 0;
+  }
+  function isCustomPreset(id) {
+    return !id || id === "custom";
+  }
+  function skeletonHtml(id) {
+    var p = getPreset(id);
+    return p ? p.skeleton() : "";
+  }
+
   // src/render/screen.ts
   function toggleScreen(screenId) {
     if (state.hiddenScreens[screenId]) {
@@ -381,7 +470,13 @@
     el.appendChild(hdr);
     var body = document.createElement("div");
     body.className = "fb-screen-body";
-    body.innerHTML = screenData.content || "";
+    var preset = screenData.preset || "custom";
+    if (isCustomPreset(preset)) {
+      body.innerHTML = screenData.content || "";
+    } else {
+      body.classList.add("fb-skeleton", "fb-skel-" + preset);
+      body.innerHTML = skeletonHtml(preset);
+    }
     el.appendChild(body);
     if (screenData.notes) {
       var footer = document.createElement("div");
@@ -1393,7 +1488,7 @@
       sb.el.style.top = top - wrapperRect.top + "px";
       sb.el.style.width = right - left + "px";
       sb.el.style.height = bottom - top + "px";
-      var box = { left, top, right, bottom };
+      var box2 = { left, top, right, bottom };
       var next = {};
       for (var bk in sb.base) next[bk] = true;
       var screens = state.project.screens || [];
@@ -1402,7 +1497,7 @@
         if (state.hiddenScreens[id]) continue;
         var el = state.screenEls[id];
         if (!el) continue;
-        if (rectsIntersect(box, el.getBoundingClientRect())) next[id] = true;
+        if (rectsIntersect(box2, el.getBoundingClientRect())) next[id] = true;
       }
       state.selected = next;
       updateSelectionStyles();

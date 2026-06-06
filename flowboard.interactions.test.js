@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { init } from './src/board';
 import { state } from './src/core/state';
+import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 
 // Modules are imported directly and share one `state` singleton, so reset it
 // between tests (init repopulates most of it, but not every transient field).
@@ -228,5 +229,40 @@ describe('mode switch + selection', () => {
     zoomIn.click();
     expect(state.zoom).toBeGreaterThan(1);
     expect(sizePx() * state.zoom).toBeCloseTo(onScreen);
+  });
+});
+
+describe('context menu', () => {
+  beforeEach(() => { document.body.innerHTML = ''; closeContextMenu(); });
+
+  it('renders a menu at the given position', () => {
+    showContextMenu(10, 20, [{ label: 'A' }, { label: 'B' }]);
+    const menu = document.querySelector('.fb-ctx-menu');
+    expect(menu).toBeTruthy();
+    expect(menu.querySelectorAll('.fb-ctx-item').length).toBe(2);
+  });
+
+  it('clicking a leaf item runs onClick and closes the menu', () => {
+    let clicked = false;
+    showContextMenu(0, 0, [{ label: 'Go', onClick: () => { clicked = true; } }]);
+    document.querySelector('.fb-ctx-item').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    expect(clicked).toBe(true);
+    expect(document.querySelector('.fb-ctx-menu')).toBeNull();
+  });
+
+  it('a submenu item reveals its children on hover', () => {
+    showContextMenu(0, 0, [{ label: 'Créer', submenu: [{ label: 'form' }, { label: 'list' }] }]);
+    const item = document.querySelector('.fb-ctx-item.fb-ctx-has-sub');
+    expect(item).toBeTruthy();
+    item.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: false }));
+    const sub = item.querySelector('.fb-ctx-sub');
+    expect(sub).toBeTruthy();
+    expect(sub.querySelectorAll('.fb-ctx-item').length).toBe(2);
+  });
+
+  it('showing a new menu closes the previous one', () => {
+    showContextMenu(0, 0, [{ label: 'A' }]);
+    showContextMenu(0, 0, [{ label: 'B' }]);
+    expect(document.querySelectorAll('.fb-ctx-menu').length).toBe(1);
   });
 });

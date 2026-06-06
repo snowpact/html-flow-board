@@ -5,6 +5,7 @@ import { getEpic, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { showScreenPopup } from './popups';
+import { isCustomPreset, skeletonHtml } from './presets';
 
 export function toggleScreen(screenId: string): void {
   if (state.hiddenScreens[screenId]) {
@@ -65,10 +66,17 @@ export function renderScreen(screenData: Screen): HTMLElement {
 
   el.appendChild(hdr);
 
-  // Body
+  // Body — 'custom' renders the raw HTML content (today); other presets render
+  // a grey wireframe skeleton instead (content is kept in data, just hidden).
   var body = document.createElement('div');
   body.className = 'fb-screen-body';
-  body.innerHTML = screenData.content || '';
+  var preset = screenData.preset || 'custom';
+  if (isCustomPreset(preset)) {
+    body.innerHTML = screenData.content || '';
+  } else {
+    body.classList.add('fb-skeleton', 'fb-skel-' + preset);
+    body.innerHTML = skeletonHtml(preset);
+  }
   el.appendChild(body);
 
   // Footer (notes only)
