@@ -26,9 +26,9 @@ var RE_BARE = /[^\s,]+/y;
 var RE_LEAD = /^\s*/;
 var RE_FENCE = /^`{3,}$/;
 var RE_DIRECTIVE = /^(![A-Za-z]+)(\s*=\s*)(.*)$/;
-var RE_ARROW = /^([^\s,]+)(\s*(?:\.\.>|->)\s*)([^\s,]+)(.*)$/;
-var RE_EPIC = /^(@[^\s,]+)(.*)$/;
-var RE_SCREEN = /^([^\s,]+)(.*)$/;
+var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:\.\.>|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
+var RE_EPIC = /^(@(?:"(?:\\.|[^"])*"|[^\s,"]+))(.*)$/;
+var RE_SCREEN = /^("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
 
 // Highlight the attribute tail of a line (e.g. ", t=Login, p=form, x=120, h").
 // Char-accurate: every character is either wrapped or escaped, none dropped.

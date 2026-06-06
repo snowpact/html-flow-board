@@ -101,7 +101,7 @@ export function parse(text: string): ParseResult {
 
     // Arrow: a -> b  /  a ..> b   (optional ", attrs"). Endpoints may be quoted
     // (so ids with spaces/commas/specials survive).
-    var am = line.match(/^("(?:\\.|[^"])*"|[^\s,]+)\s*(\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,]+)(?:\s*,\s*(.*))?$/);
+    var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
     if (am) {
       var arrow: Arrow = { from: unquote(am[1]), to: unquote(am[3]) };
       if (am[2] === '..>') arrow.dashed = true;

@@ -52,7 +52,7 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
   (project.epics || []).forEach(function (e: Epic) {
     var parts = ['@' + qtok(e.id)];
     if (e.label) parts.push('t=' + q(e.label));
-    if (e.color) parts.push('c=' + e.color);
+    if (e.color) parts.push('c=' + q(e.color));
     out.push(parts.join(', '));
   });
 
@@ -63,7 +63,7 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
     if (s.title) parts.push('t=' + q(s.title));
     if (s.preset && s.preset !== 'custom') parts.push('p=' + s.preset);
     if (s.format) parts.push('f=' + s.format);
-    if (s.epic) parts.push('e=' + s.epic);
+    if (s.epic) parts.push('e=' + q(s.epic));
     if (s.notes) parts.push('n=' + q(s.notes));
     if (s.size) parts.push('sz=' + s.size);
     if (s.width) parts.push('w=' + Math.round(s.width));
@@ -92,8 +92,8 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
       var line = qtok(a.from) + (a.dashed ? ' ..> ' : ' -> ') + qtok(a.to);
       var attrs: string[] = [];
       if (a.label) attrs.push('l=' + q(a.label));
-      if (a.fromSide) attrs.push('fs=' + a.fromSide);
-      if (a.toSide) attrs.push('ts=' + a.toSide);
+      if (a.fromSide) attrs.push('fs=' + q(a.fromSide));
+      if (a.toSide) attrs.push('ts=' + q(a.toSide));
       if (attrs.length) line += ', ' + attrs.join(', ');
       out.push(line);
     });

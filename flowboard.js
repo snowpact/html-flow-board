@@ -1391,7 +1391,7 @@
         i++;
         continue;
       }
-      var am = line.match(/^("(?:\\.|[^"])*"|[^\s,]+)\s*(\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,]+)(?:\s*,\s*(.*))?$/);
+      var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
       if (am) {
         var arrow = { from: unquote(am[1]), to: unquote(am[3]) };
         if (am[2] === "..>") arrow.dashed = true;
@@ -1958,7 +1958,7 @@
     (project.epics || []).forEach(function(e) {
       var parts = ["@" + qtok(e.id)];
       if (e.label) parts.push("t=" + q(e.label));
-      if (e.color) parts.push("c=" + e.color);
+      if (e.color) parts.push("c=" + q(e.color));
       out.push(parts.join(", "));
     });
     if (out.length) out.push("");
@@ -1967,7 +1967,7 @@
       if (s.title) parts.push("t=" + q(s.title));
       if (s.preset && s.preset !== "custom") parts.push("p=" + s.preset);
       if (s.format) parts.push("f=" + s.format);
-      if (s.epic) parts.push("e=" + s.epic);
+      if (s.epic) parts.push("e=" + q(s.epic));
       if (s.notes) parts.push("n=" + q(s.notes));
       if (s.size) parts.push("sz=" + s.size);
       if (s.width) parts.push("w=" + Math.round(s.width));
@@ -1992,8 +1992,8 @@
         var line = qtok(a.from) + (a.dashed ? " ..> " : " -> ") + qtok(a.to);
         var attrs = [];
         if (a.label) attrs.push("l=" + q(a.label));
-        if (a.fromSide) attrs.push("fs=" + a.fromSide);
-        if (a.toSide) attrs.push("ts=" + a.toSide);
+        if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
+        if (a.toSide) attrs.push("ts=" + q(a.toSide));
         if (attrs.length) line += ", " + attrs.join(", ");
         out.push(line);
       });
@@ -2018,9 +2018,9 @@
   var RE_LEAD = /^\s*/;
   var RE_FENCE = /^`{3,}$/;
   var RE_DIRECTIVE = /^(![A-Za-z]+)(\s*=\s*)(.*)$/;
-  var RE_ARROW = /^([^\s,]+)(\s*(?:\.\.>|->)\s*)([^\s,]+)(.*)$/;
-  var RE_EPIC = /^(@[^\s,]+)(.*)$/;
-  var RE_SCREEN = /^([^\s,]+)(.*)$/;
+  var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:\.\.>|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
+  var RE_EPIC = /^(@(?:"(?:\\.|[^"])*"|[^\s,"]+))(.*)$/;
+  var RE_SCREEN = /^("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
   function hlAttrs(s) {
     var out = "";
     var i = 0;

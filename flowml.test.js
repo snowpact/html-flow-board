@@ -175,6 +175,27 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
   it('migrates the legacy square format to fluid', () => {
     expect(parse('a, f=square\n').project.screens[0].format).toBe('fluid');
   });
+
+  it('round-trips and is idempotent over adversarial ids (fuzz)', () => {
+    const ids = ['plain', 'a b', 'a,b', 'a"b', '@x', '#x', '!x', '`x', 'a\\b', 'a -> b', 'with, comma'];
+    const project = {
+      name: 'Fuzz',
+      epics: [{ id: ids[2], label: 'E, with comma', color: '#abc' }],
+      screens: ids.map((id, i) => ({ id, title: 'T' + i, epic: i === 0 ? ids[2] : undefined })),
+      arrows: [{ from: ids[1], to: ids[5], label: 'l' }, { from: ids[4], to: ids[3] }],
+    };
+    const positions = {};
+    ids.forEach((id, i) => { positions[id] = { x: i * 10, y: i }; });
+
+    const once = serialize(project, positions);
+    const back = parse(once);
+    expect(back.errors).toEqual([]);
+    expect(back.project.screens.map((s) => s.id)).toEqual(ids); // every id survived
+    expect(back.project.arrows).toEqual(project.arrows);         // endpoints survived
+    expect(back.project.epics[0].id).toBe(ids[2]);
+    // canonical + stable: re-serializing the parsed model reproduces the text
+    expect(serialize(back.project, back.positions)).toBe(once);
+  });
 });
 
 describe('flow-ml highlight', () => {
