@@ -262,7 +262,7 @@ function renderPanelHelp(): HTMLElement {
     ['n', 'note'], ['x y', 'position'], ['h', 'hidden'],
   ]);
   keyGroup('Epic attributes', [['t', 'label'], ['c', 'color']]);
-  keyGroup('Arrow attributes', [['l', 'label'], ['from', 'from side'], ['to', 'to side']]);
+  keyGroup('Arrow attributes', [['l', 'label'], ['fs', 'from side'], ['ts', 'to side']]);
 
   var presetsTitle = document.createElement('div');
   presetsTitle.className = 'fb-help-subtitle';

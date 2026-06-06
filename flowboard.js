@@ -1605,8 +1605,8 @@
         if (am[2] === "-->") arrow.dashed = true;
         var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
         if (aattrs.l) arrow.label = aattrs.l;
-        if (aattrs.from) arrow.fromSide = aattrs.from;
-        if (aattrs.to) arrow.toSide = aattrs.to;
+        if (aattrs.fs) arrow.fromSide = aattrs.fs;
+        if (aattrs.ts) arrow.toSide = aattrs.ts;
         project.arrows.push(arrow);
         lastScreen = null;
         i++;
@@ -2076,8 +2076,8 @@
         var line = qtok(a.from) + (a.dashed ? " --> " : " -> ") + qtok(a.to);
         var attrs = [];
         if (a.label) attrs.push("l=" + q(a.label));
-        if (a.fromSide) attrs.push("from=" + q(a.fromSide));
-        if (a.toSide) attrs.push("to=" + q(a.toSide));
+        if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
+        if (a.toSide) attrs.push("ts=" + q(a.toSide));
         if (attrs.length) line += ", " + attrs.join(", ");
         out.push(line);
       });
@@ -2451,7 +2451,7 @@
       ["h", "hidden"]
     ]);
     keyGroup("Epic attributes", [["t", "label"], ["c", "color"]]);
-    keyGroup("Arrow attributes", [["l", "label"], ["from", "from side"], ["to", "to side"]]);
+    keyGroup("Arrow attributes", [["l", "label"], ["fs", "from side"], ["ts", "to side"]]);
     var presetsTitle = document.createElement("div");
     presetsTitle.className = "fb-help-subtitle";
     presetsTitle.textContent = "Presets (p=)";

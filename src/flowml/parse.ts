@@ -151,8 +151,8 @@ export function parse(text: string): ParseResult {
       if (am[2] === '-->') arrow.dashed = true;
       var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
       if (aattrs.l) arrow.label = aattrs.l;
-      if (aattrs.from) arrow.fromSide = aattrs.from;
-      if (aattrs.to) arrow.toSide = aattrs.to;
+      if (aattrs.fs) arrow.fromSide = aattrs.fs;
+      if (aattrs.ts) arrow.toSide = aattrs.ts;
       project.arrows.push(arrow);
       lastScreen = null;
       i++; continue;
