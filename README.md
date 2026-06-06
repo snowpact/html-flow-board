@@ -335,13 +335,32 @@ Text → diagram rebuilds are debounced (300 ms) and screens are inserted via a 
 
 ---
 
+## Claude Code skill
+
+Teach Claude Code to generate FlowBoard storyboards. One command installs (or updates) the skill:
+
+```bash
+npx github:snowpact/html-flow-board
+```
+
+It asks where to install:
+
+- **this project** → `./.claude/skills/flowboard` (shared with the repo)
+- **your account** → `~/.claude/skills/flowboard` (available everywhere)
+
+Skip the prompt with `--project` or `--user`. **Re-run the command any time to update** the skill
+to the latest version (it overwrites the installed `SKILL.md`). The skill source lives in
+[`skills/flowboard/SKILL.md`](./skills/flowboard/SKILL.md).
+
+---
+
 ## Development
 
 ```bash
 npm run dev         # watch-rebuild src/ + static server on :3000 (loads the built bundle)
 npm run build       # bundle src/ -> flowboard.js + flowboard.min.js (tsup/esbuild)
 npm run typecheck   # tsc --noEmit (the type gate; CI-enforced)
-npm test            # build, then run the vitest + jsdom suite (163 tests)
+npm test            # build, then run the vitest + jsdom suite (178 tests)
 npm run test:watch  # vitest watch
 npm run bench       # vitest bench (Flow-ML serialize/parse/highlight + rebuild)
 ```
