@@ -6,6 +6,7 @@ import {
   getBestSides, buildSpreadMap, resolveArrowSides,
 } from './src/arrows';
 import { autoLayout, bfsDepth, centerPositions, layoutByEpics, layoutGrid } from './src/layout';
+import { PRESETS, getPreset, isCustomPreset, skeletonHtml } from './src/render/presets';
 
 // Reset the shared state singleton between tests (modules are imported directly,
 // so state persists across cases within the file).
@@ -1085,5 +1086,44 @@ describe('toggleSelection', () => {
   it('returns the same selection object', () => {
     var sel = {};
     expect(toggleSelection(sel, 'A')).toBe(sel);
+  });
+});
+
+// ─────────────────────────────────────────────────
+// presets — display-type registry + skeleton bodies
+// ─────────────────────────────────────────────────
+describe('presets', () => {
+  it('has 15 presets including custom', () => {
+    expect(PRESETS).toHaveLength(15);
+    expect(PRESETS.map((p) => p.id)).toContain('custom');
+  });
+
+  it('custom is special: no skeleton html', () => {
+    expect(isCustomPreset('custom')).toBe(true);
+    expect(skeletonHtml('custom')).toBe('');
+  });
+
+  it('absent preset counts as custom', () => {
+    expect(isCustomPreset(undefined)).toBe(true);
+  });
+
+  it('every non-custom preset produces non-empty skeleton html', () => {
+    PRESETS.filter((p) => p.id !== 'custom').forEach((p) => {
+      expect(isCustomPreset(p.id)).toBe(false);
+      expect(skeletonHtml(p.id).length).toBeGreaterThan(0);
+    });
+  });
+
+  it('skeleton html contains only grey shapes, no real text', () => {
+    PRESETS.filter((p) => p.id !== 'custom').forEach((p) => {
+      var html = skeletonHtml(p.id);
+      // strip tags; the remainder must be empty (no text content)
+      expect(html.replace(/<[^>]*>/g, '').trim()).toBe('');
+    });
+  });
+
+  it('every preset has a human label', () => {
+    PRESETS.forEach((p) => expect(typeof p.label).toBe('string'));
+    expect(getPreset('form').label).toBe('Form');
   });
 });

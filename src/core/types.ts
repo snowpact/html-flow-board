@@ -5,6 +5,13 @@
 export type Side = string; // 'right' | 'left-top' | ... (16 anchor names)
 export type ScreenSize = 'sm' | 'md' | 'lg' | 'xl';
 
+// Display preset for a screen's BODY. 'custom' (the default when absent) keeps
+// today's behavior: render the raw `content` HTML. The others render a grey
+// wireframe skeleton instead.
+export type PresetId =
+  | 'custom' | 'blank' | 'form' | 'list' | 'table' | 'dashboard' | 'cardgrid'
+  | 'detail' | 'auth' | 'feed' | 'settings' | 'kanban' | 'modal' | 'gallery' | 'nav';
+
 export interface Epic {
   id: string;
   label: string;
@@ -18,6 +25,8 @@ export interface Screen {
   epic?: string;
   size?: ScreenSize;
   notes?: string;
+  content?: string;   // raw HTML body, used when preset is 'custom'
+  preset?: PresetId;  // body display preset; absent ⇒ 'custom'
   [k: string]: any;
 }
 
