@@ -9,12 +9,11 @@ export var ZOOM_STEP = 0.1;
 export var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
 // Device formats → base body dimensions (px). desktop/phone are fixed device
 // frames; `fluid` sets only a MIN width/height and lets the card grow with its
-// content (so custom HTML is never clipped). `square` is a legacy alias of fluid.
+// content (so custom HTML is never clipped).
 export var FORMATS: Record<string, { width: number; height: number; fluid?: boolean }> = {
   desktop: { width: 400, height: 240 }, // lg width, landscape
   phone: { width: 240, height: 420 },   // sm width, tall portrait
   fluid: { width: 280, height: 180, fluid: true },  // min-w × min-h, content-driven
-  square: { width: 280, height: 180, fluid: true }, // legacy alias → fluid
 };
 export var GAP_X = 100;
 export var GAP_Y = 40;

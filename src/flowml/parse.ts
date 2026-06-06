@@ -46,104 +46,37 @@ function parseAttrs(attrParts: string[]): Record<string, any> {
   return attrs;
 }
 
-// Does the line contain an arrow operator OUTSIDE of any quoted value? (Used to
-// flag a malformed arrow vs. a title that merely contains "->".)
-function hasUnquotedArrow(line: string): boolean {
-  var bare = line.replace(/"(?:\\.|[^"])*"/g, '');
-  return /(\.\.>|-+>)/.test(bare);
-}
+// One token, either a "quoted string" (with escapes) or a bare run with no space,
+// comma or quote. Used for arrow endpoints.
+var ENDPOINT = '"(?:\\\\.|[^"])*"|[^\\s,"]+';
+var ARROW_RE = new RegExp('^(' + ENDPOINT + ')\\s*(-->|->)\\s*(' + ENDPOINT + ')(?:\\s*,\\s*(.*))?$');
 
 // Parse Flow-ML text to the board model. Tolerant: bad lines are recorded in
 // `errors` and skipped; parsing never throws. The inverse of serialize().
+//
+// Line grammar (dispatched by first char — no ambiguity, no bare screens):
+//   !name = …      directive
+//   @id, …         epic
+//   :id, …         screen
+//   a -> b / a --> b   arrow (solid / dashed)
+//   ``` … ```      HTML body of the screen above
+//   # …            comment
 export function parse(text: string): ParseResult {
   var project: FlowProject = { name: '', epics: [], screens: [], arrows: [] };
   var positions: Record<string, Position> = {};
   var errors: { line: number; msg: string }[] = [];
 
-  // Normalize line endings so CRLF input round-trips identically to LF.
-  var lines = text.replace(/\r\n?/g, '\n').split('\n');
-  var lastScreen: Screen | null = null;
-  var i = 0;
-
-  while (i < lines.length) {
-    var raw = lines[i];
-    var line = raw.trim();
-    var lineNo = i + 1;
-
-    if (line === '' || line.charAt(0) === '#') { i++; continue; }
-
-    // Fenced HTML block (``` or longer) → content of the screen just above. The
-    // closing fence must match the opening fence exactly (length included), so an
-    // inner ``` line stays part of the content.
-    if (/^`{3,}$/.test(line)) {
-      var fence = line;
-      var html: string[] = [];
-      i++;
-      while (i < lines.length && lines[i].trim() !== fence) { html.push(lines[i]); i++; }
-      i++; // skip closing fence
-      if (lastScreen) {
-        lastScreen.content = html.join('\n');
-        // Do NOT force preset='custom': absent and 'custom' are equivalent, and a
-        // screen may carry both a non-custom preset and authored content.
-      } else {
-        errors.push({ line: lineNo, msg: 'HTML block without a preceding screen' });
-      }
-      continue;
-    }
-
-    // Directive: !name = ...
-    if (line.charAt(0) === '!') {
-      var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
-      if (dm && dm[1] === 'name') project.name = unquote(dm[2]);
-      else errors.push({ line: lineNo, msg: 'unknown directive' });
-      i++; continue;
-    }
-
-    // Arrow: a -> b (solid) / a --> b (dashed; legacy ..> still accepted on input).
-    // Endpoints may be quoted (so ids with spaces/commas/specials survive).
-    var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(-->|\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
-    if (am) {
-      var arrow: Arrow = { from: unquote(am[1]), to: unquote(am[3]) };
-      if (am[2] === '-->' || am[2] === '..>') arrow.dashed = true;
-      var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
-      if (aattrs.l) arrow.label = aattrs.l;
-      if (aattrs.fs) arrow.fromSide = aattrs.fs;
-      if (aattrs.ts) arrow.toSide = aattrs.ts;
-      project.arrows.push(arrow);
-      lastScreen = null;
-      i++; continue;
-    }
-
-    // A line with an unquoted arrow operator that did not match above is a
-    // malformed arrow — flag it instead of silently making a junk screen.
-    if (line.charAt(0) !== '@' && hasUnquotedArrow(line)) {
-      errors.push({ line: lineNo, msg: 'malformed arrow' });
-      lastScreen = null;
-      i++; continue;
-    }
-
-    // Epic: @id, attrs
-    if (line.charAt(0) === '@') {
-      var eparts = splitAttrs(line.slice(1));
-      var epic: Epic = { id: unquote(eparts.shift() || ''), label: '', color: '' };
-      var ea = parseAttrs(eparts);
-      if (ea.t) epic.label = ea.t;
-      if (ea.c) epic.color = ea.c;
-      project.epics.push(epic);
-      lastScreen = null;
-      i++; continue;
-    }
-
-    // Screen: id, attrs
-    var sparts = splitAttrs(line);
+  // Parse one screen body ("id, attrs", `:` prefix already stripped).
+  function addScreen(body: string): Screen | null {
+    var sparts = splitAttrs(body);
     var idRaw = sparts.shift();
-    if (!idRaw) { errors.push({ line: lineNo, msg: 'invalid line' }); i++; continue; }
+    if (!idRaw) return null;
     var id = unquote(idRaw);
     var sa = parseAttrs(sparts);
     var screen: Screen = { id: id };
     if (sa.t) screen.title = sa.t;
     if (sa.p) screen.preset = sa.p as PresetId;
-    if (sa.f) screen.format = (sa.f === 'square' ? 'fluid' : sa.f); // legacy migration
+    if (sa.f) screen.format = sa.f;
     if (sa.e) screen.epic = sa.e;
     if (sa.n) screen.notes = sa.n;
     if (sa.sz) screen.size = sa.sz as ScreenSize;
@@ -154,7 +87,80 @@ export function parse(text: string): ParseResult {
       positions[id] = { x: parseFloat(sa.x) || 0, y: parseFloat(sa.y) || 0 };
     }
     project.screens.push(screen);
-    lastScreen = screen;
+    return screen;
+  }
+
+  // Normalize line endings so CRLF input round-trips identically to LF.
+  var lines = text.replace(/\r\n?/g, '\n').split('\n');
+  var lastScreen: Screen | null = null;
+  var i = 0;
+
+  while (i < lines.length) {
+    var line = lines[i].trim();
+    var lineNo = i + 1;
+    var c0 = line.charAt(0);
+
+    if (line === '' || c0 === '#') { i++; continue; }
+
+    // Fenced HTML block (``` or longer) → content of the screen just above. The
+    // closing fence must match the opening fence exactly, so an inner ``` line
+    // stays part of the content.
+    if (/^`{3,}$/.test(line)) {
+      var fence = line;
+      var html: string[] = [];
+      i++;
+      while (i < lines.length && lines[i].trim() !== fence) { html.push(lines[i]); i++; }
+      i++; // skip closing fence
+      if (lastScreen) lastScreen.content = html.join('\n');
+      else errors.push({ line: lineNo, msg: 'HTML block without a preceding screen' });
+      continue;
+    }
+
+    // Directive: !name = …
+    if (c0 === '!') {
+      var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
+      if (dm && dm[1] === 'name') project.name = unquote(dm[2]);
+      else errors.push({ line: lineNo, msg: 'unknown directive' });
+      i++; continue;
+    }
+
+    // Screen: :id, attrs
+    if (c0 === ':') {
+      var ps = addScreen(line.slice(1));
+      if (ps) lastScreen = ps;
+      else errors.push({ line: lineNo, msg: 'invalid screen' });
+      i++; continue;
+    }
+
+    // Epic: @id, attrs
+    if (c0 === '@') {
+      var eparts = splitAttrs(line.slice(1));
+      var epic: Epic = { id: unquote(eparts.shift() || ''), label: '', color: '' };
+      var ea = parseAttrs(eparts);
+      if (ea.t) epic.label = ea.t;
+      if (ea.c) epic.color = ea.c;
+      project.epics.push(epic);
+      lastScreen = null;
+      i++; continue;
+    }
+
+    // Arrow: a -> b (solid) / a --> b (dashed). Endpoints may be quoted.
+    var am = line.match(ARROW_RE);
+    if (am) {
+      var arrow: Arrow = { from: unquote(am[1]), to: unquote(am[3]) };
+      if (am[2] === '-->') arrow.dashed = true;
+      var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
+      if (aattrs.l) arrow.label = aattrs.l;
+      if (aattrs.fs) arrow.fromSide = aattrs.fs;
+      if (aattrs.ts) arrow.toSide = aattrs.ts;
+      project.arrows.push(arrow);
+      lastScreen = null;
+      i++; continue;
+    }
+
+    // Anything else is not valid Flow-ML.
+    errors.push({ line: lineNo, msg: 'unrecognized line' });
+    lastScreen = null;
     i++;
   }
 

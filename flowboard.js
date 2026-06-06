@@ -11,10 +11,8 @@
     // lg width, landscape
     phone: { width: 240, height: 420 },
     // sm width, tall portrait
-    fluid: { width: 280, height: 180, fluid: true },
+    fluid: { width: 280, height: 180, fluid: true }
     // min-w × min-h, content-driven
-    square: { width: 280, height: 180, fluid: true }
-    // legacy alias → fluid
   };
   var GAP_X = 100;
   var GAP_Y = 40;
@@ -912,7 +910,7 @@
     popup.appendChild(fmtLabel);
     var fmtRow = document.createElement("div");
     fmtRow.className = "fb-screen-popup-formats";
-    var currentFmt = screenData.format === "square" ? "fluid" : screenData.format || "";
+    var currentFmt = screenData.format || "";
     var fmtNames = { desktop: "Desktop", phone: "Phone", fluid: "Fluide" };
     ["desktop", "phone", "fluid"].forEach(function(fmt) {
       var btn = document.createElement("button");
@@ -1349,91 +1347,22 @@
     });
     return attrs;
   }
-  function hasUnquotedArrow(line) {
-    var bare = line.replace(/"(?:\\.|[^"])*"/g, "");
-    return /(\.\.>|-+>)/.test(bare);
-  }
+  var ENDPOINT = '"(?:\\\\.|[^"])*"|[^\\s,"]+';
+  var ARROW_RE = new RegExp("^(" + ENDPOINT + ")\\s*(-->|->)\\s*(" + ENDPOINT + ")(?:\\s*,\\s*(.*))?$");
   function parse(text) {
     var project = { name: "", epics: [], screens: [], arrows: [] };
     var positions = {};
     var errors = [];
-    var lines = text.replace(/\r\n?/g, "\n").split("\n");
-    var lastScreen = null;
-    var i = 0;
-    while (i < lines.length) {
-      var raw = lines[i];
-      var line = raw.trim();
-      var lineNo = i + 1;
-      if (line === "" || line.charAt(0) === "#") {
-        i++;
-        continue;
-      }
-      if (/^`{3,}$/.test(line)) {
-        var fence = line;
-        var html = [];
-        i++;
-        while (i < lines.length && lines[i].trim() !== fence) {
-          html.push(lines[i]);
-          i++;
-        }
-        i++;
-        if (lastScreen) {
-          lastScreen.content = html.join("\n");
-        } else {
-          errors.push({ line: lineNo, msg: "HTML block without a preceding screen" });
-        }
-        continue;
-      }
-      if (line.charAt(0) === "!") {
-        var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
-        if (dm && dm[1] === "name") project.name = unquote(dm[2]);
-        else errors.push({ line: lineNo, msg: "unknown directive" });
-        i++;
-        continue;
-      }
-      var am = line.match(/^("(?:\\.|[^"])*"|[^\s,"]+)\s*(-->|\.\.>|->)\s*("(?:\\.|[^"])*"|[^\s,"]+)(?:\s*,\s*(.*))?$/);
-      if (am) {
-        var arrow = { from: unquote(am[1]), to: unquote(am[3]) };
-        if (am[2] === "-->" || am[2] === "..>") arrow.dashed = true;
-        var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
-        if (aattrs.l) arrow.label = aattrs.l;
-        if (aattrs.fs) arrow.fromSide = aattrs.fs;
-        if (aattrs.ts) arrow.toSide = aattrs.ts;
-        project.arrows.push(arrow);
-        lastScreen = null;
-        i++;
-        continue;
-      }
-      if (line.charAt(0) !== "@" && hasUnquotedArrow(line)) {
-        errors.push({ line: lineNo, msg: "malformed arrow" });
-        lastScreen = null;
-        i++;
-        continue;
-      }
-      if (line.charAt(0) === "@") {
-        var eparts = splitAttrs(line.slice(1));
-        var epic = { id: unquote(eparts.shift() || ""), label: "", color: "" };
-        var ea = parseAttrs(eparts);
-        if (ea.t) epic.label = ea.t;
-        if (ea.c) epic.color = ea.c;
-        project.epics.push(epic);
-        lastScreen = null;
-        i++;
-        continue;
-      }
-      var sparts = splitAttrs(line);
+    function addScreen(body) {
+      var sparts = splitAttrs(body);
       var idRaw = sparts.shift();
-      if (!idRaw) {
-        errors.push({ line: lineNo, msg: "invalid line" });
-        i++;
-        continue;
-      }
+      if (!idRaw) return null;
       var id = unquote(idRaw);
       var sa = parseAttrs(sparts);
       var screen = { id };
       if (sa.t) screen.title = sa.t;
       if (sa.p) screen.preset = sa.p;
-      if (sa.f) screen.format = sa.f === "square" ? "fluid" : sa.f;
+      if (sa.f) screen.format = sa.f;
       if (sa.e) screen.epic = sa.e;
       if (sa.n) screen.notes = sa.n;
       if (sa.sz) screen.size = sa.sz;
@@ -1450,7 +1379,72 @@
         positions[id] = { x: parseFloat(sa.x) || 0, y: parseFloat(sa.y) || 0 };
       }
       project.screens.push(screen);
-      lastScreen = screen;
+      return screen;
+    }
+    var lines = text.replace(/\r\n?/g, "\n").split("\n");
+    var lastScreen = null;
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i].trim();
+      var lineNo = i + 1;
+      var c0 = line.charAt(0);
+      if (line === "" || c0 === "#") {
+        i++;
+        continue;
+      }
+      if (/^`{3,}$/.test(line)) {
+        var fence = line;
+        var html = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== fence) {
+          html.push(lines[i]);
+          i++;
+        }
+        i++;
+        if (lastScreen) lastScreen.content = html.join("\n");
+        else errors.push({ line: lineNo, msg: "HTML block without a preceding screen" });
+        continue;
+      }
+      if (c0 === "!") {
+        var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
+        if (dm && dm[1] === "name") project.name = unquote(dm[2]);
+        else errors.push({ line: lineNo, msg: "unknown directive" });
+        i++;
+        continue;
+      }
+      if (c0 === ":") {
+        var ps = addScreen(line.slice(1));
+        if (ps) lastScreen = ps;
+        else errors.push({ line: lineNo, msg: "invalid screen" });
+        i++;
+        continue;
+      }
+      if (c0 === "@") {
+        var eparts = splitAttrs(line.slice(1));
+        var epic = { id: unquote(eparts.shift() || ""), label: "", color: "" };
+        var ea = parseAttrs(eparts);
+        if (ea.t) epic.label = ea.t;
+        if (ea.c) epic.color = ea.c;
+        project.epics.push(epic);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      var am = line.match(ARROW_RE);
+      if (am) {
+        var arrow = { from: unquote(am[1]), to: unquote(am[3]) };
+        if (am[2] === "-->") arrow.dashed = true;
+        var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
+        if (aattrs.l) arrow.label = aattrs.l;
+        if (aattrs.fs) arrow.fromSide = aattrs.fs;
+        if (aattrs.ts) arrow.toSide = aattrs.ts;
+        project.arrows.push(arrow);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      errors.push({ line: lineNo, msg: "unrecognized line" });
+      lastScreen = null;
       i++;
     }
     return { project, positions, errors };
@@ -1963,7 +1957,7 @@
     });
     if (out.length) out.push("");
     (project.screens || []).forEach(function(s) {
-      var parts = [qtok(s.id)];
+      var parts = [":" + qtok(s.id)];
       if (s.title) parts.push("t=" + q(s.title));
       if (s.preset && s.preset !== "custom") parts.push("p=" + s.preset);
       if (s.format) parts.push("f=" + s.format);
@@ -2018,7 +2012,7 @@
   var RE_LEAD = /^\s*/;
   var RE_FENCE = /^`{3,}$/;
   var RE_DIRECTIVE = /^(![A-Za-z]+)(\s*=\s*)(.*)$/;
-  var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:-->|\.\.>|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
+  var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:-->|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
   var RE_EPIC = /^(@(?:"(?:\\.|[^"])*"|[^\s,"]+))(.*)$/;
   var RE_SCREEN = /^("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
   function hlAttrs(s) {
@@ -2120,8 +2114,10 @@
         else out.push(head + tok("directive", body));
         continue;
       }
-      if (body.charAt(0) !== "@" && (m = RE_ARROW.exec(body))) {
-        out.push(head + tok("ref", m[1]) + tok("arrow", m[2]) + tok("ref", m[3]) + hlAttrs(m[4]));
+      if (body.charAt(0) === ":") {
+        m = RE_SCREEN.exec(body.slice(1));
+        if (m) out.push(head + tok("screen", ":" + m[1]) + hlAttrs(m[2]));
+        else out.push(head + tok("screen", body));
         continue;
       }
       if (body.charAt(0) === "@") {
@@ -2130,9 +2126,11 @@
         else out.push(head + tok("epic", body));
         continue;
       }
-      m = RE_SCREEN.exec(body);
-      if (m) out.push(head + tok("screen", m[1]) + hlAttrs(m[2]));
-      else out.push(head + esc(body));
+      if (m = RE_ARROW.exec(body)) {
+        out.push(head + tok("ref", m[1]) + tok("arrow", m[2]) + tok("ref", m[3]) + hlAttrs(m[4]));
+        continue;
+      }
+      out.push(head + esc(body));
     }
     return out.join("\n");
   }
@@ -2306,8 +2304,8 @@
     var rows = [
       ["!name = Mon app", "nom du projet"],
       ["@auth, t=Authentification, c=#6366f1", "epic \u2014 un groupe (couleur c=)"],
-      ["login, t=Login, p=form, f=phone, e=auth", "\xE9cran (titre, preset, format, epic)"],
-      ["login, x=120, y=80, h", "position (x,y) \xB7 h = masqu\xE9"],
+      [":login, t=Login, p=form, f=phone, e=auth", "\xE9cran \u2014 pr\xE9fixe \xAB : \xBB (titre, preset, format, epic)"],
+      [":login, x=120, y=80, h", "position (x,y) \xB7 h = masqu\xE9"],
       ["login -> home", "fl\xE8che"],
       ["login --> home, l=ok", "fl\xE8che pointill\xE9e + label"],
       ["# un commentaire", "commentaire (ignor\xE9)"]
@@ -2334,7 +2332,7 @@
     help.appendChild(fenceTitle);
     var fence = document.createElement("code");
     fence.className = "fb-help-ex fb-help-block";
-    fence.innerHTML = highlight("home, t=Accueil\n```\n<h1>Bonjour</h1>\n```");
+    fence.innerHTML = highlight(":home, t=Accueil\n```\n<h1>Bonjour</h1>\n```");
     help.appendChild(fence);
     var keysTitle = document.createElement("div");
     keysTitle.className = "fb-help-subtitle";

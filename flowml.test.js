@@ -30,8 +30,8 @@ describe('flow-ml serialize', () => {
     const out = serialize(RICH.project, RICH.positions);
     expect(out).toContain('!name = Mon app');
     expect(out).toContain('@auth, t=Authentication, c=#6366f1');
-    expect(out).toContain('login, t=Login, p=form, f=phone, e=auth, x=120, y=80');
-    expect(out).toContain('prefs, t="Mes réglages", x=920, y=80'); // custom → no p=, quoted title
+    expect(out).toContain(':login, t=Login, p=form, f=phone, e=auth, x=120, y=80');
+    expect(out).toContain(':prefs, t="Mes réglages", x=920, y=80'); // custom → no p=, quoted title
     expect(out).toContain('<div>x</div>'); // fenced custom HTML
     expect(out).toContain('home -> prefs, l=ouvrir');
     expect(out).toContain('login --> prefs'); // dashed
@@ -40,13 +40,19 @@ describe('flow-ml serialize', () => {
 
 describe('flow-ml parse', () => {
   it('reads a screen with attributes and a position', () => {
-    const { project, positions } = parse('login, t=Login, p=form, f=phone, e=auth, x=120, y=80\n');
+    const { project, positions } = parse(':login, t=Login, p=form, f=phone, e=auth, x=120, y=80\n');
     expect(project.screens[0]).toEqual({ id: 'login', title: 'Login', preset: 'form', format: 'phone', epic: 'auth' });
     expect(positions.login).toEqual({ x: 120, y: 80 });
   });
 
+  it('rejects an un-prefixed screen line (no bare screens)', () => {
+    const { project, errors } = parse('login, t=Login\n');
+    expect(project.screens).toHaveLength(0);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
   it('reads an epic, a dashed arrow, and a labelled arrow', () => {
-    const { project } = parse('@auth, t=Authentication, c=#6366f1\na -> b\nb ..> c\nb -> c, l=go\n');
+    const { project } = parse('@auth, t=Authentication, c=#6366f1\na -> b\nb --> c\nb -> c, l=go\n');
     expect(project.epics[0]).toEqual({ id: 'auth', label: 'Authentication', color: '#6366f1' });
     expect(project.arrows).toEqual([
       { from: 'a', to: 'b' },
@@ -56,13 +62,13 @@ describe('flow-ml parse', () => {
   });
 
   it('collects a fenced HTML block into the preceding screen (custom ≡ absent preset)', () => {
-    const { project } = parse('prefs, t=Settings\n```\n<b>hi</b>\n```\n');
+    const { project } = parse(':prefs, t=Settings\n```\n<b>hi</b>\n```\n');
     expect(project.screens[0].content).toBe('<b>hi</b>');
     expect(project.screens[0].preset).toBeUndefined();
   });
 
   it('ignores comments/blanks and records errors without throwing', () => {
-    const { project, errors } = parse('# a comment\n\nlogin, t=Login\n!bogus = 1\n```\nx\n```\n');
+    const { project, errors } = parse('# a comment\n\n:login, t=Login\n!bogus = 1\n```\nx\n```\n');
     expect(project.screens).toHaveLength(1);
     expect(errors.length).toBeGreaterThan(0); // unknown directive
   });
@@ -114,7 +120,7 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
   });
 
   it('normalizes CRLF in fenced content', () => {
-    const { project } = parse('a\r\n```\r\n<div>x</div>\r\n```\r\n');
+    const { project } = parse(':a\r\n```\r\n<div>x</div>\r\n```\r\n');
     expect(project.screens[0].content).toBe('<div>x</div>');
   });
 
@@ -131,21 +137,22 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
     expect(s.height).toBe(300);
   });
 
-  it('flags a malformed arrow instead of making a junk screen', () => {
+  it('records an error for a malformed arrow instead of making a junk screen', () => {
     const { project, errors } = parse('a -> b c\n');
     expect(project.screens).toHaveLength(0);
-    expect(errors.some((e) => /arrow/.test(e.msg))).toBe(true);
+    expect(project.arrows).toHaveLength(0);
+    expect(errors.length).toBeGreaterThan(0);
   });
 
   it('does not treat an arrow inside a quoted value as an arrow', () => {
-    const { project } = parse('home, t="go -> next"\n');
+    const { project } = parse(':home, t="go -> next"\n');
     expect(project.screens).toHaveLength(1);
     expect(project.screens[0].title).toBe('go -> next');
     expect(project.arrows).toHaveLength(0);
   });
 
   it('ignores a bare unknown attribute (no title=true)', () => {
-    const { project } = parse('a, t\n');
+    const { project } = parse(':a, t\n');
     expect(project.screens[0].title).toBeUndefined();
   });
 
@@ -172,14 +179,10 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
     expect(project.screens[0].epic).toBe('e x');
   });
 
-  it('migrates the legacy square format to fluid', () => {
-    expect(parse('a, f=square\n').project.screens[0].format).toBe('fluid');
-  });
-
-  it('uses --> for dashed arrows (legacy ..> still accepted on input)', () => {
+  it('uses --> for dashed arrows; ..> is no longer accepted', () => {
     expect(parse('a --> b\n').project.arrows[0].dashed).toBe(true);
-    expect(parse('a ..> b\n').project.arrows[0].dashed).toBe(true); // back-compat
     expect(parse('a -> b\n').project.arrows[0].dashed).toBeUndefined();
+    expect(parse('a ..> b\n').project.arrows).toHaveLength(0); // dropped form → error
     const out = serialize({ screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', dashed: true }] }, {});
     expect(out).toContain('a --> b');
     expect(out).not.toContain('..>');
@@ -221,7 +224,7 @@ describe('flow-ml highlight', () => {
   });
 
   it('tags each construct with a distinct token class', () => {
-    const html = highlight('!name = App\n@auth, t="My Auth", c=#6366f1\nlogin, t=Login, p=form, x=12, h\nlogin -> home\n# note\n');
+    const html = highlight('!name = App\n@auth, t="My Auth", c=#6366f1\n:login, t=Login, p=form, x=12, h\nlogin -> home\n# note\n');
     expect(html).toContain('fb-tok-directive');
     expect(html).toContain('fb-tok-epic');
     expect(html).toContain('fb-tok-screen');
@@ -235,7 +238,7 @@ describe('flow-ml highlight', () => {
   });
 
   it('does not mistake an arrow inside a quoted value for an operator', () => {
-    const html = highlight('home, t="go -> next"\n');
+    const html = highlight(':home, t="go -> next"\n');
     expect(html).toContain('fb-tok-screen'); // it is a screen line
     expect(html).not.toContain('fb-tok-arrow');
   });

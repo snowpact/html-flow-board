@@ -26,7 +26,7 @@ var RE_BARE = /[^\s,]+/y;
 var RE_LEAD = /^\s*/;
 var RE_FENCE = /^`{3,}$/;
 var RE_DIRECTIVE = /^(![A-Za-z]+)(\s*=\s*)(.*)$/;
-var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:-->|\.\.>|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
+var RE_ARROW = /^("(?:\\.|[^"])*"|[^\s,"]+)(\s*(?:-->|->)\s*)("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
 var RE_EPIC = /^(@(?:"(?:\\.|[^"])*"|[^\s,"]+))(.*)$/;
 var RE_SCREEN = /^("(?:\\.|[^"])*"|[^\s,"]+)(.*)$/;
 
@@ -94,9 +94,11 @@ export function highlight(text: string): string {
       continue;
     }
 
-    // Arrow: from (op) to [, attrs] — endpoints stop at a comma.
-    if (body.charAt(0) !== '@' && (m = RE_ARROW.exec(body))) {
-      out.push(head + tok('ref', m[1]) + tok('arrow', m[2]) + tok('ref', m[3]) + hlAttrs(m[4]));
+    // Screen: :id, attrs (the ':' is part of the screen token)
+    if (body.charAt(0) === ':') {
+      m = RE_SCREEN.exec(body.slice(1));
+      if (m) out.push(head + tok('screen', ':' + m[1]) + hlAttrs(m[2]));
+      else out.push(head + tok('screen', body)); // bare ":" mid-edit — never throw
       continue;
     }
 
@@ -107,10 +109,14 @@ export function highlight(text: string): string {
       continue;
     }
 
-    // Screen: id, attrs
-    m = RE_SCREEN.exec(body);
-    if (m) out.push(head + tok('screen', m[1]) + hlAttrs(m[2]));
-    else out.push(head + esc(body)); // unclassifiable (e.g. leading comma) — plain
+    // Arrow: from (op) to [, attrs] — endpoints stop at a comma.
+    if ((m = RE_ARROW.exec(body))) {
+      out.push(head + tok('ref', m[1]) + tok('arrow', m[2]) + tok('ref', m[3]) + hlAttrs(m[4]));
+      continue;
+    }
+
+    // Anything else (incl. an un-prefixed line being typed) — plain, never throws.
+    out.push(head + esc(body));
   }
 
   return out.join('\n');

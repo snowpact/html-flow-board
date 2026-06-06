@@ -24,8 +24,8 @@ short text document you can version, diff, copy, and paste.
 
 @auth, t=Authentication, c=#6366f1
 
-login, t=Login, p=form, f=phone, e=auth, x=120, y=80
-home,  t=Dashboard, p=dashboard, f=desktop, e=auth, x=560, y=80
+:login, t=Login, p=form, f=phone, e=auth, x=120, y=80
+:home,  t=Dashboard, p=dashboard, f=desktop, e=auth, x=560, y=80
 
 login -> home, l=Login OK
 login --> home          # dashed = secondary path
@@ -98,15 +98,18 @@ short, comma-separated attributes.
 |---|---|
 | `!name = My App` | Project name (directive) |
 | `@auth, t=Authentication, c=#6366f1` | **Epic** — a group, with a color |
-| `login, t=Login, p=form, f=phone, e=auth` | **Screen** |
+| `:login, t=Login, p=form, f=phone, e=auth` | **Screen** (note the `:` prefix) |
 | ` ``` ` … ` ``` ` (fenced block under a screen) | Raw HTML body (rendered when preset is `custom`) |
 | `login -> home, l=ok` | **Arrow** (solid) |
 | `login --> home` | **Arrow** (dashed) |
 | `# anything` | Comment (ignored) |
 
+Each line is identified by its first character — `:` screen, `@` epic, `!` directive, `#` comment,
+or an `->`/`-->` for an arrow — so a screen and an arrow are never ambiguous at a glance.
+
 ### Screen attributes
 
-A screen line starts with its **id**, followed by `key=value` attributes (any order):
+A screen line starts with `:` then its **id**, followed by `key=value` attributes (any order):
 
 | Key | Meaning | Example |
 |---|---|---|
@@ -125,7 +128,7 @@ A screen line starts with its **id**, followed by `key=value` attributes (any or
 
 ### Arrows
 
-`from -> to` (solid) or `from --> to` (dashed; legacy `..>` still accepted), with optional attributes:
+`from -> to` (solid) or `from --> to` (dashed), with optional attributes:
 
 | Key | Meaning |
 |---|---|
@@ -139,7 +142,7 @@ A fenced block immediately **after** a screen line becomes that screen's HTML bo
 the `custom` preset). Use the [`fb-*` wireframe classes](#wireframe-classes-fb-) inside:
 
 ````
-prefs, t=Settings
+:prefs, t=Settings
 ```
 <div class="fb-text title">Preferences</div>
 <div class="fb-input">Email</div>
@@ -183,8 +186,7 @@ HTML you authored — it is kept in the model and reused if you switch back to `
 | `fluid` | min 280 × 180, grows with content |
 
 `fluid` is the right pick for `custom` HTML bodies: it sets only a minimum and lets the
-card size to its content (so nothing is clipped). The legacy `square` value is migrated to
-`fluid` automatically.
+card size to its content (so nothing is clipped).
 
 ---
 

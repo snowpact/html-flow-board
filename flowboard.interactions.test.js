@@ -391,7 +391,7 @@ describe('Flow-ML panel + sync', () => {
   });
 
   it('text → diagram: rebuildBoard renders screens from a parsed model', () => {
-    const { project, positions } = parse('x1, t=One\nx2, t=Two\nx1 -> x2\n');
+    const { project, positions } = parse(':x1, t=One\n:x2, t=Two\nx1 -> x2\n');
     rebuildBoard(project, positions);
     expect(Object.keys(state.screenEls).sort()).toEqual(['x1', 'x2']);
     expect(state.canvasEl.querySelectorAll('.fb-screen').length).toBe(2);
@@ -439,7 +439,7 @@ describe('Flow-ML sync hardening', () => {
 
   it('editing !name keeps writing to the original (pinned) storage key', () => {
     vi.useFakeTimers();
-    typePanel('!name = Renamed\nA, t=A\n');
+    typePanel('!name = Renamed\n:A, t=A\n');
     vi.advanceTimersByTime(300);
     vi.useRealTimers();
     expect(loadDoc()).toContain('Renamed');                              // pinned key fb-Smoke
@@ -447,7 +447,7 @@ describe('Flow-ML sync hardening', () => {
   });
 
   it('changing epics in the text rebuilds the toolbar legend', () => {
-    const { project, positions } = parse('@e2, t=New, c=#0f0\nx1, t=One, e=e2\n');
+    const { project, positions } = parse('@e2, t=New, c=#0f0\n:x1, t=One, e=e2\n');
     state.syncing = true; rebuildBoard(project, positions); state.syncing = false;
     expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e2"]')).toBeTruthy();
     expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e1"]')).toBeFalsy();
@@ -455,7 +455,7 @@ describe('Flow-ML sync hardening', () => {
 
   it('rebuild prunes selection entries for deleted screens', () => {
     state.selected = { A: true, GONE: true };
-    const { project, positions } = parse('A, t=A\n');
+    const { project, positions } = parse(':A, t=A\n');
     state.syncing = true; rebuildBoard(project, positions); state.syncing = false;
     expect(state.selected.GONE).toBeUndefined();
   });

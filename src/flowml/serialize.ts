@@ -59,7 +59,7 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
   if (out.length) out.push('');
 
   (project.screens || []).forEach(function (s: Screen) {
-    var parts = [qtok(s.id)];
+    var parts = [':' + qtok(s.id)];
     if (s.title) parts.push('t=' + q(s.title));
     if (s.preset && s.preset !== 'custom') parts.push('p=' + s.preset);
     if (s.format) parts.push('f=' + s.format);

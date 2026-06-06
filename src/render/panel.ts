@@ -206,8 +206,8 @@ function renderPanelHelp(): HTMLElement {
   var rows: [string, string][] = [
     ['!name = Mon app', 'nom du projet'],
     ['@auth, t=Authentification, c=#6366f1', 'epic — un groupe (couleur c=)'],
-    ['login, t=Login, p=form, f=phone, e=auth', 'écran (titre, preset, format, epic)'],
-    ['login, x=120, y=80, h', 'position (x,y) · h = masqué'],
+    [':login, t=Login, p=form, f=phone, e=auth', 'écran — préfixe « : » (titre, preset, format, epic)'],
+    [':login, x=120, y=80, h', 'position (x,y) · h = masqué'],
     ['login -> home', 'flèche'],
     ['login --> home, l=ok', 'flèche pointillée + label'],
     ['# un commentaire', 'commentaire (ignoré)'],
@@ -235,7 +235,7 @@ function renderPanelHelp(): HTMLElement {
   help.appendChild(fenceTitle);
   var fence = document.createElement('code');
   fence.className = 'fb-help-ex fb-help-block';
-  fence.innerHTML = highlight('home, t=Accueil\n```\n<h1>Bonjour</h1>\n```');
+  fence.innerHTML = highlight(':home, t=Accueil\n```\n<h1>Bonjour</h1>\n```');
   help.appendChild(fence);
 
   var keysTitle = document.createElement('div');
