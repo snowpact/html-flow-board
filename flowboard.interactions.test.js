@@ -7,6 +7,7 @@ import { setScreenPreset, setScreenFormat } from './src/render/screen';
 import { closePresetPicker } from './src/render/preset-picker';
 import { rebuildBoard, commit } from './src/interactions/sync';
 import { parse } from './src/flowml/parse';
+import { loadDoc } from './src/core/storage';
 
 // Modules are imported directly and share one `state` singleton, so reset it
 // between tests (init repopulates most of it, but not every transient field).
@@ -394,5 +395,15 @@ describe('Flow-ML panel + sync', () => {
     commit();
     expect(state.panelTextarea.value).toBe('SENTINEL'); // not overwritten
     state.syncing = false;
+  });
+
+  it('persists to Flow-ML and reloads from it (source of truth)', () => {
+    const id = createScreen('blank', 200, 200); // → commit → saveDoc
+    expect(loadDoc()).toContain(id);
+    // Re-init WITHOUT clearing localStorage (same project name) → loads the doc,
+    // even though the passed config has no screens.
+    document.body.innerHTML = '<div id="app"></div>';
+    init({ container: document.getElementById('app'), project: { name: 'Smoke', epics: [], screens: [], arrows: [] } });
+    expect(state.project.screens.some((s) => s.id === id)).toBe(true);
   });
 });

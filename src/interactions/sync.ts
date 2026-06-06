@@ -2,6 +2,7 @@ import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { FlowProject, Position } from '../core/types';
 import { autoLayout } from '../layout';
+import { saveDoc } from '../core/storage';
 import { parse } from '../flowml/parse';
 import { serialize } from '../flowml/serialize';
 import { renderScreen } from '../render/screen';
@@ -41,7 +42,7 @@ export function commit(): void {
   (state.project.screens || []).forEach(function (s) { s.hidden = !!state.hiddenScreens[s.id]; });
   var text = serialize(state.project, state.positions);
   setPanelText(text);
-  if (state.saveDoc) state.saveDoc(text);
+  saveDoc(text);
 }
 
 var debounceTimer: any = null;
@@ -59,7 +60,7 @@ export function initSync(): void {
       state.syncing = true;
       rebuildBoard(res.project, res.positions);
       state.syncing = false;
-      if (state.saveDoc) state.saveDoc(ta.value);
+      saveDoc(ta.value);
     }, 300);
   });
 

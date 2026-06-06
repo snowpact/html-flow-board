@@ -4,11 +4,21 @@ export function storageKey() {
   return 'fb-' + (state.project ? state.project.name : 'default');
 }
 
+// Flow-ML is the source of truth: a "schema changed" hook → re-serialize + save.
 export function savePositions() {
+  if (state.commit) state.commit();
+}
+
+export function saveDoc(text: string) {
   try {
-    localStorage.setItem(storageKey() + '-pos', JSON.stringify(state.positions));
+    localStorage.setItem(storageKey() + '-flowml', text);
   } catch (e) { /* quota */ }
-  if (state.commit) state.commit(); // diagram changed → re-serialize to Flow-ML
+}
+
+export function loadDoc(): string | null {
+  try {
+    return localStorage.getItem(storageKey() + '-flowml');
+  } catch (e) { return null; }
 }
 
 export function loadPositions() {
@@ -34,9 +44,6 @@ export function loadZoom() {
 }
 
 export function saveHiddenScreens() {
-  try {
-    localStorage.setItem(storageKey() + '-hidden', JSON.stringify(state.hiddenScreens));
-  } catch (e) { /* quota */ }
   if (state.commit) state.commit();
 }
 
@@ -48,9 +55,6 @@ export function loadHiddenScreens() {
 }
 
 export function saveArrowMutations() {
-  try {
-    localStorage.setItem(storageKey() + '-arrowmods', JSON.stringify(state.project.arrows));
-  } catch (e) { /* quota */ }
   if (state.commit) state.commit();
 }
 

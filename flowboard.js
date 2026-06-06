@@ -105,11 +105,20 @@
     return "fb-" + (state.project ? state.project.name : "default");
   }
   function savePositions() {
+    if (state.commit) state.commit();
+  }
+  function saveDoc(text) {
     try {
-      localStorage.setItem(storageKey() + "-pos", JSON.stringify(state.positions));
+      localStorage.setItem(storageKey() + "-flowml", text);
     } catch (e) {
     }
-    if (state.commit) state.commit();
+  }
+  function loadDoc() {
+    try {
+      return localStorage.getItem(storageKey() + "-flowml");
+    } catch (e) {
+      return null;
+    }
   }
   function loadPositions() {
     try {
@@ -138,10 +147,6 @@
     }
   }
   function saveHiddenScreens() {
-    try {
-      localStorage.setItem(storageKey() + "-hidden", JSON.stringify(state.hiddenScreens));
-    } catch (e) {
-    }
     if (state.commit) state.commit();
   }
   function loadHiddenScreens() {
@@ -153,10 +158,6 @@
     }
   }
   function saveArrowMutations() {
-    try {
-      localStorage.setItem(storageKey() + "-arrowmods", JSON.stringify(state.project.arrows));
-    } catch (e) {
-    }
     if (state.commit) state.commit();
   }
   function loadArrowMutations() {
@@ -1232,6 +1233,130 @@
     });
   }
 
+  // src/flowml/parse.ts
+  function unquote(v) {
+    v = v.trim();
+    if (v.length >= 2 && v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') {
+      return v.slice(1, -1).replace(/\\"/g, '"');
+    }
+    return v;
+  }
+  function splitAttrs(s) {
+    var parts = [];
+    var cur = "";
+    var inQ = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === '"' && s.charAt(i - 1) !== "\\") inQ = !inQ;
+      if (ch === "," && !inQ) {
+        parts.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    parts.push(cur);
+    return parts.map(function(p) {
+      return p.trim();
+    }).filter(function(p) {
+      return p !== "";
+    });
+  }
+  function parseAttrs(attrParts) {
+    var attrs = {};
+    attrParts.forEach(function(p) {
+      var eq = p.indexOf("=");
+      if (eq === -1) attrs[p] = true;
+      else attrs[p.slice(0, eq).trim()] = unquote(p.slice(eq + 1));
+    });
+    return attrs;
+  }
+  function parse(text) {
+    var project = { name: "", epics: [], screens: [], arrows: [] };
+    var positions = {};
+    var errors = [];
+    var lines = text.split("\n");
+    var lastScreen = null;
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i].trim();
+      var lineNo = i + 1;
+      if (line === "" || line.charAt(0) === "#") {
+        i++;
+        continue;
+      }
+      if (line === "```") {
+        var html = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== "```") {
+          html.push(lines[i]);
+          i++;
+        }
+        i++;
+        if (lastScreen) {
+          lastScreen.content = html.join("\n");
+          if (!lastScreen.preset) lastScreen.preset = "custom";
+        } else {
+          errors.push({ line: lineNo, msg: "HTML block without a preceding screen" });
+        }
+        continue;
+      }
+      if (line.charAt(0) === "!") {
+        var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
+        if (dm && dm[1] === "name") project.name = unquote(dm[2]);
+        else errors.push({ line: lineNo, msg: "unknown directive" });
+        i++;
+        continue;
+      }
+      var am = line.match(/^(\S+)\s*(\.\.>|->)\s*(\S+?)(?:\s*,\s*(.*))?$/);
+      if (am) {
+        var arrow = { from: am[1], to: am[3] };
+        if (am[2] === "..>") arrow.dashed = true;
+        var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
+        if (aattrs.l) arrow.label = aattrs.l;
+        if (aattrs.fs) arrow.fromSide = aattrs.fs;
+        if (aattrs.ts) arrow.toSide = aattrs.ts;
+        project.arrows.push(arrow);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      if (line.charAt(0) === "@") {
+        var eparts = splitAttrs(line.slice(1));
+        var epic = { id: eparts.shift() || "", label: "", color: "" };
+        var ea = parseAttrs(eparts);
+        if (ea.t) epic.label = ea.t;
+        if (ea.c) epic.color = ea.c;
+        project.epics.push(epic);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      var sparts = splitAttrs(line);
+      var id = sparts.shift();
+      if (!id) {
+        errors.push({ line: lineNo, msg: "invalid line" });
+        i++;
+        continue;
+      }
+      var sa = parseAttrs(sparts);
+      var screen = { id };
+      if (sa.t) screen.title = sa.t;
+      if (sa.p) screen.preset = sa.p;
+      if (sa.f) screen.format = sa.f;
+      if (sa.e) screen.epic = sa.e;
+      if (sa.n) screen.notes = sa.n;
+      if (sa.h) screen.hidden = true;
+      if (sa.x !== void 0 || sa.y !== void 0) {
+        positions[id] = { x: parseFloat(sa.x) || 0, y: parseFloat(sa.y) || 0 };
+      }
+      project.screens.push(screen);
+      lastScreen = screen;
+      i++;
+    }
+    return { project, positions, errors };
+  }
+
   // src/interactions/arrow-drag.ts
   function initArrowDrag() {
     state.canvasEl.addEventListener("mousedown", function(e) {
@@ -1701,130 +1826,6 @@
     { name: "Grid", fn: layoutGrid }
   ];
 
-  // src/flowml/parse.ts
-  function unquote(v) {
-    v = v.trim();
-    if (v.length >= 2 && v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') {
-      return v.slice(1, -1).replace(/\\"/g, '"');
-    }
-    return v;
-  }
-  function splitAttrs(s) {
-    var parts = [];
-    var cur = "";
-    var inQ = false;
-    for (var i = 0; i < s.length; i++) {
-      var ch = s.charAt(i);
-      if (ch === '"' && s.charAt(i - 1) !== "\\") inQ = !inQ;
-      if (ch === "," && !inQ) {
-        parts.push(cur);
-        cur = "";
-      } else {
-        cur += ch;
-      }
-    }
-    parts.push(cur);
-    return parts.map(function(p) {
-      return p.trim();
-    }).filter(function(p) {
-      return p !== "";
-    });
-  }
-  function parseAttrs(attrParts) {
-    var attrs = {};
-    attrParts.forEach(function(p) {
-      var eq = p.indexOf("=");
-      if (eq === -1) attrs[p] = true;
-      else attrs[p.slice(0, eq).trim()] = unquote(p.slice(eq + 1));
-    });
-    return attrs;
-  }
-  function parse(text) {
-    var project = { name: "", epics: [], screens: [], arrows: [] };
-    var positions = {};
-    var errors = [];
-    var lines = text.split("\n");
-    var lastScreen = null;
-    var i = 0;
-    while (i < lines.length) {
-      var line = lines[i].trim();
-      var lineNo = i + 1;
-      if (line === "" || line.charAt(0) === "#") {
-        i++;
-        continue;
-      }
-      if (line === "```") {
-        var html = [];
-        i++;
-        while (i < lines.length && lines[i].trim() !== "```") {
-          html.push(lines[i]);
-          i++;
-        }
-        i++;
-        if (lastScreen) {
-          lastScreen.content = html.join("\n");
-          if (!lastScreen.preset) lastScreen.preset = "custom";
-        } else {
-          errors.push({ line: lineNo, msg: "HTML block without a preceding screen" });
-        }
-        continue;
-      }
-      if (line.charAt(0) === "!") {
-        var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
-        if (dm && dm[1] === "name") project.name = unquote(dm[2]);
-        else errors.push({ line: lineNo, msg: "unknown directive" });
-        i++;
-        continue;
-      }
-      var am = line.match(/^(\S+)\s*(\.\.>|->)\s*(\S+?)(?:\s*,\s*(.*))?$/);
-      if (am) {
-        var arrow = { from: am[1], to: am[3] };
-        if (am[2] === "..>") arrow.dashed = true;
-        var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
-        if (aattrs.l) arrow.label = aattrs.l;
-        if (aattrs.fs) arrow.fromSide = aattrs.fs;
-        if (aattrs.ts) arrow.toSide = aattrs.ts;
-        project.arrows.push(arrow);
-        lastScreen = null;
-        i++;
-        continue;
-      }
-      if (line.charAt(0) === "@") {
-        var eparts = splitAttrs(line.slice(1));
-        var epic = { id: eparts.shift() || "", label: "", color: "" };
-        var ea = parseAttrs(eparts);
-        if (ea.t) epic.label = ea.t;
-        if (ea.c) epic.color = ea.c;
-        project.epics.push(epic);
-        lastScreen = null;
-        i++;
-        continue;
-      }
-      var sparts = splitAttrs(line);
-      var id = sparts.shift();
-      if (!id) {
-        errors.push({ line: lineNo, msg: "invalid line" });
-        i++;
-        continue;
-      }
-      var sa = parseAttrs(sparts);
-      var screen = { id };
-      if (sa.t) screen.title = sa.t;
-      if (sa.p) screen.preset = sa.p;
-      if (sa.f) screen.format = sa.f;
-      if (sa.e) screen.epic = sa.e;
-      if (sa.n) screen.notes = sa.n;
-      if (sa.h) screen.hidden = true;
-      if (sa.x !== void 0 || sa.y !== void 0) {
-        positions[id] = { x: parseFloat(sa.x) || 0, y: parseFloat(sa.y) || 0 };
-      }
-      project.screens.push(screen);
-      lastScreen = screen;
-      i++;
-    }
-    return { project, positions, errors };
-  }
-
   // src/flowml/serialize.ts
   function q(v) {
     return /[\s,"]/.test(v) ? '"' + v.replace(/"/g, '\\"') + '"' : v;
@@ -1971,7 +1972,7 @@
     });
     var text = serialize(state.project, state.positions);
     setPanelText(text);
-    if (state.saveDoc) state.saveDoc(text);
+    saveDoc(text);
   }
   var debounceTimer = null;
   function initSync() {
@@ -1985,7 +1986,7 @@
         state.syncing = true;
         rebuildBoard(res.project, res.positions);
         state.syncing = false;
-        if (state.saveDoc) state.saveDoc(ta.value);
+        saveDoc(ta.value);
       }, 300);
     });
     commit();
@@ -2714,6 +2715,22 @@
       return;
     }
     state.project = config.project;
+    var savedDoc = loadDoc();
+    if (savedDoc) {
+      var parsedDoc = parse(savedDoc);
+      if (parsedDoc.project.screens && parsedDoc.project.screens.length) {
+        var docHidden = {};
+        parsedDoc.project.screens.forEach(function(s) {
+          if (s.hidden) docHidden[s.id] = true;
+        });
+        config = {
+          container: config.container,
+          project: parsedDoc.project,
+          state: { positions: parsedDoc.positions, hiddenScreens: docHidden, arrows: parsedDoc.project.arrows }
+        };
+        state.project = config.project;
+      }
+    }
     state.showNotes = true;
     state.hiddenScreens = {};
     state.hiddenEpics = {};

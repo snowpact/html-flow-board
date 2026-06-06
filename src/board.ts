@@ -2,7 +2,8 @@ import { drawArrows, freezeArrowSides } from './arrows';
 import { CANVAS_H, CANVAS_W } from './core/constants';
 import { state } from './core/state';
 import { Epic, FlowConfig, Screen } from './core/types';
-import { loadArrowMutations, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
+import { loadArrowMutations, loadDoc, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
+import { parse } from './flowml/parse';
 import { initArrowDrag } from './interactions/arrow-drag';
 import { initCreateMenu } from './interactions/create';
 import { initDrag } from './interactions/drag';
@@ -108,7 +109,25 @@ export function init(config: FlowConfig): void {
     return;
   }
 
-  state.project = config.project;
+  state.project = config.project; // set first so storageKey()/loadDoc resolve the right key
+
+  // Flow-ML in localStorage is the source of truth: if present, it supersedes the
+  // passed config (positions/hidden/arrows all come from the parsed doc).
+  var savedDoc = loadDoc();
+  if (savedDoc) {
+    var parsedDoc = parse(savedDoc);
+    if (parsedDoc.project.screens && parsedDoc.project.screens.length) {
+      var docHidden: Record<string, boolean> = {};
+      parsedDoc.project.screens.forEach(function (s) { if (s.hidden) docHidden[s.id] = true; });
+      config = {
+        container: config.container,
+        project: parsedDoc.project,
+        state: { positions: parsedDoc.positions, hiddenScreens: docHidden, arrows: parsedDoc.project.arrows },
+      };
+      state.project = config.project;
+    }
+  }
+
   state.showNotes = true;
   state.hiddenScreens = {};
   state.hiddenEpics = {};
