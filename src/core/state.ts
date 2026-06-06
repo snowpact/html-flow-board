@@ -27,7 +27,8 @@ export var state: FlowState = {
   hiddenScreens: {},
   layoutIndex: 0,
   screenPopup: null,
-  panDrag: null
+  panDrag: null,
+  storageKeyBase: null   // pinned localStorage prefix (survives !name edits)
 };
 
 // Epic data by id.
@@ -37,6 +38,19 @@ export function getEpic(epicId: string): Epic | null {
     if (state.project.epics[i].id === epicId) return state.project.epics[i];
   }
   return null;
+}
+
+// An epic counts as hidden when every one of its screens is hidden. Derived from
+// hiddenScreens; recomputed after any rebuild so the legend stays in sync.
+export function recomputeHiddenEpics(): void {
+  state.hiddenEpics = {};
+  var screens = (state.project && state.project.screens) || [];
+  ((state.project && state.project.epics) || []).forEach(function (epic: Epic) {
+    var es = screens.filter(function (s: Screen) { return s.epic === epic.id; });
+    if (es.length && es.every(function (s: Screen) { return state.hiddenScreens[s.id]; })) {
+      state.hiddenEpics[epic.id] = true;
+    }
+  });
 }
 
 // Body width from the format, else legacy explicit width / size, else 320.

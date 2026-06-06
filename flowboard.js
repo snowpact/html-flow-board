@@ -79,7 +79,9 @@
     hiddenScreens: {},
     layoutIndex: 0,
     screenPopup: null,
-    panDrag: null
+    panDrag: null,
+    storageKeyBase: null
+    // pinned localStorage prefix (survives !name edits)
   };
   function getEpic(epicId) {
     if (!state.project || !state.project.epics) return null;
@@ -87,6 +89,20 @@
       if (state.project.epics[i].id === epicId) return state.project.epics[i];
     }
     return null;
+  }
+  function recomputeHiddenEpics() {
+    state.hiddenEpics = {};
+    var screens = state.project && state.project.screens || [];
+    (state.project && state.project.epics || []).forEach(function(epic) {
+      var es = screens.filter(function(s) {
+        return s.epic === epic.id;
+      });
+      if (es.length && es.every(function(s) {
+        return state.hiddenScreens[s.id];
+      })) {
+        state.hiddenEpics[epic.id] = true;
+      }
+    });
   }
   function screenWidth(s) {
     if (s.format && FORMATS[s.format]) return FORMATS[s.format].width;
@@ -102,6 +118,7 @@
 
   // src/core/storage.ts
   function storageKey() {
+    if (state.storageKeyBase) return state.storageKeyBase;
     return "fb-" + (state.project ? state.project.name : "default");
   }
   function savePositions() {
@@ -1234,10 +1251,13 @@
   }
 
   // src/flowml/parse.ts
+  var FLAGS = { h: true };
   function unquote(v) {
     v = v.trim();
     if (v.length >= 2 && v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') {
-      return v.slice(1, -1).replace(/\\"/g, '"');
+      return v.slice(1, -1).replace(/\\(.)/g, function(_m, c) {
+        return c === "n" ? "\n" : c;
+      });
     }
     return v;
   }
@@ -1266,36 +1286,42 @@
     var attrs = {};
     attrParts.forEach(function(p) {
       var eq = p.indexOf("=");
-      if (eq === -1) attrs[p] = true;
-      else attrs[p.slice(0, eq).trim()] = unquote(p.slice(eq + 1));
+      if (eq === -1) {
+        if (FLAGS[p]) attrs[p] = true;
+      } else attrs[p.slice(0, eq).trim()] = unquote(p.slice(eq + 1));
     });
     return attrs;
+  }
+  function hasUnquotedArrow(line) {
+    var bare = line.replace(/"(?:\\.|[^"])*"/g, "");
+    return /(\.\.>|->)/.test(bare);
   }
   function parse(text) {
     var project = { name: "", epics: [], screens: [], arrows: [] };
     var positions = {};
     var errors = [];
-    var lines = text.split("\n");
+    var lines = text.replace(/\r\n?/g, "\n").split("\n");
     var lastScreen = null;
     var i = 0;
     while (i < lines.length) {
-      var line = lines[i].trim();
+      var raw = lines[i];
+      var line = raw.trim();
       var lineNo = i + 1;
       if (line === "" || line.charAt(0) === "#") {
         i++;
         continue;
       }
-      if (line === "```") {
+      if (/^`{3,}$/.test(line)) {
+        var fence = line;
         var html = [];
         i++;
-        while (i < lines.length && lines[i].trim() !== "```") {
+        while (i < lines.length && lines[i].trim() !== fence) {
           html.push(lines[i]);
           i++;
         }
         i++;
         if (lastScreen) {
           lastScreen.content = html.join("\n");
-          if (!lastScreen.preset) lastScreen.preset = "custom";
         } else {
           errors.push({ line: lineNo, msg: "HTML block without a preceding screen" });
         }
@@ -1317,6 +1343,12 @@
         if (aattrs.fs) arrow.fromSide = aattrs.fs;
         if (aattrs.ts) arrow.toSide = aattrs.ts;
         project.arrows.push(arrow);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      if (line.charAt(0) !== "@" && hasUnquotedArrow(line)) {
+        errors.push({ line: lineNo, msg: "malformed arrow" });
         lastScreen = null;
         i++;
         continue;
@@ -1346,6 +1378,15 @@
       if (sa.f) screen.format = sa.f;
       if (sa.e) screen.epic = sa.e;
       if (sa.n) screen.notes = sa.n;
+      if (sa.sz) screen.size = sa.sz;
+      if (sa.w !== void 0) {
+        var w = parseFloat(sa.w);
+        if (!isNaN(w)) screen.width = w;
+      }
+      if (sa.hg !== void 0) {
+        var hh = parseFloat(sa.hg);
+        if (!isNaN(hh)) screen.height = hh;
+      }
       if (sa.h) screen.hidden = true;
       if (sa.x !== void 0 || sa.y !== void 0) {
         positions[id] = { x: parseFloat(sa.x) || 0, y: parseFloat(sa.y) || 0 };
@@ -1828,7 +1869,22 @@
 
   // src/flowml/serialize.ts
   function q(v) {
-    return /[\s,"]/.test(v) ? '"' + v.replace(/"/g, '\\"') + '"' : v;
+    var s = String(v);
+    if (/[\s,"\\]/.test(s)) {
+      return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n") + '"';
+    }
+    return s;
+  }
+  function fenceFor(content) {
+    var longest = 0;
+    var runs = content.match(/`+/g);
+    if (runs) runs.forEach(function(r) {
+      if (r.length > longest) longest = r.length;
+    });
+    var n = Math.max(3, longest + 1);
+    var f = "";
+    for (var i = 0; i < n; i++) f += "`";
+    return f;
   }
   function serialize(project, positions) {
     var out = [];
@@ -1847,6 +1903,9 @@
       if (s.format) parts.push("f=" + s.format);
       if (s.epic) parts.push("e=" + s.epic);
       if (s.notes) parts.push("n=" + q(s.notes));
+      if (s.size) parts.push("sz=" + s.size);
+      if (s.width) parts.push("w=" + Math.round(s.width));
+      if (s.height) parts.push("hg=" + Math.round(s.height));
       var pos = positions[s.id];
       if (pos) {
         parts.push("x=" + Math.round(pos.x));
@@ -1854,10 +1913,11 @@
       }
       if (s.hidden) parts.push("h");
       out.push(parts.join(", "));
-      if ((!s.preset || s.preset === "custom") && s.content) {
-        out.push("```");
+      if (s.content) {
+        var fence = fenceFor(s.content);
+        out.push(fence);
         out.push(s.content);
-        out.push("```");
+        out.push(fence);
       }
     });
     if (project.arrows && project.arrows.length) {
@@ -1939,319 +1999,6 @@
       state.panelTextarea.value = text;
       updateGutter();
     }
-  }
-
-  // src/interactions/sync.ts
-  function rebuildBoard(project, positions) {
-    state.project = project;
-    state.hiddenScreens = {};
-    (project.screens || []).forEach(function(s) {
-      if (s.hidden) state.hiddenScreens[s.id] = true;
-    });
-    var auto = autoLayout(project.screens || [], project.arrows || []);
-    state.defaultPositions = auto;
-    state.positions = {};
-    (project.screens || []).forEach(function(s) {
-      state.positions[s.id] = positions[s.id] || auto[s.id] || { x: 100, y: 100 };
-    });
-    var olds = state.canvasEl.querySelectorAll(".fb-screen");
-    for (var i = 0; i < olds.length; i++) {
-      if (olds[i].parentNode) olds[i].parentNode.removeChild(olds[i]);
-    }
-    while (state.svgEl.firstChild) state.svgEl.removeChild(state.svgEl.firstChild);
-    state.screenEls = {};
-    (project.screens || []).forEach(function(s) {
-      state.canvasEl.appendChild(renderScreen(s));
-    });
-    drawArrows();
-  }
-  function commit() {
-    if (state.syncing) return;
-    (state.project.screens || []).forEach(function(s) {
-      s.hidden = !!state.hiddenScreens[s.id];
-    });
-    var text = serialize(state.project, state.positions);
-    setPanelText(text);
-    saveDoc(text);
-  }
-  var debounceTimer = null;
-  function initSync() {
-    state.commit = commit;
-    var ta = state.panelTextarea;
-    if (!ta) return;
-    ta.addEventListener("input", function() {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(function() {
-        var res = parse(ta.value);
-        state.syncing = true;
-        rebuildBoard(res.project, res.positions);
-        state.syncing = false;
-        saveDoc(ta.value);
-      }, 300);
-    });
-    commit();
-  }
-
-  // src/interactions/mode.ts
-  function setMode(mode) {
-    if (mode !== "select") mode = "drag";
-    state.mode = mode;
-    if (mode === "drag") {
-      state.selected = {};
-      updateSelectionStyles();
-    }
-    if (state.wrapperEl) {
-      state.wrapperEl.classList.toggle("fb-mode-select", mode === "select");
-      state.wrapperEl.classList.toggle("fb-mode-drag", mode === "drag");
-    }
-    var sw = state.container && state.container.querySelector(".fb-mode-switch");
-    if (sw) {
-      var btns = sw.querySelectorAll(".fb-mode-btn");
-      for (var i = 0; i < btns.length; i++) {
-        var btn = btns[i];
-        btn.classList.toggle("active", btn.dataset.mode === mode);
-      }
-    }
-  }
-  function initModeKeys() {
-    state.wrapperEl.addEventListener("mouseenter", function() {
-      state.pointerInBoard = true;
-    });
-    state.wrapperEl.addEventListener("mouseleave", function() {
-      state.pointerInBoard = false;
-    });
-    document.addEventListener("keydown", function(e) {
-      if (!state.pointerInBoard) return;
-      var t = e.target;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "v" || e.key === "V") {
-        setMode("select");
-      } else if (e.key === "h" || e.key === "H") {
-        setMode("drag");
-      } else if (e.key === "Escape" && state.mode === "select") {
-        state.selected = {};
-        updateSelectionStyles();
-      }
-    });
-  }
-
-  // src/interactions/transform.ts
-  function setZoom(z) {
-    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
-    if (state.wrapperEl) {
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var mx = wrapperRect.width / 2;
-      var my = wrapperRect.height / 2;
-      var cx = (mx - state.panX) / state.zoom;
-      var cy = (my - state.panY) / state.zoom;
-      state.panX = mx - cx * newZoom;
-      state.panY = my - cy * newZoom;
-    }
-    state.zoom = newZoom;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-  function applyTransform() {
-    if (state.sizerEl) {
-      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
-    }
-    if (state.canvasEl && state._dotZoom !== state.zoom) {
-      state._dotZoom = state.zoom;
-      var sp = DOT_SPACING / state.zoom;
-      var r = DOT_RADIUS / state.zoom;
-      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
-      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
-    }
-  }
-  function fitToContent() {
-    if (!state.wrapperEl || !state.project) return;
-    var screens = state.project.screens || [];
-    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-    var hasVisible = false;
-    screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      hasVisible = true;
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + el.offsetWidth);
-      maxY = Math.max(maxY, pos.y + el.offsetHeight);
-    });
-    if (!hasVisible) return;
-    var wrapperRect = state.wrapperEl.getBoundingClientRect();
-    var viewW = wrapperRect.width;
-    var viewH = wrapperRect.height;
-    var contentW = maxX - minX;
-    var contentH = maxY - minY;
-    var padding = 60;
-    var zoomX = (viewW - padding * 2) / contentW;
-    var zoomY = (viewH - padding * 2) / contentH;
-    var zoom = Math.min(zoomX, zoomY, 1);
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
-    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
-    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
-    state.zoom = zoom;
-    state.panX = panX;
-    state.panY = panY;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-
-  // src/interactions/pan.ts
-  function initPan() {
-    var wrapper = state.wrapperEl;
-    wrapper.addEventListener("wheel", function(e) {
-      closeArrowPopup();
-      closeScreenPopup();
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        var wrapperRect = wrapper.getBoundingClientRect();
-        var mx = e.clientX - wrapperRect.left;
-        var my = e.clientY - wrapperRect.top;
-        var cx = (mx - state.panX) / state.zoom;
-        var cy = (my - state.panY) / state.zoom;
-        var delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-        var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((state.zoom + delta) * 100) / 100));
-        state.panX = mx - cx * newZoom;
-        state.panY = my - cy * newZoom;
-        state.zoom = newZoom;
-        applyTransform();
-        var label = document.getElementById("fb-zoom-label");
-        if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-        saveZoom();
-      } else {
-        e.preventDefault();
-        state.panX -= e.deltaX;
-        state.panY -= e.deltaY;
-        applyTransform();
-        saveZoom();
-      }
-    }, { passive: false });
-    wrapper.addEventListener("mousedown", function(e) {
-      if (state.mode !== "drag") return;
-      if (state.creatingArrow) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
-      if (e.button !== 0) return;
-      closeArrowPopup();
-      closeScreenPopup();
-      state.panDrag = {
-        startX: e.clientX,
-        startY: e.clientY,
-        startPanX: state.panX,
-        startPanY: state.panY
-      };
-      wrapper.classList.add("fb-panning");
-      e.preventDefault();
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.panDrag) return;
-      state.panX = state.panDrag.startPanX + (e.clientX - state.panDrag.startX);
-      state.panY = state.panDrag.startPanY + (e.clientY - state.panDrag.startY);
-      applyTransform();
-    });
-    document.addEventListener("mouseup", function() {
-      if (!state.panDrag) return;
-      state.panDrag = null;
-      wrapper.classList.remove("fb-panning");
-      saveZoom();
-    });
-  }
-
-  // src/interactions/selection.ts
-  function initSelection() {
-    var wrapper = state.wrapperEl;
-    wrapper.addEventListener("mousedown", function(e) {
-      if (state.mode !== "select") return;
-      if (state.creatingArrow) return;
-      if (e.button !== 0) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
-      closeArrowPopup();
-      closeScreenPopup();
-      var additive = e.metaKey || e.ctrlKey || e.shiftKey;
-      var base = {};
-      if (additive) {
-        for (var k in state.selected) base[k] = true;
-      }
-      state.selectBox = { startX: e.clientX, startY: e.clientY, base, additive, moved: false, el: null };
-      e.preventDefault();
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!state.selectBox) return;
-      var sb = state.selectBox;
-      if (!sb.moved && Math.abs(e.clientX - sb.startX) < SELECT_DRAG_THRESHOLD && Math.abs(e.clientY - sb.startY) < SELECT_DRAG_THRESHOLD) {
-        return;
-      }
-      sb.moved = true;
-      if (!sb.el) {
-        sb.el = document.createElement("div");
-        sb.el.className = "fb-select-rect";
-        state.wrapperEl.appendChild(sb.el);
-      }
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var left = Math.min(e.clientX, sb.startX);
-      var top = Math.min(e.clientY, sb.startY);
-      var right = Math.max(e.clientX, sb.startX);
-      var bottom = Math.max(e.clientY, sb.startY);
-      sb.el.style.left = left - wrapperRect.left + "px";
-      sb.el.style.top = top - wrapperRect.top + "px";
-      sb.el.style.width = right - left + "px";
-      sb.el.style.height = bottom - top + "px";
-      var box2 = { left, top, right, bottom };
-      var next = {};
-      for (var bk in sb.base) next[bk] = true;
-      var screens = state.project.screens || [];
-      for (var i = 0; i < screens.length; i++) {
-        var id = screens[i].id;
-        if (state.hiddenScreens[id]) continue;
-        var el = state.screenEls[id];
-        if (!el) continue;
-        if (rectsIntersect(box2, el.getBoundingClientRect())) next[id] = true;
-      }
-      state.selected = next;
-      updateSelectionStyles();
-    });
-    document.addEventListener("mouseup", function() {
-      if (!state.selectBox) return;
-      var sb = state.selectBox;
-      if (sb.el && sb.el.parentNode) sb.el.parentNode.removeChild(sb.el);
-      if (!sb.moved && !sb.additive) {
-        state.selected = {};
-        updateSelectionStyles();
-      }
-      state.selectBox = null;
-    });
-  }
-
-  // src/render/mode-switch.ts
-  function renderModeSwitch() {
-    var sw = document.createElement("div");
-    sw.className = "fb-mode-switch";
-    var selectBtn = document.createElement("button");
-    selectBtn.className = "fb-mode-btn";
-    selectBtn.dataset.mode = "select";
-    selectBtn.title = "Curseur \u2014 s\xE9lection (V)";
-    selectBtn.innerHTML = ICON_CURSOR;
-    selectBtn.addEventListener("click", function() {
-      setMode("select");
-    });
-    sw.appendChild(selectBtn);
-    var dragBtn = document.createElement("button");
-    dragBtn.className = "fb-mode-btn";
-    dragBtn.dataset.mode = "drag";
-    dragBtn.title = "D\xE9placement \u2014 pan (H)";
-    dragBtn.innerHTML = ICON_HAND;
-    dragBtn.addEventListener("click", function() {
-      setMode("drag");
-    });
-    sw.appendChild(dragBtn);
-    return sw;
   }
 
   // src/export.ts
@@ -2474,6 +2221,74 @@
     }
   }
 
+  // src/interactions/transform.ts
+  function setZoom(z) {
+    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
+    if (state.wrapperEl) {
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var mx = wrapperRect.width / 2;
+      var my = wrapperRect.height / 2;
+      var cx = (mx - state.panX) / state.zoom;
+      var cy = (my - state.panY) / state.zoom;
+      state.panX = mx - cx * newZoom;
+      state.panY = my - cy * newZoom;
+    }
+    state.zoom = newZoom;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
+  }
+  function applyTransform() {
+    if (state.sizerEl) {
+      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
+    }
+    if (state.canvasEl && state._dotZoom !== state.zoom) {
+      state._dotZoom = state.zoom;
+      var sp = DOT_SPACING / state.zoom;
+      var r = DOT_RADIUS / state.zoom;
+      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
+      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
+    }
+  }
+  function fitToContent() {
+    if (!state.wrapperEl || !state.project) return;
+    var screens = state.project.screens || [];
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var hasVisible = false;
+    screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      var el = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el || !pos) return;
+      hasVisible = true;
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + el.offsetWidth);
+      maxY = Math.max(maxY, pos.y + el.offsetHeight);
+    });
+    if (!hasVisible) return;
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var viewW = wrapperRect.width;
+    var viewH = wrapperRect.height;
+    var contentW = maxX - minX;
+    var contentH = maxY - minY;
+    var padding = 60;
+    var zoomX = (viewW - padding * 2) / contentW;
+    var zoomY = (viewH - padding * 2) / contentH;
+    var zoom = Math.min(zoomX, zoomY, 1);
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
+    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
+    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
+    state.zoom = zoom;
+    state.panX = panX;
+    state.panY = panY;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
+  }
+
   // src/render/toolbar.ts
   function updateLayoutButton() {
     var btn = document.getElementById("fb-layout-btn");
@@ -2482,23 +2297,12 @@
       btn.textContent = "Auto-Layout (" + name + ")";
     }
   }
-  function renderToolbar() {
-    var header = document.createElement("div");
-    header.className = "fb-header";
-    var left = document.createElement("div");
-    left.className = "fb-toolbar-group";
-    var title = document.createElement("span");
-    title.className = "fb-project-title";
-    title.textContent = state.project.name || "FlowBoard";
-    left.appendChild(title);
-    var sep1 = document.createElement("div");
-    sep1.className = "fb-header-separator";
-    left.appendChild(sep1);
+  function renderLegend() {
     var legend = document.createElement("div");
     legend.className = "fb-legend";
     (state.project.epics || []).forEach(function(epic) {
       var label = document.createElement("label");
-      label.className = "fb-legend-item";
+      label.className = "fb-legend-item" + (state.hiddenEpics[epic.id] ? " fb-dimmed" : "");
       var cb = document.createElement("input");
       cb.type = "checkbox";
       cb.checked = !state.hiddenEpics[epic.id];
@@ -2516,7 +2320,28 @@
       label.appendChild(document.createTextNode(epic.label));
       legend.appendChild(label);
     });
-    left.appendChild(legend);
+    return legend;
+  }
+  function syncToolbar() {
+    if (!state.container) return;
+    var title = state.container.querySelector(".fb-project-title");
+    if (title) title.textContent = state.project.name || "FlowBoard";
+    var old = state.container.querySelector(".fb-legend");
+    if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
+  }
+  function renderToolbar() {
+    var header = document.createElement("div");
+    header.className = "fb-header";
+    var left = document.createElement("div");
+    left.className = "fb-toolbar-group";
+    var title = document.createElement("span");
+    title.className = "fb-project-title";
+    title.textContent = state.project.name || "FlowBoard";
+    left.appendChild(title);
+    var sep1 = document.createElement("div");
+    sep1.className = "fb-header-separator";
+    left.appendChild(sep1);
+    left.appendChild(renderLegend());
     header.appendChild(left);
     var right = document.createElement("div");
     right.className = "fb-toolbar-group";
@@ -2637,6 +2462,264 @@
     drawArrows();
   }
 
+  // src/interactions/sync.ts
+  function rebuildBoard(project, positions) {
+    state.project = project;
+    state.hiddenScreens = {};
+    (project.screens || []).forEach(function(s) {
+      if (s.hidden) state.hiddenScreens[s.id] = true;
+    });
+    recomputeHiddenEpics();
+    var ids = {};
+    (project.screens || []).forEach(function(s) {
+      ids[s.id] = true;
+    });
+    for (var sel in state.selected) {
+      if (!ids[sel]) delete state.selected[sel];
+    }
+    var auto = autoLayout(project.screens || [], project.arrows || []);
+    state.defaultPositions = auto;
+    state.positions = {};
+    (project.screens || []).forEach(function(s) {
+      state.positions[s.id] = positions[s.id] || auto[s.id] || { x: 100, y: 100 };
+    });
+    var olds = state.canvasEl.querySelectorAll(".fb-screen");
+    for (var i = 0; i < olds.length; i++) {
+      if (olds[i].parentNode) olds[i].parentNode.removeChild(olds[i]);
+    }
+    while (state.svgEl.firstChild) state.svgEl.removeChild(state.svgEl.firstChild);
+    state.screenEls = {};
+    (project.screens || []).forEach(function(s) {
+      state.canvasEl.appendChild(renderScreen(s));
+    });
+    drawArrows();
+    syncToolbar();
+  }
+  function commit() {
+    if (state.syncing) return;
+    (state.project.screens || []).forEach(function(s) {
+      s.hidden = !!state.hiddenScreens[s.id];
+    });
+    var text = serialize(state.project, state.positions);
+    setPanelText(text);
+    saveDoc(text);
+  }
+  var debounceTimer = null;
+  function initSync() {
+    state.commit = commit;
+    var ta = state.panelTextarea;
+    if (!ta) return;
+    ta.addEventListener("input", function() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        var res = parse(ta.value);
+        if (!res.project.screens || !res.project.screens.length) {
+          saveDoc(ta.value);
+          return;
+        }
+        state.syncing = true;
+        rebuildBoard(res.project, res.positions);
+        state.syncing = false;
+        saveDoc(ta.value);
+      }, 300);
+    });
+    commit();
+  }
+
+  // src/interactions/mode.ts
+  function setMode(mode) {
+    if (mode !== "select") mode = "drag";
+    state.mode = mode;
+    if (mode === "drag") {
+      state.selected = {};
+      updateSelectionStyles();
+    }
+    if (state.wrapperEl) {
+      state.wrapperEl.classList.toggle("fb-mode-select", mode === "select");
+      state.wrapperEl.classList.toggle("fb-mode-drag", mode === "drag");
+    }
+    var sw = state.container && state.container.querySelector(".fb-mode-switch");
+    if (sw) {
+      var btns = sw.querySelectorAll(".fb-mode-btn");
+      for (var i = 0; i < btns.length; i++) {
+        var btn = btns[i];
+        btn.classList.toggle("active", btn.dataset.mode === mode);
+      }
+    }
+  }
+  function initModeKeys() {
+    state.wrapperEl.addEventListener("mouseenter", function() {
+      state.pointerInBoard = true;
+    });
+    state.wrapperEl.addEventListener("mouseleave", function() {
+      state.pointerInBoard = false;
+    });
+    document.addEventListener("keydown", function(e) {
+      if (!state.pointerInBoard) return;
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "v" || e.key === "V") {
+        setMode("select");
+      } else if (e.key === "h" || e.key === "H") {
+        setMode("drag");
+      } else if (e.key === "Escape" && state.mode === "select") {
+        state.selected = {};
+        updateSelectionStyles();
+      }
+    });
+  }
+
+  // src/interactions/pan.ts
+  function initPan() {
+    var wrapper = state.wrapperEl;
+    wrapper.addEventListener("wheel", function(e) {
+      closeArrowPopup();
+      closeScreenPopup();
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        var wrapperRect = wrapper.getBoundingClientRect();
+        var mx = e.clientX - wrapperRect.left;
+        var my = e.clientY - wrapperRect.top;
+        var cx = (mx - state.panX) / state.zoom;
+        var cy = (my - state.panY) / state.zoom;
+        var delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+        var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((state.zoom + delta) * 100) / 100));
+        state.panX = mx - cx * newZoom;
+        state.panY = my - cy * newZoom;
+        state.zoom = newZoom;
+        applyTransform();
+        var label = document.getElementById("fb-zoom-label");
+        if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+        saveZoom();
+      } else {
+        e.preventDefault();
+        state.panX -= e.deltaX;
+        state.panY -= e.deltaY;
+        applyTransform();
+        saveZoom();
+      }
+    }, { passive: false });
+    wrapper.addEventListener("mousedown", function(e) {
+      if (state.mode !== "drag") return;
+      if (state.creatingArrow) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      if (e.button !== 0) return;
+      closeArrowPopup();
+      closeScreenPopup();
+      state.panDrag = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startPanX: state.panX,
+        startPanY: state.panY
+      };
+      wrapper.classList.add("fb-panning");
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.panDrag) return;
+      state.panX = state.panDrag.startPanX + (e.clientX - state.panDrag.startX);
+      state.panY = state.panDrag.startPanY + (e.clientY - state.panDrag.startY);
+      applyTransform();
+    });
+    document.addEventListener("mouseup", function() {
+      if (!state.panDrag) return;
+      state.panDrag = null;
+      wrapper.classList.remove("fb-panning");
+      saveZoom();
+    });
+  }
+
+  // src/interactions/selection.ts
+  function initSelection() {
+    var wrapper = state.wrapperEl;
+    wrapper.addEventListener("mousedown", function(e) {
+      if (state.mode !== "select") return;
+      if (state.creatingArrow) return;
+      if (e.button !== 0) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      closeArrowPopup();
+      closeScreenPopup();
+      var additive = e.metaKey || e.ctrlKey || e.shiftKey;
+      var base = {};
+      if (additive) {
+        for (var k in state.selected) base[k] = true;
+      }
+      state.selectBox = { startX: e.clientX, startY: e.clientY, base, additive, moved: false, el: null };
+      e.preventDefault();
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!state.selectBox) return;
+      var sb = state.selectBox;
+      if (!sb.moved && Math.abs(e.clientX - sb.startX) < SELECT_DRAG_THRESHOLD && Math.abs(e.clientY - sb.startY) < SELECT_DRAG_THRESHOLD) {
+        return;
+      }
+      sb.moved = true;
+      if (!sb.el) {
+        sb.el = document.createElement("div");
+        sb.el.className = "fb-select-rect";
+        state.wrapperEl.appendChild(sb.el);
+      }
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var left = Math.min(e.clientX, sb.startX);
+      var top = Math.min(e.clientY, sb.startY);
+      var right = Math.max(e.clientX, sb.startX);
+      var bottom = Math.max(e.clientY, sb.startY);
+      sb.el.style.left = left - wrapperRect.left + "px";
+      sb.el.style.top = top - wrapperRect.top + "px";
+      sb.el.style.width = right - left + "px";
+      sb.el.style.height = bottom - top + "px";
+      var box2 = { left, top, right, bottom };
+      var next = {};
+      for (var bk in sb.base) next[bk] = true;
+      var screens = state.project.screens || [];
+      for (var i = 0; i < screens.length; i++) {
+        var id = screens[i].id;
+        if (state.hiddenScreens[id]) continue;
+        var el = state.screenEls[id];
+        if (!el) continue;
+        if (rectsIntersect(box2, el.getBoundingClientRect())) next[id] = true;
+      }
+      state.selected = next;
+      updateSelectionStyles();
+    });
+    document.addEventListener("mouseup", function() {
+      if (!state.selectBox) return;
+      var sb = state.selectBox;
+      if (sb.el && sb.el.parentNode) sb.el.parentNode.removeChild(sb.el);
+      if (!sb.moved && !sb.additive) {
+        state.selected = {};
+        updateSelectionStyles();
+      }
+      state.selectBox = null;
+    });
+  }
+
+  // src/render/mode-switch.ts
+  function renderModeSwitch() {
+    var sw = document.createElement("div");
+    sw.className = "fb-mode-switch";
+    var selectBtn = document.createElement("button");
+    selectBtn.className = "fb-mode-btn";
+    selectBtn.dataset.mode = "select";
+    selectBtn.title = "Curseur \u2014 s\xE9lection (V)";
+    selectBtn.innerHTML = ICON_CURSOR;
+    selectBtn.addEventListener("click", function() {
+      setMode("select");
+    });
+    sw.appendChild(selectBtn);
+    var dragBtn = document.createElement("button");
+    dragBtn.className = "fb-mode-btn";
+    dragBtn.dataset.mode = "drag";
+    dragBtn.title = "D\xE9placement \u2014 pan (H)";
+    dragBtn.innerHTML = ICON_HAND;
+    dragBtn.addEventListener("click", function() {
+      setMode("drag");
+    });
+    sw.appendChild(dragBtn);
+    return sw;
+  }
+
   // src/board.ts
   function cycleLayout() {
     state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
@@ -2673,9 +2756,6 @@
       localStorage.removeItem(key + "-arrowmods");
     } catch (e) {
     }
-    if (state._originalArrows) {
-      state.project.arrows = JSON.parse(JSON.stringify(state._originalArrows));
-    }
     state.hiddenScreens = {};
     state.hiddenEpics = {};
     state.selected = {};
@@ -2708,6 +2788,7 @@
     drawArrows();
     freezeArrowSides();
     fitToContent();
+    if (state.commit) state.commit();
   }
   function init(config) {
     if (!config || !config.project) {
@@ -2715,10 +2796,11 @@
       return;
     }
     state.project = config.project;
+    state.storageKeyBase = "fb-" + (config.project.name || "default");
     var savedDoc = loadDoc();
-    if (savedDoc) {
+    if (savedDoc && !config.state) {
       var parsedDoc = parse(savedDoc);
-      if (parsedDoc.project.screens && parsedDoc.project.screens.length) {
+      if (parsedDoc.project.screens.length || parsedDoc.errors.length === 0) {
         var docHidden = {};
         parsedDoc.project.screens.forEach(function(s) {
           if (s.hidden) docHidden[s.id] = true;
@@ -2738,7 +2820,6 @@
     state.creatingArrow = null;
     state.anchorDotsEls = [];
     state.layoutIndex = 0;
-    state._originalArrows = JSON.parse(JSON.stringify(state.project.arrows || []));
     var configState = config.state || null;
     if (configState && configState.arrows) {
       state.project.arrows = JSON.parse(JSON.stringify(configState.arrows));
@@ -2754,17 +2835,7 @@
         state.hiddenScreens = savedHidden;
       }
     }
-    var allScreens = config.project.screens || [];
-    (config.project.epics || []).forEach(function(epic) {
-      var epicScreens = allScreens.filter(function(s) {
-        return s.epic === epic.id;
-      });
-      if (epicScreens.length > 0 && epicScreens.every(function(s) {
-        return state.hiddenScreens[s.id];
-      })) {
-        state.hiddenEpics[epic.id] = true;
-      }
-    });
+    recomputeHiddenEpics();
     var containerEl;
     if (typeof config.container === "string") {
       containerEl = document.querySelector(config.container);
@@ -2814,7 +2885,9 @@
     var hasSavedPositions = false;
     if (configState && configState.positions) {
       hasSavedPositions = true;
-      state.positions = JSON.parse(JSON.stringify(configState.positions));
+      screens.forEach(function(s) {
+        if (configState.positions[s.id]) state.positions[s.id] = configState.positions[s.id];
+      });
     } else {
       var savedPos = loadPositions();
       if (savedPos) {
@@ -2880,6 +2953,15 @@
       drawArrows();
       freezeArrowSides();
       if (state.commit) state.commit();
+      if (!savedDoc) {
+        try {
+          var mk = storageKey();
+          localStorage.removeItem(mk + "-pos");
+          localStorage.removeItem(mk + "-hidden");
+          localStorage.removeItem(mk + "-arrowmods");
+        } catch (e) {
+        }
+      }
     });
   }
 

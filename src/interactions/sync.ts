@@ -1,5 +1,5 @@
 import { drawArrows } from '../arrows';
-import { state } from '../core/state';
+import { recomputeHiddenEpics, state } from '../core/state';
 import { FlowProject, Position } from '../core/types';
 import { autoLayout } from '../layout';
 import { saveDoc } from '../core/storage';
@@ -7,13 +7,21 @@ import { parse } from '../flowml/parse';
 import { serialize } from '../flowml/serialize';
 import { renderScreen } from '../render/screen';
 import { setPanelText } from '../render/panel';
+import { syncToolbar } from '../render/toolbar';
 
 // Rebuild the diagram (screens + arrows) from a parsed model. Positions come
-// from the model; missing ones fall back to auto-layout.
+// from the model; missing ones fall back to auto-layout. Callers MUST set
+// state.syncing while this runs: nothing it invokes may call state.commit().
 export function rebuildBoard(project: FlowProject, positions: Record<string, Position>): void {
   state.project = project;
   state.hiddenScreens = {};
   (project.screens || []).forEach(function (s) { if (s.hidden) state.hiddenScreens[s.id] = true; });
+  recomputeHiddenEpics();
+
+  // Drop selection entries for screens that no longer exist.
+  var ids: Record<string, boolean> = {};
+  (project.screens || []).forEach(function (s) { ids[s.id] = true; });
+  for (var sel in state.selected) { if (!ids[sel]) delete state.selected[sel]; }
 
   var auto = autoLayout(project.screens || [], project.arrows || []);
   state.defaultPositions = auto;
@@ -33,6 +41,7 @@ export function rebuildBoard(project: FlowProject, positions: Record<string, Pos
     state.canvasEl.appendChild(renderScreen(s));
   });
   drawArrows();
+  syncToolbar(); // project name + epic legend may have changed in the text
 }
 
 // Diagram → text: re-serialize the current model into the panel. Skipped while a
@@ -57,6 +66,12 @@ export function initSync(): void {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(function () {
       var res = parse(ta.value);
+      // Never let a transient/incomplete edit wipe the board: if the text parses
+      // to zero screens, persist it but keep the current diagram on screen.
+      if (!res.project.screens || !res.project.screens.length) {
+        saveDoc(ta.value);
+        return;
+      }
       state.syncing = true;
       rebuildBoard(res.project, res.positions);
       state.syncing = false;

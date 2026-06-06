@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { init } from './src/board';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { init, doReset } from './src/board';
 import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
-import { setScreenPreset, setScreenFormat } from './src/render/screen';
+import { setScreenPreset, setScreenFormat, toggleScreen } from './src/render/screen';
 import { closePresetPicker } from './src/render/preset-picker';
 import { rebuildBoard, commit } from './src/interactions/sync';
 import { parse } from './src/flowml/parse';
@@ -405,5 +405,65 @@ describe('Flow-ML panel + sync', () => {
     document.body.innerHTML = '<div id="app"></div>';
     init({ container: document.getElementById('app'), project: { name: 'Smoke', epics: [], screens: [], arrows: [] } });
     expect(state.project.screens.some((s) => s.id === id)).toBe(true);
+  });
+});
+
+describe('Flow-ML sync hardening', () => {
+  beforeEach(() => { initBoard(); });
+
+  function typePanel(text) {
+    state.panelTextarea.value = text;
+    state.panelTextarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+  }
+
+  it('an emptied / whitespace panel does not wipe the board', () => {
+    vi.useFakeTimers();
+    typePanel('   ');
+    vi.advanceTimersByTime(300);
+    vi.useRealTimers();
+    expect(state.canvasEl.querySelectorAll('.fb-screen').length).toBe(3); // A,B,C intact
+  });
+
+  it('editing !name keeps writing to the original (pinned) storage key', () => {
+    vi.useFakeTimers();
+    typePanel('!name = Renamed\nA, t=A\n');
+    vi.advanceTimersByTime(300);
+    vi.useRealTimers();
+    expect(loadDoc()).toContain('Renamed');                              // pinned key fb-Smoke
+    expect(window.localStorage.getItem('fb-Renamed-flowml')).toBeNull(); // no orphan key
+  });
+
+  it('changing epics in the text rebuilds the toolbar legend', () => {
+    const { project, positions } = parse('@e2, t=New, c=#0f0\nx1, t=One, e=e2\n');
+    state.syncing = true; rebuildBoard(project, positions); state.syncing = false;
+    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e2"]')).toBeTruthy();
+    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e1"]')).toBeFalsy();
+  });
+
+  it('rebuild prunes selection entries for deleted screens', () => {
+    state.selected = { A: true, GONE: true };
+    const { project, positions } = parse('A, t=A\n');
+    state.syncing = true; rebuildBoard(project, positions); state.syncing = false;
+    expect(state.selected.GONE).toBeUndefined();
+  });
+
+  it('an explicit config.state wins over a saved doc', () => {
+    createScreen('blank', 100, 100); // saves a doc under fb-Smoke
+    document.body.innerHTML = '<div id="app"></div>';
+    init({
+      container: document.getElementById('app'),
+      project: { name: 'Smoke', epics: [], screens: [{ id: 'Z', title: 'Z' }], arrows: [] },
+      state: { positions: { Z: { x: 10, y: 10 } }, hiddenScreens: {}, arrows: [] },
+    });
+    expect(state.project.screens.map((s) => s.id)).toEqual(['Z']);
+  });
+
+  it('Reset clears visibility and re-serializes, keeping screens from the text', () => {
+    window.confirm = () => true;
+    toggleScreen('A');
+    expect(state.hiddenScreens.A).toBe(true);
+    doReset();
+    expect(state.hiddenScreens.A).toBeFalsy();
+    expect(loadDoc()).toContain('A,'); // committed, screens preserved
   });
 });

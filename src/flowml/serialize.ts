@@ -1,8 +1,27 @@
 import { Arrow, Epic, FlowProject, Position, Screen } from '../core/types';
 
-// Quote a value if it contains whitespace, a comma, or a quote.
+// Quote a value when it contains whitespace (incl. newlines), a comma, a quote,
+// or a backslash; escape backslash, quote and newline so the value survives on a
+// single physical line and round-trips through parse()/unquote().
 function q(v: string): string {
-  return /[\s,"]/.test(v) ? '"' + v.replace(/"/g, '\\"') + '"' : v;
+  var s = String(v);
+  if (/[\s,"\\]/.test(s)) {
+    return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"';
+  }
+  return s;
+}
+
+// Pick a backtick fence longer than any run of backticks inside the content, so a
+// content line of ``` (or longer) can never be mistaken for the closing fence
+// (CommonMark-style). Always at least 3 backticks.
+function fenceFor(content: string): string {
+  var longest = 0;
+  var runs = content.match(/`+/g);
+  if (runs) runs.forEach(function (r) { if (r.length > longest) longest = r.length; });
+  var n = Math.max(3, longest + 1);
+  var f = '';
+  for (var i = 0; i < n; i++) f += '`';
+  return f;
 }
 
 // Serialize the board model to canonical Flow-ML. Deterministic (array order),
@@ -28,6 +47,9 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
     if (s.format) parts.push('f=' + s.format);
     if (s.epic) parts.push('e=' + s.epic);
     if (s.notes) parts.push('n=' + q(s.notes));
+    if (s.size) parts.push('sz=' + s.size);
+    if (s.width) parts.push('w=' + Math.round(s.width));
+    if (s.height) parts.push('hg=' + Math.round(s.height));
     var pos = positions[s.id];
     if (pos) {
       parts.push('x=' + Math.round(pos.x));
@@ -36,10 +58,13 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
     if (s.hidden) parts.push('h');
     out.push(parts.join(', '));
 
-    if ((!s.preset || s.preset === 'custom') && s.content) {
-      out.push('```');
+    // Content is preserved whatever the preset (rendering ignores it for
+    // non-custom presets, but switching presets must not destroy the HTML).
+    if (s.content) {
+      var fence = fenceFor(s.content);
+      out.push(fence);
       out.push(s.content);
-      out.push('```');
+      out.push(fence);
     }
   });
 

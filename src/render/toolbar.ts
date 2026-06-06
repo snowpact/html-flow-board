@@ -17,6 +17,45 @@ export function updateLayoutButton(): void {
   }
 }
 
+// Build the epic legend (checkbox + color dot + label) from the current project.
+export function renderLegend(): HTMLElement {
+  var legend = document.createElement('div');
+  legend.className = 'fb-legend';
+  (state.project.epics || []).forEach(function (epic: Epic) {
+    var label = document.createElement('label');
+    label.className = 'fb-legend-item' + (state.hiddenEpics[epic.id] ? ' fb-dimmed' : '');
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = !state.hiddenEpics[epic.id];
+    cb.className = 'fb-legend-checkbox';
+    cb.style.accentColor = epic.color;
+    cb.dataset.epicId = epic.id;
+    cb.addEventListener('change', function () {
+      toggleEpic(epic.id);
+    });
+    label.appendChild(cb);
+
+    var dot = document.createElement('span');
+    dot.className = 'fb-legend-dot';
+    dot.style.background = epic.color;
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(epic.label));
+    legend.appendChild(label);
+  });
+  return legend;
+}
+
+// Refresh the toolbar pieces that depend on the project model (title + legend),
+// used after a text → diagram rebuild changes epics/name. No-op before init.
+export function syncToolbar(): void {
+  if (!state.container) return;
+  var title = state.container.querySelector('.fb-project-title');
+  if (title) title.textContent = state.project.name || 'FlowBoard';
+  var old = state.container.querySelector('.fb-legend');
+  if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
+}
+
 // -- Get epic by id --
 export function renderToolbar(): HTMLElement {
   var header = document.createElement('div');
@@ -37,31 +76,7 @@ export function renderToolbar(): HTMLElement {
   left.appendChild(sep1);
 
   // Legend with checkboxes
-  var legend = document.createElement('div');
-  legend.className = 'fb-legend';
-  (state.project.epics || []).forEach(function (epic: Epic) {
-    var label = document.createElement('label');
-    label.className = 'fb-legend-item';
-
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !state.hiddenEpics[epic.id];
-    cb.className = 'fb-legend-checkbox';
-    cb.style.accentColor = epic.color;
-    cb.dataset.epicId = epic.id;
-    cb.addEventListener('change', function () {
-      toggleEpic(epic.id);
-    });
-    label.appendChild(cb);
-
-    var dot = document.createElement('span');
-    dot.className = 'fb-legend-dot';
-    dot.style.background = epic.color;
-    label.appendChild(dot);
-    label.appendChild(document.createTextNode(epic.label));
-    legend.appendChild(label);
-  });
-  left.appendChild(legend);
+  left.appendChild(renderLegend());
 
   header.appendChild(left);
 

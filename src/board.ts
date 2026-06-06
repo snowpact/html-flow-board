@@ -1,7 +1,7 @@
 import { drawArrows, freezeArrowSides } from './arrows';
 import { CANVAS_H, CANVAS_W } from './core/constants';
-import { state } from './core/state';
-import { Epic, FlowConfig, Screen } from './core/types';
+import { recomputeHiddenEpics, state } from './core/state';
+import { FlowConfig, Screen } from './core/types';
 import { loadArrowMutations, loadDoc, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
 import { parse } from './flowml/parse';
 import { initArrowDrag } from './interactions/arrow-drag';
@@ -59,11 +59,8 @@ export function doReset(): void {
     localStorage.removeItem(key + '-arrowmods');
   } catch (e) { /* ignore */ }
 
-  // Restore original arrows from init config
-  if (state._originalArrows) {
-    state.project.arrows = JSON.parse(JSON.stringify(state._originalArrows));
-  }
-
+  // Flow-ML is the source of truth for screens/arrows, so Reset only restores the
+  // default auto-layout + visibility; it does not revert content typed in the panel.
   state.hiddenScreens = {};
   state.hiddenEpics = {};
   state.selected = {};
@@ -100,6 +97,7 @@ export function doReset(): void {
   drawArrows();
   freezeArrowSides();
   fitToContent();
+  if (state.commit) state.commit(); // persist the reset layout into the Flow-ML doc
 }
 
 // -- Export full init config as JS --
@@ -110,13 +108,17 @@ export function init(config: FlowConfig): void {
   }
 
   state.project = config.project; // set first so storageKey()/loadDoc resolve the right key
+  // Pin the storage key to the name the embedding page passed, so editing `!name`
+  // in the panel never writes to (or orphans) a different key.
+  state.storageKeyBase = 'fb-' + (config.project.name || 'default');
 
-  // Flow-ML in localStorage is the source of truth: if present, it supersedes the
-  // passed config (positions/hidden/arrows all come from the parsed doc).
+  // Flow-ML in localStorage is the source of truth: if present (and the caller did
+  // NOT pass an explicit config.state), it supersedes the passed config — an
+  // intentionally-empty doc (0 screens, no parse errors) is honored too.
   var savedDoc = loadDoc();
-  if (savedDoc) {
+  if (savedDoc && !config.state) {
     var parsedDoc = parse(savedDoc);
-    if (parsedDoc.project.screens && parsedDoc.project.screens.length) {
+    if (parsedDoc.project.screens.length || parsedDoc.errors.length === 0) {
       var docHidden: Record<string, boolean> = {};
       parsedDoc.project.screens.forEach(function (s) { if (s.hidden) docHidden[s.id] = true; });
       config = {
@@ -135,9 +137,6 @@ export function init(config: FlowConfig): void {
   state.creatingArrow = null;
   state.anchorDotsEls = [];
   state.layoutIndex = 0;
-
-  // Keep original arrows for reset
-  state._originalArrows = JSON.parse(JSON.stringify(state.project.arrows || []));
 
   // config.state takes priority over everything
   var configState = config.state || null;
@@ -161,13 +160,7 @@ export function init(config: FlowConfig): void {
   }
 
   // Derive hiddenEpics from hiddenScreens: an epic is "hidden" if all its screens are hidden
-  var allScreens = config.project.screens || [];
-  (config.project.epics || []).forEach(function (epic: Epic) {
-    var epicScreens = allScreens.filter(function (s: Screen) { return s.epic === epic.id; });
-    if (epicScreens.length > 0 && epicScreens.every(function (s: Screen) { return state.hiddenScreens[s.id]; })) {
-      state.hiddenEpics[epic.id] = true;
-    }
-  });
+  recomputeHiddenEpics();
 
   // Resolve container
   var containerEl: HTMLElement;
@@ -237,7 +230,11 @@ export function init(config: FlowConfig): void {
   var hasSavedPositions = false;
   if (configState && configState.positions) {
     hasSavedPositions = true;
-    state.positions = JSON.parse(JSON.stringify(configState.positions));
+    // Merge over auto-layout so screens absent from the saved map keep a sensible
+    // slot instead of stacking at {100,100}.
+    screens.forEach(function (s) {
+      if (configState.positions[s.id]) state.positions[s.id] = configState.positions[s.id];
+    });
   } else {
     var savedPos = loadPositions();
     if (savedPos) {
@@ -322,6 +319,17 @@ export function init(config: FlowConfig): void {
     drawArrows();
     freezeArrowSides();
     if (state.commit) state.commit(); // refresh the panel with the settled positions
+
+    // First-load migration: once the legacy deltas have been folded into the
+    // Flow-ML doc (just written by commit), drop the orphaned legacy keys.
+    if (!savedDoc) {
+      try {
+        var mk = storageKey();
+        localStorage.removeItem(mk + '-pos');
+        localStorage.removeItem(mk + '-hidden');
+        localStorage.removeItem(mk + '-arrowmods');
+      } catch (e) { /* ignore */ }
+    }
   });
 }
 

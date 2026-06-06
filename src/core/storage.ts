@@ -1,6 +1,8 @@
 import { state } from './state';
 
 export function storageKey() {
+  // Pinned at init() so editing `!name` in the panel never orphans the saved doc.
+  if (state.storageKeyBase) return state.storageKeyBase;
   return 'fb-' + (state.project ? state.project.name : 'default');
 }
 
