@@ -4,6 +4,15 @@
   "description": "Standalone JS+CSS library to create interactive storyboards with screens connected by SVG arrows",
   "main": "flowboard.js",
   "style": "flowboard.css",
+  "bin": "scripts/install-skill.mjs",
+  "files": [
+    "flowboard.js",
+    "flowboard.min.js",
+    "flowboard.css",
+    "skills",
+    "scripts/install-skill.mjs",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "concurrently -k \"node scripts/dev-watch.cjs\" \"serve . -l 3000\"",
