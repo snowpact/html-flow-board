@@ -257,7 +257,7 @@ describe('context menu', () => {
   });
 
   it('a submenu item reveals its children on hover', () => {
-    showContextMenu(0, 0, [{ label: 'Créer', submenu: [{ label: 'form' }, { label: 'list' }] }]);
+    showContextMenu(0, 0, [{ label: 'Create', submenu: [{ label: 'form' }, { label: 'list' }] }]);
     const item = document.querySelector('.fb-ctx-item.fb-ctx-has-sub');
     expect(item).toBeTruthy();
     item.dispatchEvent(new window.MouseEvent('mouseenter', { bubbles: false }));
@@ -276,11 +276,11 @@ describe('context menu', () => {
 describe('preset create + modify', () => {
   beforeEach(() => { closeContextMenu(); closePresetPicker(); initBoard(); });
 
-  it('right-click → "Créer un écran" → preset picker (preview grid)', () => {
+  it('right-click → "Create screen" → preset picker (preview grid)', () => {
     state.wrapperEl.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
     const menu = document.querySelector('.fb-ctx-menu');
     expect(menu).toBeTruthy();
-    expect(menu.textContent).toContain('Créer un écran');
+    expect(menu.textContent).toContain('Create screen');
     menu.querySelector('.fb-ctx-item').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     const picker = document.querySelector('.fb-preset-picker');
     expect(picker).toBeTruthy();
@@ -294,7 +294,7 @@ describe('preset create + modify', () => {
     expect(state.project.screens.length).toBe(before + 1);
     const s = state.project.screens.find((x) => x.id === id);
     expect(s.preset).toBe('form');
-    expect(s.title).toBe('Écran ' + id.replace('screen-', '')); // title number aligns with id
+    expect(s.title).toBe('Screen ' + id.replace('screen-', '')); // title number aligns with id
     expect(state.positions[id]).toBeTruthy();
     expect(state.screenEls[id].querySelector('.fb-skel-form')).toBeTruthy();
   });
@@ -334,7 +334,7 @@ describe('preset create + modify', () => {
     state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
     const btns = state.container.querySelectorAll('.fb-screen-popup-format');
     expect(btns.length).toBe(3);
-    expect(Array.prototype.map.call(btns, (b) => b.textContent)).toEqual(['Desktop', 'Phone', 'Fluide']);
+    expect(Array.prototype.map.call(btns, (b) => b.textContent)).toEqual(['Desktop', 'Phone', 'Fluid']);
   });
 
   it('a mousedown inside the popup does not start a pan that closes it', () => {
@@ -345,10 +345,10 @@ describe('preset create + modify', () => {
     expect(state.container.querySelector('.fb-screen-popup')).toBeTruthy(); // popup still open
   });
 
-  it('the popup "Modifier le layout" button opens the preset picker', () => {
+  it('the popup "Change layout" button opens the preset picker', () => {
     state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
     const btns = state.container.querySelectorAll('.fb-screen-popup-btn');
-    const layoutBtn = Array.prototype.find.call(btns, (b) => b.textContent === 'Modifier le layout');
+    const layoutBtn = Array.prototype.find.call(btns, (b) => b.textContent === 'Change layout');
     expect(layoutBtn).toBeTruthy();
     layoutBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
     expect(document.querySelector('.fb-preset-picker')).toBeTruthy();

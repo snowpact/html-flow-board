@@ -48,7 +48,7 @@ export function cycleLayout(): void {
 }
 
 export function doReset(): void {
-  if (!confirm('Remettre la disposition par défaut ?')) return;
+  if (!confirm('Reset to the default layout?')) return;
 
   var key = storageKey();
   try {

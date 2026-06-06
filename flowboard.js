@@ -377,6 +377,24 @@
     drawArrows();
   }
 
+  // src/render/icons.ts
+  function icon(inner, size) {
+    var s = size || 16;
+    return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + "</svg>";
+  }
+  var ICON_EYE = icon('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>');
+  var ICON_EYE_OFF = icon('<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>');
+  var ICON_LAYOUT = icon('<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>');
+  var ICON_TAG = icon('<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>');
+  var ICON_TRASH = icon('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>');
+  var ICON_PLUS = icon('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>');
+  var ICON_SWAP = icon('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>');
+  var ICON_LINE_SOLID = icon('<line x1="3" y1="12" x2="21" y2="12"/>');
+  var ICON_LINE_DASHED = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
+  var ICON_DESKTOP = icon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>');
+  var ICON_PHONE = icon('<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>');
+  var ICON_FLUID = icon('<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>');
+
   // src/render/presets.ts
   var bar = '<i class="fb-skel-bar"></i>';
   var box = '<i class="fb-skel-box"></i>';
@@ -514,8 +532,8 @@
     hdr.innerHTML = "<span>" + escapeHtml(screenData.title) + "</span>";
     var toggleBtn = document.createElement("button");
     toggleBtn.className = "fb-screen-toggle";
-    toggleBtn.title = "Masquer cet \xE9cran";
-    toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    toggleBtn.title = "Hide this screen";
+    toggleBtn.innerHTML = ICON_EYE;
     toggleBtn.addEventListener("click", function(e) {
       e.stopPropagation();
       toggleScreen(screenData.id);
@@ -754,8 +772,8 @@
     popup.appendChild(popupSep);
     var swapBtn = document.createElement("button");
     swapBtn.className = "fb-arrow-popup-btn";
-    swapBtn.title = "Inverser la direction";
-    swapBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+    swapBtn.title = "Reverse direction";
+    swapBtn.innerHTML = ICON_SWAP;
     swapBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       swapArrowDirection(arrowIndex);
@@ -764,12 +782,8 @@
     popup.appendChild(swapBtn);
     var styleBtn = document.createElement("button");
     styleBtn.className = "fb-arrow-popup-btn";
-    styleBtn.title = arrow.dashed ? "Trait plein" : "Trait pointill\xE9";
-    if (arrow.dashed) {
-      styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-    } else {
-      styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-    }
+    styleBtn.title = arrow.dashed ? "Make solid" : "Make dashed";
+    styleBtn.innerHTML = arrow.dashed ? ICON_LINE_SOLID : ICON_LINE_DASHED;
     styleBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       toggleArrowStyle(arrowIndex);
@@ -778,8 +792,8 @@
     popup.appendChild(styleBtn);
     var deleteBtn = document.createElement("button");
     deleteBtn.className = "fb-arrow-popup-btn fb-arrow-popup-delete";
-    deleteBtn.title = "Supprimer la fl\xE8che";
-    deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    deleteBtn.title = "Delete arrow";
+    deleteBtn.innerHTML = ICON_TRASH;
     deleteBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       deleteArrow(arrowIndex);
@@ -864,9 +878,21 @@
     if (!el) return;
     var popup = document.createElement("div");
     popup.className = "fb-screen-popup";
+    function mkBtn(svg, text, danger) {
+      var b = document.createElement("button");
+      b.className = "fb-screen-popup-btn" + (danger ? " fb-screen-popup-delete" : "");
+      var ic = document.createElement("span");
+      ic.className = "fb-popup-btn-icon";
+      ic.innerHTML = svg;
+      var lb = document.createElement("span");
+      lb.textContent = text;
+      b.appendChild(ic);
+      b.appendChild(lb);
+      return b;
+    }
     var titleLabel = document.createElement("div");
     titleLabel.className = "fb-screen-popup-label";
-    titleLabel.textContent = "Titre";
+    titleLabel.textContent = "Title";
     popup.appendChild(titleLabel);
     var titleInput = document.createElement("input");
     titleInput.type = "text";
@@ -911,14 +937,25 @@
     var fmtRow = document.createElement("div");
     fmtRow.className = "fb-screen-popup-formats";
     var currentFmt = screenData.format || "";
-    var fmtNames = { desktop: "Desktop", phone: "Phone", fluid: "Fluide" };
-    ["desktop", "phone", "fluid"].forEach(function(fmt) {
+    var fmtDefs = [
+      { id: "desktop", label: "Desktop", icon: ICON_DESKTOP },
+      { id: "phone", label: "Phone", icon: ICON_PHONE },
+      { id: "fluid", label: "Fluid", icon: ICON_FLUID }
+    ];
+    fmtDefs.forEach(function(def) {
       var btn = document.createElement("button");
-      btn.className = "fb-screen-popup-format" + (fmt === currentFmt ? " active" : "");
-      btn.textContent = fmtNames[fmt];
+      btn.className = "fb-screen-popup-format" + (def.id === currentFmt ? " active" : "");
+      var fic = document.createElement("span");
+      fic.className = "fb-fmt-icon";
+      fic.innerHTML = def.icon;
+      var flb = document.createElement("span");
+      flb.className = "fb-fmt-label";
+      flb.textContent = def.label;
+      btn.appendChild(fic);
+      btn.appendChild(flb);
       btn.addEventListener("click", function(ev) {
         ev.stopPropagation();
-        setScreenFormat(screenId, fmt);
+        setScreenFormat(screenId, def.id);
         closeScreenPopup();
       });
       fmtRow.appendChild(btn);
@@ -927,18 +964,15 @@
     var sep3 = document.createElement("div");
     sep3.className = "fb-screen-popup-sep";
     popup.appendChild(sep3);
-    var hideBtn = document.createElement("button");
-    hideBtn.className = "fb-screen-popup-btn";
-    hideBtn.textContent = state.hiddenScreens[screenId] ? "Afficher" : "Masquer";
+    var hidden = !!state.hiddenScreens[screenId];
+    var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? "Show" : "Hide");
     hideBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       toggleScreen(screenId);
       closeScreenPopup();
     });
     popup.appendChild(hideBtn);
-    var layoutBtn = document.createElement("button");
-    layoutBtn.className = "fb-screen-popup-btn";
-    layoutBtn.textContent = "Modifier le layout";
+    var layoutBtn = mkBtn(ICON_LAYOUT, "Change layout");
     layoutBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       var cx = ev.clientX;
@@ -950,13 +984,11 @@
       }, current);
     });
     popup.appendChild(layoutBtn);
-    var deleteScreenBtn = document.createElement("button");
-    deleteScreenBtn.className = "fb-screen-popup-btn fb-screen-popup-delete";
-    deleteScreenBtn.textContent = "Supprimer";
+    var deleteScreenBtn = mkBtn(ICON_TRASH, "Delete", true);
     deleteScreenBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       closeScreenPopup();
-      if (confirm("Supprimer cet \xE9cran et ses fl\xE8ches ?")) deleteScreen(screenId);
+      if (confirm("Delete this screen and its arrows?")) deleteScreen(screenId);
     });
     popup.appendChild(deleteScreenBtn);
     var wrapperRect = state.wrapperEl.getBoundingClientRect();
@@ -1536,7 +1568,13 @@
     menu.className = "fb-ctx-menu";
     items.forEach(function(item) {
       var row = document.createElement("div");
-      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
+      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.danger ? " fb-ctx-danger" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
+      if (item.icon) {
+        var ic = document.createElement("span");
+        ic.className = "fb-ctx-icon";
+        ic.innerHTML = item.icon;
+        row.appendChild(ic);
+      }
       var label = document.createElement("span");
       label.className = "fb-ctx-label";
       label.textContent = item.label;
@@ -1622,7 +1660,7 @@
     var y = Math.max(0, Math.min(CANVAS_H - 50, (clientY - wrapperRect.top - state.panY) / state.zoom));
     if (!state.project.screens) state.project.screens = [];
     var id = uniqueId();
-    var screen = { id, title: "\xC9cran " + createCounter, preset, format: "desktop" };
+    var screen = { id, title: "Screen " + createCounter, preset, format: "desktop" };
     state.project.screens.push(screen);
     state.positions[id] = { x, y };
     var el = renderScreen(screen);
@@ -1642,7 +1680,8 @@
       var cx = e.clientX;
       var cy = e.clientY;
       showContextMenu(cx, cy, [{
-        label: "Cr\xE9er un \xE9cran",
+        label: "Create screen",
+        icon: ICON_PLUS,
         onClick: function() {
           showPresetPicker(cx, cy, function(preset) {
             createScreen(preset, cx, cy);
@@ -2153,7 +2192,7 @@
     actions.className = "fb-panel-actions";
     var copyBtn = document.createElement("button");
     copyBtn.className = "fb-panel-copy-btn";
-    copyBtn.title = "Copier le Flow-ML";
+    copyBtn.title = "Copy Flow-ML";
     copyBtn.innerHTML = COPY_ICON;
     copyBtn.addEventListener("click", function() {
       copyPanel(copyBtn);
@@ -2161,13 +2200,13 @@
     actions.appendChild(copyBtn);
     var helpBtn = document.createElement("button");
     helpBtn.className = "fb-panel-help-btn";
-    helpBtn.title = "Aide \u2014 syntaxe Flow-ML";
+    helpBtn.title = "Help \u2014 Flow-ML syntax";
     helpBtn.textContent = "?";
     helpBtn.addEventListener("click", togglePanelHelp);
     actions.appendChild(helpBtn);
     var collapse = document.createElement("button");
     collapse.className = "fb-panel-collapse";
-    collapse.title = "R\xE9duire le panneau";
+    collapse.title = "Collapse panel";
     collapse.textContent = "\u2039";
     collapse.addEventListener("click", togglePanel);
     actions.appendChild(collapse);
@@ -2203,7 +2242,7 @@
     panel.appendChild(renderPanelHelp());
     var reopen = document.createElement("button");
     reopen.className = "fb-panel-reopen";
-    reopen.title = "Ouvrir Flow-ML";
+    reopen.title = "Open Flow-ML";
     reopen.textContent = "\u203A";
     reopen.addEventListener("click", togglePanel);
     panel.appendChild(reopen);
@@ -2299,16 +2338,16 @@
     help.appendChild(h);
     var intro = document.createElement("p");
     intro.className = "fb-help-intro";
-    intro.textContent = "Le texte est la source de v\xE9rit\xE9 : \xE9ditez \xE0 gauche et le diagramme suit \u2014 et tout ce que vous faites sur le diagramme r\xE9\xE9crit le texte (sync bidirectionnelle).";
+    intro.textContent = "The text is the source of truth: edit on the left and the diagram follows \u2014 and everything you do on the diagram rewrites the text (two-way sync).";
     help.appendChild(intro);
     var rows = [
-      ["!name = Mon app", "nom du projet"],
-      ["@auth, t=Authentification, c=#6366f1", "epic \u2014 un groupe (couleur c=)"],
-      [":login, t=Login, p=form, f=phone, e=auth", "\xE9cran \u2014 pr\xE9fixe \xAB : \xBB (titre, preset, format, epic)"],
-      [":login, x=120, y=80, h", "position (x,y) \xB7 h = masqu\xE9"],
-      ["login -> home", "fl\xE8che"],
-      ["login --> home, l=ok", "fl\xE8che pointill\xE9e + label"],
-      ["# un commentaire", "commentaire (ignor\xE9)"]
+      ["!name = My app", "project name"],
+      ["@auth, t=Authentication, c=#6366f1", "epic \u2014 a group (color c=)"],
+      [":login, t=Login, p=form, f=phone, e=auth", 'screen \u2014 ":" prefix (title, preset, format, epic)'],
+      [":login, x=120, y=80, h", "position (x,y) \xB7 h = hidden"],
+      ["login -> home", "arrow"],
+      ["login --> home, l=ok", "dashed arrow + label"],
+      ["# a comment", "comment (ignored)"]
     ];
     var grid = document.createElement("div");
     grid.className = "fb-help-grid";
@@ -2328,29 +2367,29 @@
     help.appendChild(grid);
     var fenceTitle = document.createElement("div");
     fenceTitle.className = "fb-help-subtitle";
-    fenceTitle.textContent = "HTML personnalis\xE9 (preset par d\xE9faut)";
+    fenceTitle.textContent = "Custom HTML (default preset)";
     help.appendChild(fenceTitle);
     var fence = document.createElement("code");
     fence.className = "fb-help-ex fb-help-block";
-    fence.innerHTML = highlight(":home, t=Accueil\n```\n<h1>Bonjour</h1>\n```");
+    fence.innerHTML = highlight(":home, t=Home\n```\n<h1>Hello</h1>\n```");
     help.appendChild(fence);
     var keysTitle = document.createElement("div");
     keysTitle.className = "fb-help-subtitle";
-    keysTitle.textContent = "Attributs";
+    keysTitle.textContent = "Attributes";
     help.appendChild(keysTitle);
     var keys = document.createElement("div");
     keys.className = "fb-help-keys";
     var defs = [
-      ["t", "titre"],
+      ["t", "title"],
       ["p", "preset"],
       ["f", "format"],
       ["e", "epic"],
       ["n", "note"],
       ["x y", "position"],
-      ["h", "masqu\xE9"],
-      ["l", "label fl\xE8che"],
-      ["fs ts", "c\xF4t\xE9s fl\xE8che"],
-      ["c", "couleur"]
+      ["h", "hidden"],
+      ["l", "arrow label"],
+      ["fs ts", "arrow sides"],
+      ["c", "color"]
     ];
     defs.forEach(function(d) {
       var span = document.createElement("span");
@@ -2671,7 +2710,7 @@
     var layoutBtn = document.createElement("button");
     layoutBtn.className = "fb-action-btn";
     layoutBtn.id = "fb-layout-btn";
-    layoutBtn.title = "Changer la disposition";
+    layoutBtn.title = "Change layout";
     layoutBtn.textContent = "Auto-Layout (" + LAYOUT_STRATEGIES[state.layoutIndex].name + ")";
     layoutBtn.addEventListener("click", cycleLayout);
     right.appendChild(layoutBtn);
@@ -2687,7 +2726,7 @@
     var resetBtn = document.createElement("button");
     resetBtn.className = "fb-action-btn";
     resetBtn.textContent = "Reset";
-    resetBtn.title = "Remettre la disposition par d\xE9faut";
+    resetBtn.title = "Reset to the default layout";
     resetBtn.addEventListener("click", doReset);
     right.appendChild(resetBtn);
     header.appendChild(right);
@@ -2982,7 +3021,7 @@
     var selectBtn = document.createElement("button");
     selectBtn.className = "fb-mode-btn";
     selectBtn.dataset.mode = "select";
-    selectBtn.title = "Curseur \u2014 s\xE9lection (V)";
+    selectBtn.title = "Cursor \u2014 select (V)";
     selectBtn.innerHTML = ICON_CURSOR;
     selectBtn.addEventListener("click", function() {
       setMode("select");
@@ -2991,7 +3030,7 @@
     var dragBtn = document.createElement("button");
     dragBtn.className = "fb-mode-btn";
     dragBtn.dataset.mode = "drag";
-    dragBtn.title = "D\xE9placement \u2014 pan (H)";
+    dragBtn.title = "Move \u2014 pan (H)";
     dragBtn.innerHTML = ICON_HAND;
     dragBtn.addEventListener("click", function() {
       setMode("drag");
@@ -3026,7 +3065,7 @@
     fitToContent();
   }
   function doReset() {
-    if (!confirm("Remettre la disposition par d\xE9faut ?")) return;
+    if (!confirm("Reset to the default layout?")) return;
     var key = storageKey();
     try {
       localStorage.removeItem(key + "-pos");

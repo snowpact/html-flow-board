@@ -5,6 +5,7 @@ import { escapeHtml } from '../core/geometry';
 import { getEpic, isFluidFormat, screenHeight, screenWidth, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
+import { ICON_EYE } from './icons';
 import { showScreenPopup } from './popups';
 import { isCustomPreset, skeletonHtml } from './presets';
 
@@ -68,8 +69,8 @@ export function renderScreen(screenData: Screen): HTMLElement {
 
   var toggleBtn = document.createElement('button');
   toggleBtn.className = 'fb-screen-toggle';
-  toggleBtn.title = 'Masquer cet écran';
-  toggleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  toggleBtn.title = 'Hide this screen';
+  toggleBtn.innerHTML = ICON_EYE;
   toggleBtn.addEventListener('click', function(e: MouseEvent) {
     e.stopPropagation();
     toggleScreen(screenData.id);

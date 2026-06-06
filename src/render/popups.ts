@@ -3,6 +3,10 @@ import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
 import { deleteScreen, setScreenFormat, setScreenPreset, toggleScreen } from './screen';
 import { showPresetPicker } from './preset-picker';
+import {
+  ICON_DESKTOP, ICON_EYE, ICON_EYE_OFF, ICON_FLUID, ICON_LAYOUT, ICON_LINE_DASHED,
+  ICON_LINE_SOLID, ICON_PHONE, ICON_SWAP, ICON_TRASH,
+} from './icons';
 import { Arrow, Format, PresetId, Screen } from '../core/types';
 
 export function handlePopupOutsideClick(e: MouseEvent): void {
@@ -67,8 +71,8 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Swap direction
   var swapBtn = document.createElement('button');
   swapBtn.className = 'fb-arrow-popup-btn';
-  swapBtn.title = 'Inverser la direction';
-  swapBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+  swapBtn.title = 'Reverse direction';
+  swapBtn.innerHTML = ICON_SWAP;
   swapBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     swapArrowDirection(arrowIndex);
@@ -79,12 +83,8 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Toggle dashed/solid
   var styleBtn = document.createElement('button');
   styleBtn.className = 'fb-arrow-popup-btn';
-  styleBtn.title = arrow.dashed ? 'Trait plein' : 'Trait pointillé';
-  if (arrow.dashed) {
-    styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-  } else {
-    styleBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
-  }
+  styleBtn.title = arrow.dashed ? 'Make solid' : 'Make dashed';
+  styleBtn.innerHTML = arrow.dashed ? ICON_LINE_SOLID : ICON_LINE_DASHED;
   styleBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     toggleArrowStyle(arrowIndex);
@@ -95,8 +95,8 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   // Delete
   var deleteBtn = document.createElement('button');
   deleteBtn.className = 'fb-arrow-popup-btn fb-arrow-popup-delete';
-  deleteBtn.title = 'Supprimer la flèche';
-  deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+  deleteBtn.title = 'Delete arrow';
+  deleteBtn.innerHTML = ICON_TRASH;
   deleteBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     deleteArrow(arrowIndex);
@@ -205,10 +205,24 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   var popup = document.createElement('div');
   popup.className = 'fb-screen-popup';
 
+  // Icon + label action button (shared look across the popup).
+  function mkBtn(svg: string, text: string, danger?: boolean): HTMLButtonElement {
+    var b = document.createElement('button');
+    b.className = 'fb-screen-popup-btn' + (danger ? ' fb-screen-popup-delete' : '');
+    var ic = document.createElement('span');
+    ic.className = 'fb-popup-btn-icon';
+    ic.innerHTML = svg;
+    var lb = document.createElement('span');
+    lb.textContent = text;
+    b.appendChild(ic);
+    b.appendChild(lb);
+    return b;
+  }
+
   // -- Title input --
   var titleLabel = document.createElement('div');
   titleLabel.className = 'fb-screen-popup-label';
-  titleLabel.textContent = 'Titre';
+  titleLabel.textContent = 'Title';
   popup.appendChild(titleLabel);
 
   var titleInput = document.createElement('input');
@@ -257,14 +271,25 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   var fmtRow = document.createElement('div');
   fmtRow.className = 'fb-screen-popup-formats';
   var currentFmt = screenData.format || '';
-  var fmtNames: Record<Format, string> = { desktop: 'Desktop', phone: 'Phone', fluid: 'Fluide' };
-  (['desktop', 'phone', 'fluid'] as Format[]).forEach(function (fmt: Format) {
+  var fmtDefs: { id: Format; label: string; icon: string }[] = [
+    { id: 'desktop', label: 'Desktop', icon: ICON_DESKTOP },
+    { id: 'phone', label: 'Phone', icon: ICON_PHONE },
+    { id: 'fluid', label: 'Fluid', icon: ICON_FLUID },
+  ];
+  fmtDefs.forEach(function (def) {
     var btn = document.createElement('button');
-    btn.className = 'fb-screen-popup-format' + (fmt === currentFmt ? ' active' : '');
-    btn.textContent = fmtNames[fmt];
+    btn.className = 'fb-screen-popup-format' + (def.id === currentFmt ? ' active' : '');
+    var fic = document.createElement('span');
+    fic.className = 'fb-fmt-icon';
+    fic.innerHTML = def.icon;
+    var flb = document.createElement('span');
+    flb.className = 'fb-fmt-label';
+    flb.textContent = def.label;
+    btn.appendChild(fic);
+    btn.appendChild(flb);
     btn.addEventListener('click', function (ev: MouseEvent) {
       ev.stopPropagation();
-      setScreenFormat(screenId, fmt);
+      setScreenFormat(screenId, def.id);
       closeScreenPopup();
     });
     fmtRow.appendChild(btn);
@@ -275,10 +300,9 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   sep3.className = 'fb-screen-popup-sep';
   popup.appendChild(sep3);
 
-  // -- Hide button --
-  var hideBtn = document.createElement('button');
-  hideBtn.className = 'fb-screen-popup-btn';
-  hideBtn.textContent = state.hiddenScreens[screenId] ? 'Afficher' : 'Masquer';
+  // -- Hide / Show --
+  var hidden = !!state.hiddenScreens[screenId];
+  var hideBtn = mkBtn(hidden ? ICON_EYE : ICON_EYE_OFF, hidden ? 'Show' : 'Hide');
   hideBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     toggleScreen(screenId);
@@ -286,10 +310,8 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   });
   popup.appendChild(hideBtn);
 
-  // -- Modifier le layout (preset) --
-  var layoutBtn = document.createElement('button');
-  layoutBtn.className = 'fb-screen-popup-btn';
-  layoutBtn.textContent = 'Modifier le layout';
+  // -- Change layout (preset) --
+  var layoutBtn = mkBtn(ICON_LAYOUT, 'Change layout');
   layoutBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     var cx = ev.clientX;
@@ -301,13 +323,11 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   popup.appendChild(layoutBtn);
 
   // -- Delete --
-  var deleteScreenBtn = document.createElement('button');
-  deleteScreenBtn.className = 'fb-screen-popup-btn fb-screen-popup-delete';
-  deleteScreenBtn.textContent = 'Supprimer';
+  var deleteScreenBtn = mkBtn(ICON_TRASH, 'Delete', true);
   deleteScreenBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     closeScreenPopup();
-    if (confirm('Supprimer cet écran et ses flèches ?')) deleteScreen(screenId);
+    if (confirm('Delete this screen and its arrows?')) deleteScreen(screenId);
   });
   popup.appendChild(deleteScreenBtn);
 

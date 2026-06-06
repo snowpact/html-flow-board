@@ -8,7 +8,7 @@ export function renderModeSwitch(): HTMLDivElement {
   var selectBtn = document.createElement('button');
   selectBtn.className = 'fb-mode-btn';
   selectBtn.dataset.mode = 'select';
-  selectBtn.title = 'Curseur — sélection (V)';
+  selectBtn.title = 'Cursor — select (V)';
   selectBtn.innerHTML = ICON_CURSOR;
   selectBtn.addEventListener('click', function () { setMode('select'); });
   sw.appendChild(selectBtn);
@@ -16,7 +16,7 @@ export function renderModeSwitch(): HTMLDivElement {
   var dragBtn = document.createElement('button');
   dragBtn.className = 'fb-mode-btn';
   dragBtn.dataset.mode = 'drag';
-  dragBtn.title = 'Déplacement — pan (H)';
+  dragBtn.title = 'Move — pan (H)';
   dragBtn.innerHTML = ICON_HAND;
   dragBtn.addEventListener('click', function () { setMode('drag'); });
   sw.appendChild(dragBtn);

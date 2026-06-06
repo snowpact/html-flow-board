@@ -1,0 +1,213 @@
+---
+name: flowboard
+description: Generate html-flow-board storyboard files for UI/UX wireframing. Use when user asks to create a flowboard, storyboard, wireframe, or screen flow.
+---
+
+# FlowBoard — HTML Storyboard Generator
+
+Generate interactive storyboard HTML files using the [html-flow-board](https://github.com/snowpact/html-flow-board) library.
+
+## What is html-flow-board
+
+A lightweight JS/CSS library that renders zoomable, pannable screen arrows from a JSON config. One HTML file = one complete storyboard with screens, epics, and navigation arrows.
+
+## Output Format
+
+Always produce a **single self-contained HTML file** with this structure:
+
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{Project Name} - Storyboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.css">
+  <script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.js"></script>
+</head>
+<body>
+<div id="flowboard"></div>
+<script>
+FlowBoard.init({
+  container: '#flowboard',
+  project: {
+    name: '{Project Name}',
+    epics: [ /* ... */ ],
+    screens: [ /* ... */ ],
+    arrows: [ /* ... */ ],
+  },
+});
+</script>
+</body>
+</html>
+```
+
+## Config Schema
+
+### Epics
+
+Group screens by feature/domain. Each epic gets a color in the legend and on its screen cards.
+
+```js
+epics: [
+  { id: 'auth',    label: 'Authentication', color: '#d97706' },
+  { id: 'home',    label: 'Home',           color: '#264653' },
+  { id: 'report',  label: 'Reports',        color: '#2A9D8F' },
+]
+```
+
+### Screens
+
+Each screen is a wireframe card on the board.
+
+```js
+{
+  id: 'login',              // unique ID (used in arrows)
+  title: 'Login',           // card header
+  epic: 'auth',             // links to epic.id
+  size: 'sm',               // 'sm' (mobile), 'md' (medium), 'lg' (desktop/wide)
+  notes: 'OTP login flow',  // subtitle/notes shown below title
+  content: `...`,           // HTML wireframe content (inline styles)
+}
+```
+
+### Flows
+
+Arrows connecting screens. Define navigation paths.
+
+```js
+arrows: [
+  { from: 'login', to: 'home', label: 'Login success' },
+  { from: 'home', to: 'report-create', label: 'New report', color: '#2A9D8F' },
+]
+```
+
+## CSS Utility Classes
+
+Use these inside `content` for consistent wireframe styling:
+
+| Class | Usage |
+|-------|-------|
+| `fb-text` | Base text. Add `title` for headings, `small` for smaller, `muted` for gray |
+| `fb-btn` | Button. Add `outline` for bordered variant |
+| `fb-input` | Input field placeholder |
+| `fb-card` | Bordered card container |
+| `fb-badge` | Status badge. Add `green`, `orange`, `red` for colors |
+| `fb-table` | Styled table with `thead`/`tbody` |
+| `fb-bar` | Top navigation bar |
+| `fb-row` | Horizontal flex row. Add `spread` for space-between |
+| `fb-img` | Image placeholder box |
+| `fb-icon` | Small colored circle icon |
+| `fb-stat-card` | Stat card with `.value` and `.label` children |
+| `fb-sep` | Horizontal separator line |
+| `fb-section-label` | Section title (small, uppercase, gray) |
+
+## Screen Size Guidelines
+
+- **`sm`** — Mobile screens (phone). ~180px wide. Good for: login, settings, simple forms, mobile app screens
+- **`md`** — Medium screens. ~280px wide. Good for: forms, detail views, dialogs
+- **`lg`** — Large/desktop screens. ~400px wide. Good for: dashboards, lists with sidebars, tables
+
+## Design Patterns
+
+### Mobile App Screen (sm)
+
+```html
+<div style="min-height:280px">
+  <!-- Status bar -->
+  <div class="fb-bar" style="display:flex; align-items:center; justify-content:space-between; padding:4px 8px">
+    <span style="font-size:8px">←</span>
+    <div class="fb-text" style="margin:0; font-weight:700; font-size:8px">Title</div>
+    <span style="font-size:8px">⋯</span>
+  </div>
+  <!-- Content -->
+  <div style="padding:8px">
+    <!-- ... -->
+  </div>
+  <!-- Bottom tab bar -->
+  <div style="display:flex; justify-content:space-around; padding:6px 0; border-top:1px solid #e5e7eb; margin-top:auto">
+    <div style="text-align:center; font-size:5px">🏠<br>Home</div>
+    <div style="text-align:center; font-size:5px">📋<br>Reports</div>
+    <div style="text-align:center; font-size:5px">👤<br>Profile</div>
+  </div>
+</div>
+```
+
+### Desktop Screen with Sidebar (lg)
+
+```html
+<div style="display:flex; min-height:220px">
+  <!-- Sidebar -->
+  <div style="width:60px; background:#264653; border-radius:4px; padding:6px 4px; margin-right:6px; flex-shrink:0">
+    <div style="width:28px; height:28px; background:rgba(255,255,255,0.15); border-radius:6px; margin:0 auto 8px"></div>
+    <div style="width:100%; height:22px; background:rgba(255,255,255,0.25); border-radius:4px; margin-bottom:3px; display:flex; align-items:center; justify-content:center; font-size:5px; color:#fff">Active</div>
+    <div style="width:100%; height:22px; background:rgba(255,255,255,0.1); border-radius:4px; margin-bottom:3px; display:flex; align-items:center; justify-content:center; font-size:5px; color:rgba(255,255,255,0.6)">Item</div>
+  </div>
+  <!-- Main content -->
+  <div style="flex:1; min-width:0">
+    <!-- ... -->
+  </div>
+</div>
+```
+
+### Form Screen (md)
+
+```html
+<div style="padding:12px; min-height:180px">
+  <div class="fb-text title" style="margin-bottom:8px">Form Title</div>
+  <div class="fb-text small" style="font-weight:600; margin-bottom:2px">Field Label</div>
+  <div class="fb-input">Placeholder text</div>
+  <div class="fb-sep"></div>
+  <div class="fb-btn" style="width:100%">Submit</div>
+</div>
+```
+
+## Workflow
+
+### Creating a new flowboard
+1. **Ask the user** what screens they need (or derive from screenshots/specs)
+2. **Define epics** first — group screens by feature domain
+3. **Create screens** with wireframe content using CSS utility classes
+4. **Add arrows** to show navigation between screens
+5. **Write the HTML file** to the project docs or .context directory
+6. **Tell the user** to open it in a browser
+
+### Updating from an exported init
+The flowboard UI has an **Export** button that outputs the full `FlowBoard.init({...})` JS call, including saved positions, zoom, pan, and arrow side adjustments.
+
+When the user provides an exported init JS:
+1. **Replace the entire `<script>` content** in the HTML file with the exported init
+2. **Keep the HTML boilerplate** (DOCTYPE, head with CSS/JS CDN links, container div)
+3. The exported init includes a `state` object with `positions`, `zoom`, `panX`, `panY`, `hiddenScreens` — always preserve it
+4. Arrow properties like `fromSide` and `toSide` are set by the user in the UI — never remove them
+
+HTML boilerplate to wrap the init:
+```html
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{Project Name} - Storyboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.css">
+  <script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.js"></script>
+</head>
+<body>
+<div id="app" style="width:100vw;height:100vh"></div>
+<script>
+{EXPORTED_INIT_JS}
+</script>
+</body>
+</html>
+```
+
+## Rules
+
+- All text in the wireframes should match the app's language (usually French for Signaleo)
+- Keep wireframes low-fidelity — no real images, use `fb-img` placeholders
+- Use inline styles for layout, CSS classes for components
+- Screen IDs must be unique and kebab-case
+- Every screen must have an `epic` that exists in the epics array
+- Arrows use `from`/`to` (screen IDs) + optional `label`, `fromSide`, `toSide`
+- Font sizes in wireframes: titles ~8-10px, body ~6-7px, small ~5px (the library scales everything)
+- Container must be `#app` with `width:100vw;height:100vh`

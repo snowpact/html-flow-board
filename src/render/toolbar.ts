@@ -135,7 +135,7 @@ export function renderToolbar(): HTMLElement {
   var layoutBtn = document.createElement('button');
   layoutBtn.className = 'fb-action-btn';
   layoutBtn.id = 'fb-layout-btn';
-  layoutBtn.title = 'Changer la disposition';
+  layoutBtn.title = 'Change layout';
   layoutBtn.textContent = 'Auto-Layout (' + LAYOUT_STRATEGIES[state.layoutIndex].name + ')';
   layoutBtn.addEventListener('click', cycleLayout);
   right.appendChild(layoutBtn);
@@ -157,7 +157,7 @@ export function renderToolbar(): HTMLElement {
   var resetBtn = document.createElement('button');
   resetBtn.className = 'fb-action-btn';
   resetBtn.textContent = 'Reset';
-  resetBtn.title = 'Remettre la disposition par défaut';
+  resetBtn.title = 'Reset to the default layout';
   resetBtn.addEventListener('click', doReset);
   right.appendChild(resetBtn);
 

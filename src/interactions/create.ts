@@ -4,6 +4,7 @@ import { CANVAS_H, CANVAS_W } from '../core/constants';
 import { state } from '../core/state';
 import { savePositions } from '../core/storage';
 import { showContextMenu } from '../render/context-menu';
+import { ICON_PLUS } from '../render/icons';
 import { showPresetPicker } from '../render/preset-picker';
 import { renderScreen } from '../render/screen';
 
@@ -35,7 +36,7 @@ export function createScreen(preset: PresetId, clientX: number, clientY: number)
 
   if (!state.project.screens) state.project.screens = [];
   var id = uniqueId(); // bumps createCounter; title shares the same number as the id
-  var screen: Screen = { id: id, title: 'Écran ' + createCounter, preset: preset, format: 'desktop' };
+  var screen: Screen = { id: id, title: 'Screen ' + createCounter, preset: preset, format: 'desktop' };
 
   state.project.screens.push(screen);
   state.positions[id] = { x: x, y: y };
@@ -47,7 +48,7 @@ export function createScreen(preset: PresetId, clientX: number, clientY: number)
   return id;
 }
 
-// Right-click on empty board background → "Créer ▸" submenu of presets.
+// Right-click on empty board background → "Create screen" → preset picker.
 export function initCreateMenu(): void {
   state.wrapperEl.addEventListener('contextmenu', function (e: MouseEvent) {
     if (state.creatingArrow) return;
@@ -59,7 +60,8 @@ export function initCreateMenu(): void {
     var cx = e.clientX;
     var cy = e.clientY;
     showContextMenu(cx, cy, [{
-      label: 'Créer un écran',
+      label: 'Create screen',
+      icon: ICON_PLUS,
       onClick: function () {
         showPresetPicker(cx, cy, function (preset) { createScreen(preset, cx, cy); });
       },

@@ -351,160 +351,132 @@
 }
 
 /* --- Arrow Contextual Popup --- */
+/* --- Shared menu surface (popups + context menu + preset picker) --- */
+.fb-arrow-popup, .fb-screen-popup, .fb-ctx-menu, .fb-preset-picker {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #fff;
+  border: 1px solid #d0d3d8;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(20, 28, 40, 0.16);
+  color: #2b3138;
+}
+
+/* Arrow popup — compact horizontal icon toolbar */
 .fb-arrow-popup {
   position: absolute;
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 4px;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  padding: 5px;
   z-index: 50;
 }
-
 .fb-arrow-popup-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   cursor: pointer;
-  font-size: 16px;
-  color: #555;
-  transition: background 0.15s, color 0.15s;
+  color: #5b636e;
   padding: 0;
-  line-height: 1;
+  transition: background 0.15s, color 0.15s;
 }
-
-.fb-arrow-popup-btn:hover {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.fb-arrow-popup-delete:hover {
-  background: #fee2e2;
-  color: #e74c3c;
-}
-
+.fb-arrow-popup-btn:hover { background: #eef0f3; color: #2b3138; }
+.fb-arrow-popup-delete:hover { background: #fef2f2; color: #dc2626; }
 .fb-arrow-popup-input {
-  width: 90px;
-  height: 26px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 0 6px;
-  font-size: 12px;
+  width: 96px;
+  height: 28px;
+  border: 1px solid #dfe3e8;
+  border-radius: 7px;
+  padding: 0 8px;
+  font-size: 13px;
   font-family: inherit;
   outline: none;
-  color: #333;
+  color: #2b3138;
 }
+.fb-arrow-popup-input:focus { border-color: #6366f1; }
+.fb-arrow-popup-sep { width: 1px; height: 20px; background: #eef1f4; margin: 0 3px; }
 
-.fb-arrow-popup-input:focus {
-  border-color: #2A9D8F;
-}
-
-.fb-arrow-popup-sep {
-  width: 1px;
-  height: 20px;
-  background: #e0e0e0;
-  margin: 0 2px;
-}
-
-/* --- Screen Contextual Popup --- */
+/* --- Screen contextual popup — vertical menu (title + format + actions) --- */
 .fb-screen-popup {
   position: absolute;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
-  min-width: 150px;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  gap: 5px;
+  padding: 6px;
+  min-width: 188px;
   z-index: 50;
 }
-
 .fb-screen-popup-label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #888;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #9aa3af;
+  padding: 4px 6px 0;
 }
-
-.fb-screen-popup-formats {
-  display: flex;
-  gap: 4px;
-}
-
+.fb-screen-popup-formats { display: flex; gap: 5px; padding: 0 2px; }
 .fb-screen-popup-format {
   flex: 1;
-  height: 28px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  background: transparent;
-  font-size: 11px;
-  font-weight: 600;
-  color: #555;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: 1px solid #e1e4e9;
+  border-radius: 8px;
+  background: #fff;
+  color: #5b636e;
   cursor: pointer;
+  font-family: inherit;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-
-.fb-screen-popup-format:hover {
-  background: #f0f0f0;
-}
-
-.fb-screen-popup-format.active {
-  background: #2d7ef7;
-  color: #fff;
-  border-color: #2d7ef7;
-}
-
-.fb-screen-popup-sep {
-  height: 1px;
-  background: #e0e0e0;
-}
-
+.fb-screen-popup-format .fb-fmt-label { font-size: 10px; font-weight: 600; }
+.fb-screen-popup-format:hover { background: #f3f4f6; }
+.fb-screen-popup-format.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+.fb-screen-popup-sep { height: 1px; background: #eef1f4; margin: 3px 0; }
 .fb-screen-popup-input {
   width: 100%;
-  height: 28px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 0 6px;
-  font-size: 12px;
+  height: 30px;
+  box-sizing: border-box;
+  border: 1px solid #dfe3e8;
+  border-radius: 7px;
+  padding: 0 8px;
+  font-size: 13px;
   font-family: inherit;
   outline: none;
-  color: #333;
-  box-sizing: border-box;
+  color: #2b3138;
 }
-
-.fb-screen-popup-input:focus {
-  border-color: #2A9D8F;
-}
-
+.fb-screen-popup-input:focus { border-color: #6366f1; }
 .fb-screen-popup-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   width: 100%;
   text-align: left;
-  padding: 5px 8px;
+  padding: 7px 9px;
   border: none;
   background: transparent;
   cursor: pointer;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: 7px;
+  font-size: 13px;
   font-family: inherit;
-  color: #555;
+  color: #2b3138;
   transition: background 0.15s;
 }
-
-.fb-screen-popup-btn:hover {
-  background: #f0f0f0;
-}
-
+.fb-screen-popup-btn:hover { background: #eef0f3; }
 .fb-screen-popup-delete { color: #dc2626; }
 .fb-screen-popup-delete:hover { background: #fef2f2; }
+
+/* Icons inside popup buttons — muted, follow the button color on hover/danger */
+.fb-popup-btn-icon, .fb-fmt-icon { display: inline-flex; color: #97a0ad; }
+.fb-popup-btn-icon { flex: none; }
+.fb-screen-popup-btn:hover .fb-popup-btn-icon { color: #5b636e; }
+.fb-screen-popup-delete .fb-popup-btn-icon { color: #dc2626; }
+.fb-screen-popup-format.active .fb-fmt-icon { color: #fff; }
 
 /* --- Anchor Dots --- */
 .fb-anchor-dot {
@@ -1103,16 +1075,21 @@
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 10px;
-  border-radius: 5px;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
 }
 .fb-ctx-item:hover { background: #eef0f3; }
+.fb-ctx-icon { display: inline-flex; flex: none; color: #97a0ad; }
+.fb-ctx-item:hover .fb-ctx-icon { color: #5b636e; }
+.fb-ctx-label { flex: 1; }
 .fb-ctx-active { color: #2d7ef7; font-weight: 600; }
 .fb-ctx-active::after { content: '✓'; margin-left: 8px; }
+.fb-ctx-danger { color: #dc2626; }
+.fb-ctx-danger .fb-ctx-icon { color: #dc2626; }
+.fb-ctx-danger:hover { background: #fef2f2; }
 .fb-ctx-caret { color: #97a0ad; font-size: 11px; }
 .fb-ctx-sub {
   position: absolute;

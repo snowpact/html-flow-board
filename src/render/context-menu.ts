@@ -1,12 +1,14 @@
 // Reusable cursor-positioned menu with one level of submenu. Single instance:
 // opening a new one closes the previous. Dismisses on outside click / Escape.
-// Used by S2 (Créer, Modifier le layout) and later S3 (toolbar dropdown).
+// Used by the board "Create screen" menu and the screen "Change epic" menu.
 
 export interface CtxItem {
   label: string;
   onClick?: () => void;
   submenu?: CtxItem[];
   active?: boolean;
+  icon?: string;     // inline SVG (see icons.ts)
+  danger?: boolean;  // red styling for destructive actions
 }
 
 var openRoot: HTMLElement | null = null;
@@ -30,7 +32,15 @@ function buildMenu(items: CtxItem[]): HTMLElement {
     var row = document.createElement('div');
     row.className = 'fb-ctx-item'
       + (item.active ? ' fb-ctx-active' : '')
+      + (item.danger ? ' fb-ctx-danger' : '')
       + (item.submenu ? ' fb-ctx-has-sub' : '');
+
+    if (item.icon) {
+      var ic = document.createElement('span');
+      ic.className = 'fb-ctx-icon';
+      ic.innerHTML = item.icon;
+      row.appendChild(ic);
+    }
 
     var label = document.createElement('span');
     label.className = 'fb-ctx-label';

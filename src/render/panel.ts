@@ -28,19 +28,19 @@ export function renderPanel(): HTMLElement {
   actions.className = 'fb-panel-actions';
   var copyBtn = document.createElement('button');
   copyBtn.className = 'fb-panel-copy-btn';
-  copyBtn.title = 'Copier le Flow-ML';
+  copyBtn.title = 'Copy Flow-ML';
   copyBtn.innerHTML = COPY_ICON;
   copyBtn.addEventListener('click', function () { copyPanel(copyBtn); });
   actions.appendChild(copyBtn);
   var helpBtn = document.createElement('button');
   helpBtn.className = 'fb-panel-help-btn';
-  helpBtn.title = 'Aide — syntaxe Flow-ML';
+  helpBtn.title = 'Help — Flow-ML syntax';
   helpBtn.textContent = '?';
   helpBtn.addEventListener('click', togglePanelHelp);
   actions.appendChild(helpBtn);
   var collapse = document.createElement('button');
   collapse.className = 'fb-panel-collapse';
-  collapse.title = 'Réduire le panneau';
+  collapse.title = 'Collapse panel';
   collapse.textContent = '‹';
   collapse.addEventListener('click', togglePanel);
   actions.appendChild(collapse);
@@ -87,7 +87,7 @@ export function renderPanel(): HTMLElement {
 
   var reopen = document.createElement('button');
   reopen.className = 'fb-panel-reopen';
-  reopen.title = 'Ouvrir Flow-ML';
+  reopen.title = 'Open Flow-ML';
   reopen.textContent = '›';
   reopen.addEventListener('click', togglePanel);
   panel.appendChild(reopen);
@@ -199,18 +199,18 @@ function renderPanelHelp(): HTMLElement {
 
   var intro = document.createElement('p');
   intro.className = 'fb-help-intro';
-  intro.textContent = 'Le texte est la source de vérité : éditez à gauche et le diagramme suit — '
-    + 'et tout ce que vous faites sur le diagramme réécrit le texte (sync bidirectionnelle).';
+  intro.textContent = 'The text is the source of truth: edit on the left and the diagram follows — '
+    + 'and everything you do on the diagram rewrites the text (two-way sync).';
   help.appendChild(intro);
 
   var rows: [string, string][] = [
-    ['!name = Mon app', 'nom du projet'],
-    ['@auth, t=Authentification, c=#6366f1', 'epic — un groupe (couleur c=)'],
-    [':login, t=Login, p=form, f=phone, e=auth', 'écran — préfixe « : » (titre, preset, format, epic)'],
-    [':login, x=120, y=80, h', 'position (x,y) · h = masqué'],
-    ['login -> home', 'flèche'],
-    ['login --> home, l=ok', 'flèche pointillée + label'],
-    ['# un commentaire', 'commentaire (ignoré)'],
+    ['!name = My app', 'project name'],
+    ['@auth, t=Authentication, c=#6366f1', 'epic — a group (color c=)'],
+    [':login, t=Login, p=form, f=phone, e=auth', 'screen — ":" prefix (title, preset, format, epic)'],
+    [':login, x=120, y=80, h', 'position (x,y) · h = hidden'],
+    ['login -> home', 'arrow'],
+    ['login --> home, l=ok', 'dashed arrow + label'],
+    ['# a comment', 'comment (ignored)'],
   ];
   var grid = document.createElement('div');
   grid.className = 'fb-help-grid';
@@ -231,23 +231,23 @@ function renderPanelHelp(): HTMLElement {
 
   var fenceTitle = document.createElement('div');
   fenceTitle.className = 'fb-help-subtitle';
-  fenceTitle.textContent = 'HTML personnalisé (preset par défaut)';
+  fenceTitle.textContent = 'Custom HTML (default preset)';
   help.appendChild(fenceTitle);
   var fence = document.createElement('code');
   fence.className = 'fb-help-ex fb-help-block';
-  fence.innerHTML = highlight(':home, t=Accueil\n```\n<h1>Bonjour</h1>\n```');
+  fence.innerHTML = highlight(':home, t=Home\n```\n<h1>Hello</h1>\n```');
   help.appendChild(fence);
 
   var keysTitle = document.createElement('div');
   keysTitle.className = 'fb-help-subtitle';
-  keysTitle.textContent = 'Attributs';
+  keysTitle.textContent = 'Attributes';
   help.appendChild(keysTitle);
   var keys = document.createElement('div');
   keys.className = 'fb-help-keys';
   var defs: [string, string][] = [
-    ['t', 'titre'], ['p', 'preset'], ['f', 'format'], ['e', 'epic'],
-    ['n', 'note'], ['x y', 'position'], ['h', 'masqué'],
-    ['l', 'label flèche'], ['fs ts', 'côtés flèche'], ['c', 'couleur'],
+    ['t', 'title'], ['p', 'preset'], ['f', 'format'], ['e', 'epic'],
+    ['n', 'note'], ['x y', 'position'], ['h', 'hidden'],
+    ['l', 'arrow label'], ['fs ts', 'arrow sides'], ['c', 'color'],
   ];
   defs.forEach(function (d) {
     var span = document.createElement('span');
