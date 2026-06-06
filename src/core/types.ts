@@ -23,12 +23,16 @@ export interface Screen {
   id: string;
   title?: string;
   epic?: string;
-  size?: ScreenSize;
+  size?: ScreenSize;  // legacy; mapped to a default width for backward-compat
+  width?: number;     // explicit body width (px)
+  height?: number;    // explicit body height (px); absent ⇒ content-driven
   notes?: string;
   content?: string;   // raw HTML body, used when preset is 'custom'
   preset?: PresetId;  // body display preset; absent ⇒ 'custom'
   [k: string]: any;
 }
+
+export interface Size { width: number; height: number; }
 
 export interface Arrow {
   from: string;
@@ -75,6 +79,7 @@ export interface FlowState {
   screenEls: Record<string, HTMLElement>;
   defaultPositions: Record<string, Position>;
   positions: Record<string, Position>;
+  sizes: Record<string, Size>;
   showNotes: boolean;
   hiddenEpics: Record<string, boolean>;
   handleEls: any[];

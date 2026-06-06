@@ -1,4 +1,5 @@
-import { Epic, FlowState } from './types';
+import { SIZES } from './constants';
+import { Epic, FlowState, Screen } from './types';
 
 export var state: FlowState = {
   zoom: 1,
@@ -19,6 +20,7 @@ export var state: FlowState = {
   screenEls: {},
   defaultPositions: {},
   positions: {},
+  sizes: {},
   showNotes: true,
   hiddenEpics: {},
   handleEls: [],
@@ -35,5 +37,27 @@ export function getEpic(epicId: string): Epic | null {
   for (var i = 0; i < state.project.epics.length; i++) {
     if (state.project.epics[i].id === epicId) return state.project.epics[i];
   }
+  return null;
+}
+
+// Default (unresized) body width: explicit width, else legacy size, else 320.
+export function baseWidth(s: Screen): number {
+  if (s.width) return s.width;
+  if (s.size && SIZES[s.size]) return SIZES[s.size];
+  return 320;
+}
+
+// Effective width: a user resize (state.sizes) overrides the default.
+export function screenWidth(s: Screen): number {
+  var sz = state.sizes[s.id];
+  if (sz && sz.width) return sz.width;
+  return baseWidth(s);
+}
+
+// Effective height: explicit resize, else null (content-driven / auto).
+export function screenHeight(s: Screen): number | null {
+  var sz = state.sizes[s.id];
+  if (sz && sz.height) return sz.height;
+  if (s.height) return s.height;
   return null;
 }

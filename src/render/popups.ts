@@ -4,7 +4,7 @@ import { saveArrowMutations } from '../core/storage';
 import { setScreenPreset, toggleScreen } from './screen';
 import { showContextMenu } from './context-menu';
 import { PRESETS } from './presets';
-import { Arrow, PresetId, Screen, ScreenSize } from '../core/types';
+import { Arrow, PresetId, Screen } from '../core/types';
 
 export function handlePopupOutsideClick(e: MouseEvent): void {
   if (state.arrowPopup && state.arrowPopup.el && !state.arrowPopup.el.contains(e.target as Node)) {
@@ -205,38 +205,6 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
 
   var popup = document.createElement('div');
   popup.className = 'fb-screen-popup';
-
-  // -- Resize section --
-  var sizeLabel = document.createElement('div');
-  sizeLabel.className = 'fb-screen-popup-label';
-  sizeLabel.textContent = 'Taille';
-  popup.appendChild(sizeLabel);
-
-  var sizesRow = document.createElement('div');
-  sizesRow.className = 'fb-screen-popup-sizes';
-  var currentSize: ScreenSize = screenData.size || 'md';
-
-  (['sm', 'md', 'lg', 'xl'] as ScreenSize[]).forEach(function (sz: ScreenSize) {
-    var btn = document.createElement('button');
-    btn.className = 'fb-screen-popup-size' + (sz === currentSize ? ' active' : '');
-    btn.textContent = sz.toUpperCase();
-    btn.addEventListener('click', function (ev: MouseEvent) {
-      ev.stopPropagation();
-      screenData.size = sz;
-      // Update DOM classes
-      el.className = el.className.replace(/fb-size-\w+/, 'fb-size-' + sz);
-      saveArrowMutations();
-      drawArrows();
-      closeScreenPopup();
-    });
-    sizesRow.appendChild(btn);
-  });
-  popup.appendChild(sizesRow);
-
-  // -- Separator --
-  var sep1 = document.createElement('div');
-  sep1.className = 'fb-screen-popup-sep';
-  popup.appendChild(sep1);
 
   // -- Title input --
   var titleLabel = document.createElement('div');

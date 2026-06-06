@@ -64,6 +64,7 @@
     screenEls: {},
     defaultPositions: {},
     positions: {},
+    sizes: {},
     showNotes: true,
     hiddenEpics: {},
     handleEls: [],
@@ -80,6 +81,22 @@
     }
     return null;
   }
+  function baseWidth(s) {
+    if (s.width) return s.width;
+    if (s.size && SIZES[s.size]) return SIZES[s.size];
+    return 320;
+  }
+  function screenWidth(s) {
+    var sz = state.sizes[s.id];
+    if (sz && sz.width) return sz.width;
+    return baseWidth(s);
+  }
+  function screenHeight(s) {
+    var sz = state.sizes[s.id];
+    if (sz && sz.height) return sz.height;
+    if (s.height) return s.height;
+    return null;
+  }
 
   // src/core/storage.ts
   function storageKey() {
@@ -94,6 +111,20 @@
   function loadPositions() {
     try {
       var raw = localStorage.getItem(storageKey() + "-pos");
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function saveSizes() {
+    try {
+      localStorage.setItem(storageKey() + "-sizes", JSON.stringify(state.sizes));
+    } catch (e) {
+    }
+  }
+  function loadSizes() {
+    try {
+      var raw = localStorage.getItem(storageKey() + "-sizes");
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
@@ -447,10 +478,12 @@
   function renderScreen(screenData) {
     var epic = getEpic(screenData.epic);
     var color = epic ? epic.color : "#666";
-    var size = screenData.size || "md";
     var el = document.createElement("div");
-    el.className = "fb-screen fb-size-" + size;
+    el.className = "fb-screen";
     el.dataset.screenId = screenData.id;
+    el.style.width = screenWidth(screenData) + "px";
+    var h = screenHeight(screenData);
+    if (h) el.style.height = h + "px";
     var pos = state.positions[screenData.id] || { x: 100, y: 100 };
     el.style.left = pos.x + "px";
     el.style.top = pos.y + "px";
@@ -496,6 +529,9 @@
         scheduleHideAnchors();
       }
     });
+    var resizeHandle = document.createElement("div");
+    resizeHandle.className = "fb-resize-handle";
+    el.appendChild(resizeHandle);
     state.screenEls[screenData.id] = el;
     return el;
   }
@@ -774,31 +810,6 @@
     if (!el) return;
     var popup = document.createElement("div");
     popup.className = "fb-screen-popup";
-    var sizeLabel = document.createElement("div");
-    sizeLabel.className = "fb-screen-popup-label";
-    sizeLabel.textContent = "Taille";
-    popup.appendChild(sizeLabel);
-    var sizesRow = document.createElement("div");
-    sizesRow.className = "fb-screen-popup-sizes";
-    var currentSize = screenData.size || "md";
-    ["sm", "md", "lg", "xl"].forEach(function(sz) {
-      var btn = document.createElement("button");
-      btn.className = "fb-screen-popup-size" + (sz === currentSize ? " active" : "");
-      btn.textContent = sz.toUpperCase();
-      btn.addEventListener("click", function(ev) {
-        ev.stopPropagation();
-        screenData.size = sz;
-        el.className = el.className.replace(/fb-size-\w+/, "fb-size-" + sz);
-        saveArrowMutations();
-        drawArrows();
-        closeScreenPopup();
-      });
-      sizesRow.appendChild(btn);
-    });
-    popup.appendChild(sizesRow);
-    var sep1 = document.createElement("div");
-    sep1.className = "fb-screen-popup-sep";
-    popup.appendChild(sep1);
     var titleLabel = document.createElement("div");
     titleLabel.className = "fb-screen-popup-label";
     titleLabel.textContent = "Titre";
@@ -1306,7 +1317,7 @@
     var y = Math.max(0, Math.min(CANVAS_H - 50, (clientY - wrapperRect.top - state.panY) / state.zoom));
     if (!state.project.screens) state.project.screens = [];
     var id = uniqueId();
-    var screen = { id, title: "\xC9cran " + createCounter, size: "md", preset };
+    var screen = { id, title: "\xC9cran " + createCounter, preset };
     state.project.screens.push(screen);
     state.positions[id] = { x, y };
     var el = renderScreen(screen);
@@ -1389,6 +1400,7 @@
       closeScreenPopup();
       if (state.creatingArrow) return;
       if (e.button !== 0) return;
+      if (e.target.closest(".fb-resize-handle")) return;
       var screenEl = e.target.closest(".fb-screen");
       if (!screenEl) return;
       var id = screenEl.dataset.screenId;
@@ -1447,6 +1459,57 @@
           showAnchorDots(singleId);
         }
       }
+    });
+  }
+
+  // src/interactions/resize.ts
+  var MIN_FACTOR = 0.7;
+  var MAX_FACTOR = 1.3;
+  function findScreen(id) {
+    var screens = state.project && state.project.screens || [];
+    for (var i = 0; i < screens.length; i++) if (screens[i].id === id) return screens[i];
+    return null;
+  }
+  function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+  function initResize() {
+    state.canvasEl.addEventListener("mousedown", function(e) {
+      var handle = e.target.closest(".fb-resize-handle");
+      if (!handle) return;
+      var screenEl = handle.closest(".fb-screen");
+      if (!screenEl) return;
+      var id = screenEl.dataset.screenId;
+      var screen = findScreen(id);
+      if (!screen) return;
+      e.stopPropagation();
+      e.preventDefault();
+      var baseW = baseWidth(screen);
+      var prevH = screenEl.style.height;
+      screenEl.style.height = "";
+      var baseH = screenEl.offsetHeight;
+      screenEl.style.height = prevH;
+      var minW = baseW * MIN_FACTOR, maxW = baseW * MAX_FACTOR;
+      var minH = baseH * MIN_FACTOR, maxH = baseH * MAX_FACTOR;
+      var startX = e.clientX, startY = e.clientY;
+      var startW = screenEl.offsetWidth, startH = screenEl.offsetHeight;
+      screenEl.classList.add("fb-resizing");
+      function onMove(ev) {
+        var w = clamp(startW + (ev.clientX - startX) / state.zoom, minW, maxW);
+        var h = clamp(startH + (ev.clientY - startY) / state.zoom, minH, maxH);
+        screenEl.style.width = w + "px";
+        screenEl.style.height = h + "px";
+        state.sizes[id] = { width: w, height: h };
+        drawArrows();
+      }
+      function onUp() {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        screenEl.classList.remove("fb-resizing");
+        saveSizes();
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
     });
   }
 
@@ -1755,7 +1818,7 @@
       var colScreens = columns[c];
       var maxW = 0;
       colScreens.forEach(function(s) {
-        var w = SIZES[s.size || "md"] || SIZES.md;
+        var w = screenWidth(s);
         if (w > maxW) maxW = w;
       });
       var offsetY = 0;
@@ -1793,7 +1856,7 @@
       });
       var maxW = 0;
       group.forEach(function(s) {
-        var w = SIZES[s.size || "md"] || SIZES.md;
+        var w = screenWidth(s);
         if (w > maxW) maxW = w;
       });
       var offsetY = 0;
@@ -1822,7 +1885,7 @@
         rowMaxH = 0;
       }
       positions[s.id] = { x: offsetX, y: offsetY };
-      var w = SIZES[s.size || "md"] || SIZES.md;
+      var w = screenWidth(s);
       var h = heights && heights[s.id] ? heights[s.id] : 200;
       if (h > rowMaxH) rowMaxH = h;
       offsetX += w + GAP_X;
@@ -1997,8 +2060,7 @@
         var clean = {
           id: s.id,
           title: s.title,
-          epic: s.epic,
-          size: s.size
+          epic: s.epic
         };
         if (s.label) clean.label = s.label;
         if (s.notes) clean.notes = s.notes;
@@ -2010,6 +2072,7 @@
     };
     var stateCopy = {
       positions: JSON.parse(JSON.stringify(state.positions)),
+      sizes: JSON.parse(JSON.stringify(state.sizes)),
       zoom: state.zoom,
       panX: state.panX,
       panY: state.panY,
@@ -2021,7 +2084,6 @@
       lines.push("        id: " + JSON.stringify(s.id) + ",");
       lines.push("        title: " + JSON.stringify(s.title) + ",");
       lines.push("        epic: " + JSON.stringify(s.epic) + ",");
-      lines.push("        size: " + JSON.stringify(s.size) + ",");
       if (s.preset && s.preset !== "custom") lines.push("        preset: " + JSON.stringify(s.preset) + ",");
       if (s.label) lines.push("        label: " + JSON.stringify(s.label) + ",");
       if (s.notes) lines.push("        notes: " + JSON.stringify(s.notes) + ",");
@@ -2413,6 +2475,12 @@
         });
       }
     }
+    if (configState && configState.sizes) {
+      state.sizes = JSON.parse(JSON.stringify(configState.sizes));
+    } else {
+      var savedSizes = loadSizes();
+      if (savedSizes) state.sizes = savedSizes;
+    }
     var hasSavedZoom = false;
     if (configState && configState.zoom !== void 0) {
       hasSavedZoom = true;
@@ -2443,6 +2511,7 @@
     initSelection();
     initModeKeys();
     initCreateMenu();
+    initResize();
     setMode("drag");
     requestAnimationFrame(function() {
       var heights = {};

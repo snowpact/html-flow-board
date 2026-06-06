@@ -1,4 +1,5 @@
-import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y, SIZES } from './core/constants';
+import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y } from './core/constants';
+import { screenWidth } from './core/state';
 import { Arrow, Position, Screen } from './core/types';
 
 export function bfsDepth(screens: Screen[], arrows: Arrow[]): Record<string, number> {
@@ -63,7 +64,7 @@ export function autoLayout(screens: Screen[], arrows: Arrow[], heights?: Record<
     var colScreens = columns[c];
     var maxW = 0;
     colScreens.forEach(function (s) {
-      var w = SIZES[s.size || 'md'] || SIZES.md;
+      var w = screenWidth(s);
       if (w > maxW) maxW = w;
     });
 
@@ -105,7 +106,7 @@ export function layoutByEpics(screens: Screen[], arrows: Arrow[], heights: Recor
 
     var maxW = 0;
     group.forEach(function (s) {
-      var w = SIZES[s.size || 'md'] || SIZES.md;
+      var w = screenWidth(s);
       if (w > maxW) maxW = w;
     });
 
@@ -139,7 +140,7 @@ export function layoutGrid(screens: Screen[], arrows: Arrow[], heights: Record<s
       rowMaxH = 0;
     }
     positions[s.id] = { x: offsetX, y: offsetY };
-    var w = SIZES[s.size || 'md'] || SIZES.md;
+    var w = screenWidth(s);
     var h = (heights && heights[s.id]) ? heights[s.id] : 200;
     if (h > rowMaxH) rowMaxH = h;
     offsetX += w + GAP_X;

@@ -2,10 +2,11 @@ import { drawArrows, freezeArrowSides } from './arrows';
 import { CANVAS_H, CANVAS_W } from './core/constants';
 import { state } from './core/state';
 import { Epic, FlowConfig, Screen } from './core/types';
-import { loadArrowMutations, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
+import { loadArrowMutations, loadHiddenScreens, loadPositions, loadSizes, loadZoom, savePositions, storageKey } from './core/storage';
 import { initArrowDrag } from './interactions/arrow-drag';
 import { initCreateMenu } from './interactions/create';
 import { initDrag } from './interactions/drag';
+import { initResize } from './interactions/resize';
 import { initModeKeys, setMode } from './interactions/mode';
 import { initPan } from './interactions/pan';
 import { initSelection } from './interactions/selection';
@@ -221,6 +222,14 @@ export function init(config: FlowConfig): void {
     }
   }
 
+  // Load saved sizes (resize deltas), like positions
+  if (configState && configState.sizes) {
+    state.sizes = JSON.parse(JSON.stringify(configState.sizes));
+  } else {
+    var savedSizes = loadSizes();
+    if (savedSizes) state.sizes = savedSizes;
+  }
+
   // Load saved zoom/pan
   var hasSavedZoom = false;
   if (configState && configState.zoom !== undefined) {
@@ -260,6 +269,7 @@ export function init(config: FlowConfig): void {
   initSelection();
   initModeKeys();
   initCreateMenu();
+  initResize();
   setMode('drag'); // default mode (sets wrapper class + active button)
 
   // After DOM layout: measure heights, recompute layout, draw arrows

@@ -546,6 +546,7 @@
 /* --- Screen Cards --- */
 .fb-screen {
   position: absolute;
+  width: 320px;          /* default; renderScreen sets an explicit inline width */
   border-radius: 10px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -568,11 +569,23 @@
   opacity: 0.92;
 }
 
-/* Size variants */
-.fb-screen.fb-size-sm { width: 240px; }
-.fb-screen.fb-size-md { width: 320px; }
-.fb-screen.fb-size-lg { width: 400px; }
-.fb-screen.fb-size-xl { width: 520px; }
+/* Resize handle (bottom-right corner) */
+.fb-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.12s;
+  background:
+    linear-gradient(135deg, transparent 0 50%, #b9bfc8 50% 60%, transparent 60% 70%, #b9bfc8 70% 80%, transparent 80%);
+}
+.fb-screen:hover .fb-resize-handle { opacity: 1; }
+.fb-screen.fb-resizing { transition: none; }
+.fb-screen.fb-resizing .fb-resize-handle { opacity: 1; }
 
 /* Screen Header */
 .fb-screen-header {
@@ -602,6 +615,7 @@
   flex-direction: column;
   gap: 8px;
   background: #fff;
+  overflow: auto;   /* scroll custom content if the card is resized shorter */
 }
 
 /* --- Skeleton presets (grey wireframe bodies, no real text) --- */

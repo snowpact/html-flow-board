@@ -1,7 +1,7 @@
 import { PresetId, Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
 import { escapeHtml } from '../core/geometry';
-import { getEpic, state } from '../core/state';
+import { getEpic, screenHeight, screenWidth, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { showScreenPopup } from './popups';
@@ -37,11 +37,15 @@ export function applyScreenVisibility(screenId: string): void {
 export function renderScreen(screenData: Screen): HTMLElement {
   var epic = getEpic(screenData.epic);
   var color = epic ? epic.color : '#666';
-  var size = screenData.size || 'md';
 
   var el = document.createElement('div');
-  el.className = 'fb-screen fb-size-' + size;
+  el.className = 'fb-screen';
   el.dataset.screenId = screenData.id;
+
+  // Size — explicit width; height stays content-driven unless resized.
+  el.style.width = screenWidth(screenData) + 'px';
+  var h = screenHeight(screenData);
+  if (h) el.style.height = h + 'px';
 
   // Position
   var pos: Position = state.positions[screenData.id] || { x: 100, y: 100 };
@@ -103,6 +107,11 @@ export function renderScreen(screenData: Screen): HTMLElement {
       scheduleHideAnchors();
     }
   });
+
+  // Resize handle (bottom-right corner)
+  var resizeHandle = document.createElement('div');
+  resizeHandle.className = 'fb-resize-handle';
+  el.appendChild(resizeHandle);
 
   state.screenEls[screenData.id] = el;
   return el;

@@ -160,8 +160,7 @@ export function doExportConfig(): void {
       var clean: Screen = {
         id: s.id,
         title: s.title,
-        epic: s.epic,
-        size: s.size
+        epic: s.epic
       };
       if (s.label) clean.label = s.label;
       if (s.notes) clean.notes = s.notes;
@@ -174,6 +173,7 @@ export function doExportConfig(): void {
 
   var stateCopy = {
     positions: JSON.parse(JSON.stringify(state.positions)),
+    sizes: JSON.parse(JSON.stringify(state.sizes)),
     zoom: state.zoom,
     panX: state.panX,
     panY: state.panY,
@@ -187,7 +187,6 @@ export function doExportConfig(): void {
     lines.push('        id: ' + JSON.stringify(s.id) + ',');
     lines.push('        title: ' + JSON.stringify(s.title) + ',');
     lines.push('        epic: ' + JSON.stringify(s.epic) + ',');
-    lines.push('        size: ' + JSON.stringify(s.size) + ',');
     if (s.preset && s.preset !== 'custom') lines.push('        preset: ' + JSON.stringify(s.preset) + ',');
     if (s.label) lines.push('        label: ' + JSON.stringify(s.label) + ',');
     if (s.notes) lines.push('        notes: ' + JSON.stringify(s.notes) + ',');
