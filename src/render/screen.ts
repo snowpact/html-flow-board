@@ -143,6 +143,7 @@ export function setScreenFormat(screenId: string, format: Format): void {
     el.style.height = h ? (h + 'px') : '';
   }
   drawArrows();
+  if (state.commit) state.commit();
 }
 
 // Change a screen's preset and re-render its body in place.
@@ -159,5 +160,6 @@ export function setScreenPreset(screenId: string, preset: PresetId): void {
   var body = el.querySelector('.fb-screen-body') as HTMLElement;
   if (body) applyScreenBody(body, screen);
   drawArrows();
+  if (state.commit) state.commit();
 }
 

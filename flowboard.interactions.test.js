@@ -5,6 +5,8 @@ import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
 import { setScreenPreset, setScreenFormat } from './src/render/screen';
 import { closePresetPicker } from './src/render/preset-picker';
+import { rebuildBoard, commit } from './src/interactions/sync';
+import { parse } from './src/flowml/parse';
 
 // Modules are imported directly and share one `state` singleton, so reset it
 // between tests (init repopulates most of it, but not every transient field).
@@ -349,5 +351,41 @@ describe('preset create + modify', () => {
     expect(layoutBtn).toBeTruthy();
     layoutBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
     expect(document.querySelector('.fb-preset-picker')).toBeTruthy();
+  });
+});
+
+describe('Flow-ML panel + sync', () => {
+  beforeEach(() => { initBoard(); });
+
+  it('renders the panel filled with the board as Flow-ML', () => {
+    expect(document.querySelector('.fb-panel')).toBeTruthy();
+    const text = state.panelTextarea.value;
+    expect(text).toContain('@e1'); // epic
+    expect(text).toContain('A,'); // screen A
+  });
+
+  it('the collapse button toggles the panel', () => {
+    document.querySelector('.fb-panel-collapse').click();
+    expect(document.querySelector('.fb-panel').classList.contains('fb-panel-collapsed')).toBe(true);
+  });
+
+  it('text → diagram: rebuildBoard renders screens from a parsed model', () => {
+    const { project, positions } = parse('x1, t=One\nx2, t=Two\nx1 -> x2\n');
+    rebuildBoard(project, positions);
+    expect(Object.keys(state.screenEls).sort()).toEqual(['x1', 'x2']);
+    expect(state.canvasEl.querySelectorAll('.fb-screen').length).toBe(2);
+  });
+
+  it('diagram → text: a mutation re-serializes into the panel', () => {
+    setScreenFormat('A', 'phone'); // routes through commit()
+    expect(state.panelTextarea.value).toContain('f=phone');
+  });
+
+  it('anti-loop: commit is a no-op while syncing', () => {
+    state.panelTextarea.value = 'SENTINEL';
+    state.syncing = true;
+    commit();
+    expect(state.panelTextarea.value).toBe('SENTINEL'); // not overwritten
+    state.syncing = false;
   });
 });

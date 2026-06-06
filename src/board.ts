@@ -6,6 +6,8 @@ import { loadArrowMutations, loadHiddenScreens, loadPositions, loadZoom, savePos
 import { initArrowDrag } from './interactions/arrow-drag';
 import { initCreateMenu } from './interactions/create';
 import { initDrag } from './interactions/drag';
+import { initSync } from './interactions/sync';
+import { renderPanel } from './render/panel';
 import { initModeKeys, setMode } from './interactions/mode';
 import { initPan } from './interactions/pan';
 import { initSelection } from './interactions/selection';
@@ -192,7 +194,13 @@ export function init(config: FlowConfig): void {
   sizer.appendChild(canvas);
   wrapper.appendChild(sizer);
   wrapper.appendChild(renderModeSwitch());
-  root.appendChild(wrapper);
+
+  // Body row: Flow-ML panel | canvas
+  var body = document.createElement('div');
+  body.className = 'fb-body';
+  body.appendChild(renderPanel());
+  body.appendChild(wrapper);
+  root.appendChild(body);
 
   state.wrapperEl = wrapper;
   state.sizerEl = sizer;
@@ -261,6 +269,7 @@ export function init(config: FlowConfig): void {
   initModeKeys();
   initCreateMenu();
   setMode('drag'); // default mode (sets wrapper class + active button)
+  initSync(); // Flow-ML panel ↔ diagram (fills the panel from the current board)
 
   // After DOM layout: measure heights, recompute layout, draw arrows
   requestAnimationFrame(function () {
@@ -293,6 +302,7 @@ export function init(config: FlowConfig): void {
 
     drawArrows();
     freezeArrowSides();
+    if (state.commit) state.commit(); // refresh the panel with the settled positions
   });
 }
 

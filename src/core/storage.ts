@@ -8,6 +8,7 @@ export function savePositions() {
   try {
     localStorage.setItem(storageKey() + '-pos', JSON.stringify(state.positions));
   } catch (e) { /* quota */ }
+  if (state.commit) state.commit(); // diagram changed → re-serialize to Flow-ML
 }
 
 export function loadPositions() {
@@ -36,6 +37,7 @@ export function saveHiddenScreens() {
   try {
     localStorage.setItem(storageKey() + '-hidden', JSON.stringify(state.hiddenScreens));
   } catch (e) { /* quota */ }
+  if (state.commit) state.commit();
 }
 
 export function loadHiddenScreens() {
@@ -49,6 +51,7 @@ export function saveArrowMutations() {
   try {
     localStorage.setItem(storageKey() + '-arrowmods', JSON.stringify(state.project.arrows));
   } catch (e) { /* quota */ }
+  if (state.commit) state.commit();
 }
 
 export function loadArrowMutations() {

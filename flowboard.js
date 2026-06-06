@@ -109,6 +109,7 @@
       localStorage.setItem(storageKey() + "-pos", JSON.stringify(state.positions));
     } catch (e) {
     }
+    if (state.commit) state.commit();
   }
   function loadPositions() {
     try {
@@ -141,6 +142,7 @@
       localStorage.setItem(storageKey() + "-hidden", JSON.stringify(state.hiddenScreens));
     } catch (e) {
     }
+    if (state.commit) state.commit();
   }
   function loadHiddenScreens() {
     try {
@@ -155,6 +157,7 @@
       localStorage.setItem(storageKey() + "-arrowmods", JSON.stringify(state.project.arrows));
     } catch (e) {
     }
+    if (state.commit) state.commit();
   }
   function loadArrowMutations() {
     try {
@@ -549,6 +552,7 @@
       el.style.height = h ? h + "px" : "";
     }
     drawArrows();
+    if (state.commit) state.commit();
   }
   function setScreenPreset(screenId, preset) {
     var screens = state.project && state.project.screens || [];
@@ -566,6 +570,7 @@
     var body = el.querySelector(".fb-screen-body");
     if (body) applyScreenBody(body, screen);
     drawArrows();
+    if (state.commit) state.commit();
   }
 
   // src/render/preset-picker.ts
@@ -1545,6 +1550,423 @@
     });
   }
 
+  // src/layout.ts
+  function bfsDepth(screens, arrows) {
+    var children = {};
+    var hasParent = {};
+    screens.forEach(function(s) {
+      children[s.id] = [];
+    });
+    arrows.forEach(function(a) {
+      if (children[a.from]) children[a.from].push(a.to);
+      hasParent[a.to] = true;
+    });
+    var roots = screens.filter(function(s) {
+      return !hasParent[s.id];
+    }).map(function(s) {
+      return s.id;
+    });
+    if (roots.length === 0 && screens.length > 0) roots = [screens[0].id];
+    var col = {};
+    var visited = {};
+    var queue = [];
+    roots.forEach(function(r) {
+      queue.push(r);
+      col[r] = 0;
+      visited[r] = true;
+    });
+    while (queue.length > 0) {
+      var cur = queue.shift();
+      (children[cur] || []).forEach(function(child) {
+        if (!visited[child]) {
+          visited[child] = true;
+          col[child] = (col[cur] || 0) + 1;
+          queue.push(child);
+        }
+      });
+    }
+    screens.forEach(function(s) {
+      if (col[s.id] === void 0) col[s.id] = 0;
+    });
+    return col;
+  }
+  function centerPositions(positions, screens, totalW, totalH) {
+    var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
+    var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
+    screens.forEach(function(s) {
+      if (positions[s.id]) {
+        positions[s.id].x += cx;
+        positions[s.id].y += cy;
+      }
+    });
+  }
+  function autoLayout(screens, arrows, heights) {
+    var col = bfsDepth(screens, arrows);
+    var columns = {};
+    screens.forEach(function(s) {
+      var c = col[s.id];
+      if (!columns[c]) columns[c] = [];
+      columns[c].push(s);
+    });
+    var positions = {};
+    var colKeys = Object.keys(columns).map(Number).sort(function(a, b) {
+      return a - b;
+    });
+    var offsetX = 0;
+    var totalH = 0;
+    colKeys.forEach(function(c) {
+      var colScreens = columns[c];
+      var maxW = 0;
+      colScreens.forEach(function(s) {
+        var w = screenWidth(s);
+        if (w > maxW) maxW = w;
+      });
+      var offsetY = 0;
+      colScreens.forEach(function(s) {
+        positions[s.id] = { x: offsetX, y: offsetY };
+        var h = heights && heights[s.id] ? heights[s.id] : 200;
+        offsetY += h + GAP_Y;
+      });
+      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
+      offsetX += maxW + GAP_X;
+    });
+    var totalW = offsetX - GAP_X;
+    centerPositions(positions, screens, totalW, totalH);
+    return positions;
+  }
+  function layoutByEpics(screens, arrows, heights) {
+    var epicGroups = {};
+    var epicOrder = [];
+    screens.forEach(function(s) {
+      var eid = s.epic || "_none";
+      if (!epicGroups[eid]) {
+        epicGroups[eid] = [];
+        epicOrder.push(eid);
+      }
+      epicGroups[eid].push(s);
+    });
+    var col = bfsDepth(screens, arrows);
+    var positions = {};
+    var offsetX = 0;
+    var totalH = 0;
+    epicOrder.forEach(function(eid) {
+      var group = epicGroups[eid];
+      group.sort(function(a, b) {
+        return (col[a.id] || 0) - (col[b.id] || 0);
+      });
+      var maxW = 0;
+      group.forEach(function(s) {
+        var w = screenWidth(s);
+        if (w > maxW) maxW = w;
+      });
+      var offsetY = 0;
+      group.forEach(function(s) {
+        positions[s.id] = { x: offsetX, y: offsetY };
+        var h = heights && heights[s.id] ? heights[s.id] : 200;
+        offsetY += h + GAP_Y;
+      });
+      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
+      offsetX += maxW + GAP_X;
+    });
+    centerPositions(positions, screens, offsetX - GAP_X, totalH);
+    return positions;
+  }
+  function layoutGrid(screens, arrows, heights) {
+    var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
+    var positions = {};
+    var offsetX = 0, offsetY = 0;
+    var rowMaxH = 0;
+    var totalW = 0, totalH = 0;
+    screens.forEach(function(s, i) {
+      var colIdx = i % cols;
+      if (colIdx === 0 && i > 0) {
+        offsetY += rowMaxH + GAP_Y;
+        offsetX = 0;
+        rowMaxH = 0;
+      }
+      positions[s.id] = { x: offsetX, y: offsetY };
+      var w = screenWidth(s);
+      var h = heights && heights[s.id] ? heights[s.id] : 200;
+      if (h > rowMaxH) rowMaxH = h;
+      offsetX += w + GAP_X;
+      if (offsetX > totalW) totalW = offsetX;
+    });
+    totalH = offsetY + rowMaxH;
+    centerPositions(positions, screens, totalW - GAP_X, totalH);
+    return positions;
+  }
+  var LAYOUT_STRATEGIES = [
+    { name: "Flow", fn: autoLayout },
+    { name: "Epics", fn: layoutByEpics },
+    { name: "Grid", fn: layoutGrid }
+  ];
+
+  // src/flowml/parse.ts
+  function unquote(v) {
+    v = v.trim();
+    if (v.length >= 2 && v.charAt(0) === '"' && v.charAt(v.length - 1) === '"') {
+      return v.slice(1, -1).replace(/\\"/g, '"');
+    }
+    return v;
+  }
+  function splitAttrs(s) {
+    var parts = [];
+    var cur = "";
+    var inQ = false;
+    for (var i = 0; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (ch === '"' && s.charAt(i - 1) !== "\\") inQ = !inQ;
+      if (ch === "," && !inQ) {
+        parts.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    parts.push(cur);
+    return parts.map(function(p) {
+      return p.trim();
+    }).filter(function(p) {
+      return p !== "";
+    });
+  }
+  function parseAttrs(attrParts) {
+    var attrs = {};
+    attrParts.forEach(function(p) {
+      var eq = p.indexOf("=");
+      if (eq === -1) attrs[p] = true;
+      else attrs[p.slice(0, eq).trim()] = unquote(p.slice(eq + 1));
+    });
+    return attrs;
+  }
+  function parse(text) {
+    var project = { name: "", epics: [], screens: [], arrows: [] };
+    var positions = {};
+    var errors = [];
+    var lines = text.split("\n");
+    var lastScreen = null;
+    var i = 0;
+    while (i < lines.length) {
+      var line = lines[i].trim();
+      var lineNo = i + 1;
+      if (line === "" || line.charAt(0) === "#") {
+        i++;
+        continue;
+      }
+      if (line === "```") {
+        var html = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== "```") {
+          html.push(lines[i]);
+          i++;
+        }
+        i++;
+        if (lastScreen) {
+          lastScreen.content = html.join("\n");
+          if (!lastScreen.preset) lastScreen.preset = "custom";
+        } else {
+          errors.push({ line: lineNo, msg: "HTML block without a preceding screen" });
+        }
+        continue;
+      }
+      if (line.charAt(0) === "!") {
+        var dm = line.slice(1).match(/^\s*([a-zA-Z]+)\s*=\s*(.*)$/);
+        if (dm && dm[1] === "name") project.name = unquote(dm[2]);
+        else errors.push({ line: lineNo, msg: "unknown directive" });
+        i++;
+        continue;
+      }
+      var am = line.match(/^(\S+)\s*(\.\.>|->)\s*(\S+?)(?:\s*,\s*(.*))?$/);
+      if (am) {
+        var arrow = { from: am[1], to: am[3] };
+        if (am[2] === "..>") arrow.dashed = true;
+        var aattrs = am[4] ? parseAttrs(splitAttrs(am[4])) : {};
+        if (aattrs.l) arrow.label = aattrs.l;
+        if (aattrs.fs) arrow.fromSide = aattrs.fs;
+        if (aattrs.ts) arrow.toSide = aattrs.ts;
+        project.arrows.push(arrow);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      if (line.charAt(0) === "@") {
+        var eparts = splitAttrs(line.slice(1));
+        var epic = { id: eparts.shift() || "", label: "", color: "" };
+        var ea = parseAttrs(eparts);
+        if (ea.t) epic.label = ea.t;
+        if (ea.c) epic.color = ea.c;
+        project.epics.push(epic);
+        lastScreen = null;
+        i++;
+        continue;
+      }
+      var sparts = splitAttrs(line);
+      var id = sparts.shift();
+      if (!id) {
+        errors.push({ line: lineNo, msg: "invalid line" });
+        i++;
+        continue;
+      }
+      var sa = parseAttrs(sparts);
+      var screen = { id };
+      if (sa.t) screen.title = sa.t;
+      if (sa.p) screen.preset = sa.p;
+      if (sa.f) screen.format = sa.f;
+      if (sa.e) screen.epic = sa.e;
+      if (sa.n) screen.notes = sa.n;
+      if (sa.h) screen.hidden = true;
+      if (sa.x !== void 0 || sa.y !== void 0) {
+        positions[id] = { x: parseFloat(sa.x) || 0, y: parseFloat(sa.y) || 0 };
+      }
+      project.screens.push(screen);
+      lastScreen = screen;
+      i++;
+    }
+    return { project, positions, errors };
+  }
+
+  // src/flowml/serialize.ts
+  function q(v) {
+    return /[\s,"]/.test(v) ? '"' + v.replace(/"/g, '\\"') + '"' : v;
+  }
+  function serialize(project, positions) {
+    var out = [];
+    if (project.name) out.push("!name = " + project.name);
+    (project.epics || []).forEach(function(e) {
+      var parts = ["@" + e.id];
+      if (e.label) parts.push("t=" + q(e.label));
+      if (e.color) parts.push("c=" + e.color);
+      out.push(parts.join(", "));
+    });
+    if (out.length) out.push("");
+    (project.screens || []).forEach(function(s) {
+      var parts = [s.id];
+      if (s.title) parts.push("t=" + q(s.title));
+      if (s.preset && s.preset !== "custom") parts.push("p=" + s.preset);
+      if (s.format) parts.push("f=" + s.format);
+      if (s.epic) parts.push("e=" + s.epic);
+      if (s.notes) parts.push("n=" + q(s.notes));
+      var pos = positions[s.id];
+      if (pos) {
+        parts.push("x=" + Math.round(pos.x));
+        parts.push("y=" + Math.round(pos.y));
+      }
+      if (s.hidden) parts.push("h");
+      out.push(parts.join(", "));
+      if ((!s.preset || s.preset === "custom") && s.content) {
+        out.push("```");
+        out.push(s.content);
+        out.push("```");
+      }
+    });
+    if (project.arrows && project.arrows.length) {
+      out.push("");
+      project.arrows.forEach(function(a) {
+        var line = a.from + (a.dashed ? " ..> " : " -> ") + a.to;
+        var attrs = [];
+        if (a.label) attrs.push("l=" + q(a.label));
+        if (a.fromSide) attrs.push("fs=" + a.fromSide);
+        if (a.toSide) attrs.push("ts=" + a.toSide);
+        if (attrs.length) line += ", " + attrs.join(", ");
+        out.push(line);
+      });
+    }
+    return out.join("\n") + "\n";
+  }
+
+  // src/render/panel.ts
+  function renderPanel() {
+    var panel = document.createElement("div");
+    panel.className = "fb-panel";
+    var header = document.createElement("div");
+    header.className = "fb-panel-header";
+    var title = document.createElement("span");
+    title.className = "fb-panel-title";
+    title.textContent = "Flow-ML";
+    header.appendChild(title);
+    var collapse = document.createElement("button");
+    collapse.className = "fb-panel-collapse";
+    collapse.title = "R\xE9duire le panneau";
+    collapse.textContent = "\u2039";
+    collapse.addEventListener("click", togglePanel);
+    header.appendChild(collapse);
+    panel.appendChild(header);
+    var textarea = document.createElement("textarea");
+    textarea.className = "fb-panel-text";
+    textarea.spellcheck = false;
+    textarea.setAttribute("autocomplete", "off");
+    textarea.setAttribute("autocapitalize", "off");
+    panel.appendChild(textarea);
+    var reopen = document.createElement("button");
+    reopen.className = "fb-panel-reopen";
+    reopen.title = "Ouvrir Flow-ML";
+    reopen.textContent = "\u203A";
+    reopen.addEventListener("click", togglePanel);
+    panel.appendChild(reopen);
+    state.panelEl = panel;
+    state.panelTextarea = textarea;
+    return panel;
+  }
+  function togglePanel() {
+    if (state.panelEl) state.panelEl.classList.toggle("fb-panel-collapsed");
+  }
+  function setPanelText(text) {
+    if (state.panelTextarea && state.panelTextarea.value !== text) {
+      state.panelTextarea.value = text;
+    }
+  }
+
+  // src/interactions/sync.ts
+  function rebuildBoard(project, positions) {
+    state.project = project;
+    state.hiddenScreens = {};
+    (project.screens || []).forEach(function(s) {
+      if (s.hidden) state.hiddenScreens[s.id] = true;
+    });
+    var auto = autoLayout(project.screens || [], project.arrows || []);
+    state.defaultPositions = auto;
+    state.positions = {};
+    (project.screens || []).forEach(function(s) {
+      state.positions[s.id] = positions[s.id] || auto[s.id] || { x: 100, y: 100 };
+    });
+    var olds = state.canvasEl.querySelectorAll(".fb-screen");
+    for (var i = 0; i < olds.length; i++) {
+      if (olds[i].parentNode) olds[i].parentNode.removeChild(olds[i]);
+    }
+    while (state.svgEl.firstChild) state.svgEl.removeChild(state.svgEl.firstChild);
+    state.screenEls = {};
+    (project.screens || []).forEach(function(s) {
+      state.canvasEl.appendChild(renderScreen(s));
+    });
+    drawArrows();
+  }
+  function commit() {
+    if (state.syncing) return;
+    (state.project.screens || []).forEach(function(s) {
+      s.hidden = !!state.hiddenScreens[s.id];
+    });
+    var text = serialize(state.project, state.positions);
+    setPanelText(text);
+    if (state.saveDoc) state.saveDoc(text);
+  }
+  var debounceTimer = null;
+  function initSync() {
+    state.commit = commit;
+    var ta = state.panelTextarea;
+    if (!ta) return;
+    ta.addEventListener("input", function() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        var res = parse(ta.value);
+        state.syncing = true;
+        rebuildBoard(res.project, res.positions);
+        state.syncing = false;
+        if (state.saveDoc) state.saveDoc(ta.value);
+      }, 300);
+    });
+    commit();
+  }
+
   // src/interactions/mode.ts
   function setMode(mode) {
     if (mode !== "select") mode = "drag";
@@ -1781,157 +2203,6 @@
       state.selectBox = null;
     });
   }
-
-  // src/layout.ts
-  function bfsDepth(screens, arrows) {
-    var children = {};
-    var hasParent = {};
-    screens.forEach(function(s) {
-      children[s.id] = [];
-    });
-    arrows.forEach(function(a) {
-      if (children[a.from]) children[a.from].push(a.to);
-      hasParent[a.to] = true;
-    });
-    var roots = screens.filter(function(s) {
-      return !hasParent[s.id];
-    }).map(function(s) {
-      return s.id;
-    });
-    if (roots.length === 0 && screens.length > 0) roots = [screens[0].id];
-    var col = {};
-    var visited = {};
-    var queue = [];
-    roots.forEach(function(r) {
-      queue.push(r);
-      col[r] = 0;
-      visited[r] = true;
-    });
-    while (queue.length > 0) {
-      var cur = queue.shift();
-      (children[cur] || []).forEach(function(child) {
-        if (!visited[child]) {
-          visited[child] = true;
-          col[child] = (col[cur] || 0) + 1;
-          queue.push(child);
-        }
-      });
-    }
-    screens.forEach(function(s) {
-      if (col[s.id] === void 0) col[s.id] = 0;
-    });
-    return col;
-  }
-  function centerPositions(positions, screens, totalW, totalH) {
-    var cx = Math.max(0, Math.round((CANVAS_W - totalW) / 2));
-    var cy = Math.max(0, Math.round((CANVAS_H - totalH) / 2));
-    screens.forEach(function(s) {
-      if (positions[s.id]) {
-        positions[s.id].x += cx;
-        positions[s.id].y += cy;
-      }
-    });
-  }
-  function autoLayout(screens, arrows, heights) {
-    var col = bfsDepth(screens, arrows);
-    var columns = {};
-    screens.forEach(function(s) {
-      var c = col[s.id];
-      if (!columns[c]) columns[c] = [];
-      columns[c].push(s);
-    });
-    var positions = {};
-    var colKeys = Object.keys(columns).map(Number).sort(function(a, b) {
-      return a - b;
-    });
-    var offsetX = 0;
-    var totalH = 0;
-    colKeys.forEach(function(c) {
-      var colScreens = columns[c];
-      var maxW = 0;
-      colScreens.forEach(function(s) {
-        var w = screenWidth(s);
-        if (w > maxW) maxW = w;
-      });
-      var offsetY = 0;
-      colScreens.forEach(function(s) {
-        positions[s.id] = { x: offsetX, y: offsetY };
-        var h = heights && heights[s.id] ? heights[s.id] : 200;
-        offsetY += h + GAP_Y;
-      });
-      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
-      offsetX += maxW + GAP_X;
-    });
-    var totalW = offsetX - GAP_X;
-    centerPositions(positions, screens, totalW, totalH);
-    return positions;
-  }
-  function layoutByEpics(screens, arrows, heights) {
-    var epicGroups = {};
-    var epicOrder = [];
-    screens.forEach(function(s) {
-      var eid = s.epic || "_none";
-      if (!epicGroups[eid]) {
-        epicGroups[eid] = [];
-        epicOrder.push(eid);
-      }
-      epicGroups[eid].push(s);
-    });
-    var col = bfsDepth(screens, arrows);
-    var positions = {};
-    var offsetX = 0;
-    var totalH = 0;
-    epicOrder.forEach(function(eid) {
-      var group = epicGroups[eid];
-      group.sort(function(a, b) {
-        return (col[a.id] || 0) - (col[b.id] || 0);
-      });
-      var maxW = 0;
-      group.forEach(function(s) {
-        var w = screenWidth(s);
-        if (w > maxW) maxW = w;
-      });
-      var offsetY = 0;
-      group.forEach(function(s) {
-        positions[s.id] = { x: offsetX, y: offsetY };
-        var h = heights && heights[s.id] ? heights[s.id] : 200;
-        offsetY += h + GAP_Y;
-      });
-      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
-      offsetX += maxW + GAP_X;
-    });
-    centerPositions(positions, screens, offsetX - GAP_X, totalH);
-    return positions;
-  }
-  function layoutGrid(screens, arrows, heights) {
-    var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
-    var positions = {};
-    var offsetX = 0, offsetY = 0;
-    var rowMaxH = 0;
-    var totalW = 0, totalH = 0;
-    screens.forEach(function(s, i) {
-      var colIdx = i % cols;
-      if (colIdx === 0 && i > 0) {
-        offsetY += rowMaxH + GAP_Y;
-        offsetX = 0;
-        rowMaxH = 0;
-      }
-      positions[s.id] = { x: offsetX, y: offsetY };
-      var w = screenWidth(s);
-      var h = heights && heights[s.id] ? heights[s.id] : 200;
-      if (h > rowMaxH) rowMaxH = h;
-      offsetX += w + GAP_X;
-      if (offsetX > totalW) totalW = offsetX;
-    });
-    totalH = offsetY + rowMaxH;
-    centerPositions(positions, screens, totalW - GAP_X, totalH);
-    return positions;
-  }
-  var LAYOUT_STRATEGIES = [
-    { name: "Flow", fn: autoLayout },
-    { name: "Epics", fn: layoutByEpics },
-    { name: "Grid", fn: layoutGrid }
-  ];
 
   // src/render/mode-switch.ts
   function renderModeSwitch() {
@@ -2485,7 +2756,11 @@
     sizer.appendChild(canvas);
     wrapper.appendChild(sizer);
     wrapper.appendChild(renderModeSwitch());
-    root.appendChild(wrapper);
+    var body = document.createElement("div");
+    body.className = "fb-body";
+    body.appendChild(renderPanel());
+    body.appendChild(wrapper);
+    root.appendChild(body);
     state.wrapperEl = wrapper;
     state.sizerEl = sizer;
     state.canvasEl = canvas;
@@ -2539,6 +2814,7 @@
     initModeKeys();
     initCreateMenu();
     setMode("drag");
+    initSync();
     requestAnimationFrame(function() {
       var heights = {};
       screens.forEach(function(s) {
@@ -2562,6 +2838,7 @@
       }
       drawArrows();
       freezeArrowSides();
+      if (state.commit) state.commit();
     });
   }
 
