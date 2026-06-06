@@ -1,0 +1,18 @@
+name: Release purge
+
+# Refresh jsDelivr's cache for the floating refs whenever a version tag is
+# pushed. Immutable tag URLs (@vX.Y.Z) never need purging.
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Purge jsDelivr @main / @latest
+        run: |
+          for f in flowboard.js flowboard.min.js flowboard.css; do
+            curl -fsS "https://purge.jsdelivr.net/gh/snowpact/html-flow-board@main/$f" || true
+            curl -fsS "https://purge.jsdelivr.net/gh/snowpact/html-flow-board@latest/$f" || true
+          done

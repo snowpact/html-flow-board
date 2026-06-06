@@ -1,0 +1,5 @@
+# Lock line endings so the committed bundle stays byte-identical across
+# platforms (the CI stale-bundle guard depends on it).
+*.js text eol=lf
+*.css text eol=lf
+*.ts text eol=lf

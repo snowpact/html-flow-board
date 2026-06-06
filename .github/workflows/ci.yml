@@ -6,18 +6,17 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege at workflow level; deploy grabs what it needs below.
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 jobs:
   ci:
     runs-on: ubuntu-latest
+    # Per-ref so a push to main never cancels an open PR's checks.
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
 
@@ -29,13 +28,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build bundle
+        run: npm run build
+
+      - name: Fail if committed bundle is stale
+        run: git diff --exit-code -- flowboard.js flowboard.min.js
+
       - name: Run tests
-        run: npm test
+        run: npx vitest run
 
   deploy:
     needs: ci
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Serialize Pages deploys; never cancel an in-flight one (GitHub warns against it).
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
