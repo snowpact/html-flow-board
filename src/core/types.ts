@@ -29,6 +29,7 @@ export interface Screen {
   width?: number;     // explicit body width (px)
   height?: number;    // explicit body height (px); absent ⇒ content-driven
   notes?: string;
+  hidden?: boolean;   // Flow-ML round-trip of the legend hide toggle
   content?: string;   // raw HTML body, used when preset is 'custom'
   preset?: PresetId;  // body display preset; absent ⇒ 'custom'
   [k: string]: any;
