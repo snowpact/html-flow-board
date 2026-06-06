@@ -4,6 +4,7 @@ import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
 import { setScreenPreset, setScreenFormat } from './src/render/screen';
+import { closePresetPicker } from './src/render/preset-picker';
 
 // Modules are imported directly and share one `state` singleton, so reset it
 // between tests (init repopulates most of it, but not every transient field).
@@ -270,13 +271,14 @@ describe('context menu', () => {
 });
 
 describe('preset create + modify', () => {
-  beforeEach(() => { closeContextMenu(); initBoard(); });
+  beforeEach(() => { closeContextMenu(); closePresetPicker(); initBoard(); });
 
-  it('right-click on the empty board opens a Créer menu', () => {
+  it('right-click on the empty board opens the preset picker (preview grid)', () => {
     state.wrapperEl.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
-    const menu = document.querySelector('.fb-ctx-menu');
-    expect(menu).toBeTruthy();
-    expect(menu.textContent).toContain('Créer');
+    const picker = document.querySelector('.fb-preset-picker');
+    expect(picker).toBeTruthy();
+    expect(picker.querySelectorAll('.fb-preset-tile').length).toBe(15); // 14 presets + custom
+    expect(picker.textContent.trim()).toBe(''); // no preset labels (previews only)
   });
 
   it('createScreen adds a positioned preset screen and renders its skeleton', () => {

@@ -2,8 +2,7 @@ import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
 import { setScreenFormat, setScreenPreset, toggleScreen } from './screen';
-import { showContextMenu } from './context-menu';
-import { PRESETS } from './presets';
+import { showPresetPicker } from './preset-picker';
 import { Arrow, Format, PresetId, Screen } from '../core/types';
 
 export function handlePopupOutsideClick(e: MouseEvent): void {
@@ -297,14 +296,7 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
     var cy = ev.clientY;
     var current: PresetId = screenData.preset || 'custom';
     closeScreenPopup();
-    var items = PRESETS.map(function (p) {
-      return {
-        label: p.label,
-        active: p.id === current,
-        onClick: function () { setScreenPreset(screenId, p.id); },
-      };
-    });
-    showContextMenu(cx, cy, items);
+    showPresetPicker(cx, cy, function (preset) { setScreenPreset(screenId, preset); }, current);
   });
   popup.appendChild(layoutBtn);
 

@@ -598,77 +598,58 @@
     drawArrows();
   }
 
-  // src/render/context-menu.ts
-  var openRoot = null;
+  // src/render/preset-picker.ts
+  var pickerEl = null;
   var dismiss = null;
-  function closeContextMenu() {
-    if (openRoot && openRoot.parentNode) openRoot.parentNode.removeChild(openRoot);
-    openRoot = null;
+  function closePresetPicker() {
+    if (pickerEl && pickerEl.parentNode) pickerEl.parentNode.removeChild(pickerEl);
+    pickerEl = null;
     if (dismiss) {
       document.removeEventListener("mousedown", dismiss, true);
       document.removeEventListener("keydown", dismiss, true);
       dismiss = null;
     }
   }
-  function buildMenu(items) {
-    var menu = document.createElement("div");
-    menu.className = "fb-ctx-menu";
-    items.forEach(function(item) {
-      var row = document.createElement("div");
-      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
-      var label = document.createElement("span");
-      label.className = "fb-ctx-label";
-      label.textContent = item.label;
-      row.appendChild(label);
-      if (item.submenu && item.submenu.length) {
-        var caret = document.createElement("span");
-        caret.className = "fb-ctx-caret";
-        caret.textContent = "\u25B8";
-        row.appendChild(caret);
-        row.addEventListener("mouseenter", function() {
-          var existing = menu.querySelectorAll(".fb-ctx-sub");
-          for (var i = 0; i < existing.length; i++) {
-            var e = existing[i];
-            if (e.parentNode) e.parentNode.removeChild(e);
-          }
-          var sub = buildMenu(item.submenu);
-          sub.classList.add("fb-ctx-sub");
-          row.appendChild(sub);
-          if (sub.getBoundingClientRect().right > window.innerWidth) {
-            sub.classList.add("fb-ctx-sub-left");
-          }
-        });
-        row.addEventListener("mouseleave", function() {
-          var s = row.querySelector(".fb-ctx-sub");
-          if (s && s.parentNode) s.parentNode.removeChild(s);
-        });
-      } else {
-        row.addEventListener("click", function(e) {
-          e.stopPropagation();
-          closeContextMenu();
-          if (item.onClick) item.onClick();
-        });
+  function showPresetPicker(x, y, onPick, current) {
+    closePresetPicker();
+    var picker = document.createElement("div");
+    picker.className = "fb-preset-picker";
+    var grid = document.createElement("div");
+    grid.className = "fb-preset-grid";
+    PRESETS.forEach(function(p) {
+      var tile = document.createElement("button");
+      tile.className = "fb-preset-tile" + (p.id === current ? " active" : "") + (p.id === "custom" ? " fb-preset-custom" : "");
+      tile.title = p.label;
+      var thumb = document.createElement("div");
+      thumb.className = "fb-preset-thumb";
+      if (p.id !== "custom") {
+        var mini = document.createElement("div");
+        mini.className = "fb-screen-body fb-skeleton fb-skel-" + p.id + " fb-preset-mini";
+        mini.innerHTML = skeletonHtml(p.id);
+        thumb.appendChild(mini);
       }
-      menu.appendChild(row);
+      tile.appendChild(thumb);
+      tile.addEventListener("click", function(e) {
+        e.stopPropagation();
+        closePresetPicker();
+        onPick(p.id);
+      });
+      grid.appendChild(tile);
     });
-    return menu;
-  }
-  function showContextMenu(x, y, items) {
-    closeContextMenu();
-    var menu = buildMenu(items);
-    menu.style.left = x + "px";
-    menu.style.top = y + "px";
-    document.body.appendChild(menu);
-    openRoot = menu;
-    var r = menu.getBoundingClientRect();
-    if (r.width && r.right > window.innerWidth) menu.style.left = Math.max(0, x - r.width) + "px";
-    if (r.height && r.bottom > window.innerHeight) menu.style.top = Math.max(0, y - r.height) + "px";
+    picker.appendChild(grid);
+    picker.style.left = x + "px";
+    picker.style.top = y + "px";
+    document.body.appendChild(picker);
+    pickerEl = picker;
+    var r = picker.getBoundingClientRect();
+    if (r.width && r.right > window.innerWidth) picker.style.left = Math.max(0, x - r.width) + "px";
+    if (r.height && r.bottom > window.innerHeight) picker.style.top = Math.max(0, y - r.height) + "px";
     dismiss = function(e) {
       if (e.type === "keydown") {
-        if (e.key === "Escape") closeContextMenu();
+        if (e.key === "Escape") closePresetPicker();
         return;
       }
-      if (openRoot && !openRoot.contains(e.target)) closeContextMenu();
+      if (pickerEl && !pickerEl.contains(e.target)) closePresetPicker();
     };
     var fn = dismiss;
     setTimeout(function() {
@@ -676,7 +657,7 @@
       document.addEventListener("mousedown", fn, true);
       document.addEventListener("keydown", fn, true);
     }, 0);
-    return menu;
+    return picker;
   }
 
   // src/render/popups.ts
@@ -925,16 +906,9 @@
       var cy = ev.clientY;
       var current = screenData.preset || "custom";
       closeScreenPopup();
-      var items = PRESETS.map(function(p) {
-        return {
-          label: p.label,
-          active: p.id === current,
-          onClick: function() {
-            setScreenPreset(screenId, p.id);
-          }
-        };
-      });
-      showContextMenu(cx, cy, items);
+      showPresetPicker(cx, cy, function(preset) {
+        setScreenPreset(screenId, preset);
+      }, current);
     });
     popup.appendChild(layoutBtn);
     var wrapperRect = state.wrapperEl.getBoundingClientRect();
@@ -1393,12 +1367,9 @@
       e.preventDefault();
       var cx = e.clientX;
       var cy = e.clientY;
-      var presetItems = PRESETS.map(function(p) {
-        return { label: p.label, onClick: function() {
-          createScreen(p.id, cx, cy);
-        } };
+      showPresetPicker(cx, cy, function(preset) {
+        createScreen(preset, cx, cy);
       });
-      showContextMenu(cx, cy, [{ label: "Cr\xE9er", submenu: presetItems }]);
     });
   }
 

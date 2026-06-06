@@ -3,8 +3,7 @@ import { drawArrows } from '../arrows';
 import { CANVAS_H, CANVAS_W } from '../core/constants';
 import { state } from '../core/state';
 import { savePositions } from '../core/storage';
-import { showContextMenu } from '../render/context-menu';
-import { PRESETS } from '../render/presets';
+import { showPresetPicker } from '../render/preset-picker';
 import { renderScreen } from '../render/screen';
 
 var createCounter = 0;
@@ -58,9 +57,6 @@ export function initCreateMenu(): void {
     e.preventDefault();
     var cx = e.clientX;
     var cy = e.clientY;
-    var presetItems = PRESETS.map(function (p) {
-      return { label: p.label, onClick: function () { createScreen(p.id, cx, cy); } };
-    });
-    showContextMenu(cx, cy, [{ label: 'Créer', submenu: presetItems }]);
+    showPresetPicker(cx, cy, function (preset) { createScreen(preset, cx, cy); });
   });
 }
