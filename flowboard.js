@@ -1937,60 +1937,86 @@
 
   // src/flowml/highlight.ts
   function esc(s) {
+    if (s.indexOf("&") === -1 && s.indexOf("<") === -1 && s.indexOf(">") === -1) return s;
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
   function tok(cls, s) {
     return '<span class="fb-tok-' + cls + '">' + esc(s) + "</span>";
   }
+  var RE_STR = /"(?:\\.|[^"])*"/y;
+  var RE_KEYEQ = /([A-Za-z][A-Za-z0-9]*)(\s*=\s*)/y;
+  var RE_COLOR = /#[0-9A-Fa-f]{3,8}\b/y;
+  var RE_NUM = /-?\d+(?:\.\d+)?/y;
+  var RE_WS = /\s+/y;
+  var RE_BARE = /[^\s,]+/y;
+  var RE_LEAD = /^\s*/;
+  var RE_FENCE = /^`{3,}$/;
+  var RE_DIRECTIVE = /^(![A-Za-z]+)(\s*=\s*)(.*)$/;
+  var RE_ARROW = /^([^\s,]+)(\s*(?:\.\.>|->)\s*)([^\s,]+)(.*)$/;
+  var RE_EPIC = /^(@[^\s,]+)(.*)$/;
+  var RE_SCREEN = /^([^\s,]+)(.*)$/;
   function hlAttrs(s) {
     var out = "";
     var i = 0;
+    var n = s.length;
     var m;
-    while (i < s.length) {
-      var rest = s.slice(i);
-      if (m = /^("(?:\\.|[^"])*")/.exec(rest)) {
-        out += tok("string", m[1]);
-        i += m[1].length;
+    while (i < n) {
+      var ch = s.charAt(i);
+      if (ch === ",") {
+        out += '<span class="fb-tok-punct">,</span>';
+        i++;
         continue;
       }
-      if (m = /^([A-Za-z][A-Za-z0-9]*)(\s*=\s*)/.exec(rest)) {
-        out += tok("key", m[1]) + tok("punct", m[2]);
-        i += m[0].length;
+      if (ch === " " || ch === "	") {
+        RE_WS.lastIndex = i;
+        m = RE_WS.exec(s);
+        out += m[0];
+        i = RE_WS.lastIndex;
         continue;
       }
-      if (m = /^(#[0-9A-Fa-f]{3,8})\b/.exec(rest)) {
-        out += tok("color", m[1]);
-        i += m[1].length;
+      if (ch === '"') {
+        RE_STR.lastIndex = i;
+        if (m = RE_STR.exec(s)) {
+          out += tok("string", m[0]);
+          i = RE_STR.lastIndex;
+          continue;
+        }
+      }
+      if (ch === "#") {
+        RE_COLOR.lastIndex = i;
+        if (m = RE_COLOR.exec(s)) {
+          out += tok("color", m[0]);
+          i = RE_COLOR.lastIndex;
+          continue;
+        }
+      }
+      if (ch >= "A" && ch <= "Z" || ch >= "a" && ch <= "z") {
+        RE_KEYEQ.lastIndex = i;
+        if (m = RE_KEYEQ.exec(s)) {
+          out += tok("key", m[1]) + tok("punct", m[2]);
+          i = RE_KEYEQ.lastIndex;
+          continue;
+        }
+      }
+      if (ch === "-" || ch >= "0" && ch <= "9") {
+        RE_NUM.lastIndex = i;
+        if (m = RE_NUM.exec(s)) {
+          out += tok("num", m[0]);
+          i = RE_NUM.lastIndex;
+          continue;
+        }
+      }
+      RE_BARE.lastIndex = i;
+      m = RE_BARE.exec(s);
+      if (m) {
+        out += m[0] === "h" ? tok("flag", m[0]) : tok("value", m[0]);
+        i = RE_BARE.lastIndex;
         continue;
       }
-      if (m = /^(-?\d+(?:\.\d+)?)/.exec(rest)) {
-        out += tok("num", m[1]);
-        i += m[1].length;
-        continue;
-      }
-      if (m = /^(,)/.exec(rest)) {
-        out += tok("punct", m[1]);
-        i += 1;
-        continue;
-      }
-      if (m = /^(\s+)/.exec(rest)) {
-        out += esc(m[1]);
-        i += m[1].length;
-        continue;
-      }
-      if (m = /^([^\s,]+)/.exec(rest)) {
-        out += m[1] === "h" ? tok("flag", m[1]) : tok("value", m[1]);
-        i += m[1].length;
-        continue;
-      }
-      out += esc(rest.charAt(0));
-      i += 1;
+      out += esc(ch);
+      i++;
     }
     return out;
-  }
-  function leading(line) {
-    var m = /^\s*/.exec(line);
-    return m ? m[0] : "";
   }
   function highlight(text) {
     var lines = text.split("\n");
@@ -2009,7 +2035,7 @@
         out.push("");
         continue;
       }
-      var lead = leading(line);
+      var lead = RE_LEAD.exec(line)[0];
       var body = line.slice(lead.length);
       var head = esc(lead);
       var m;
@@ -2017,27 +2043,27 @@
         out.push(head + tok("comment", body));
         continue;
       }
-      if (/^`{3,}$/.test(body)) {
+      if (RE_FENCE.test(body)) {
         out.push(head + tok("fence", body));
         fence = body;
         continue;
       }
       if (body.charAt(0) === "!") {
-        m = /^(![A-Za-z]+)(\s*=\s*)(.*)$/.exec(body);
+        m = RE_DIRECTIVE.exec(body);
         if (m) out.push(head + tok("directive", m[1]) + tok("punct", m[2]) + tok("value", m[3]));
         else out.push(head + tok("directive", body));
         continue;
       }
-      if (body.charAt(0) !== "@" && (m = /^([^\s,]+)(\s*(?:\.\.>|->)\s*)([^\s,]+)(.*)$/.exec(body))) {
+      if (body.charAt(0) !== "@" && (m = RE_ARROW.exec(body))) {
         out.push(head + tok("ref", m[1]) + tok("arrow", m[2]) + tok("ref", m[3]) + hlAttrs(m[4]));
         continue;
       }
       if (body.charAt(0) === "@") {
-        m = /^(@[^\s,]+)(.*)$/.exec(body);
+        m = RE_EPIC.exec(body);
         out.push(head + tok("epic", m[1]) + hlAttrs(m[2]));
         continue;
       }
-      m = /^([^\s,]+)(.*)$/.exec(body);
+      m = RE_SCREEN.exec(body);
       out.push(head + tok("screen", m[1]) + hlAttrs(m[2]));
     }
     return out.join("\n");
@@ -2720,9 +2746,11 @@
     }
     while (state.svgEl.firstChild) state.svgEl.removeChild(state.svgEl.firstChild);
     state.screenEls = {};
+    var frag = document.createDocumentFragment();
     (project.screens || []).forEach(function(s) {
-      state.canvasEl.appendChild(renderScreen(s));
+      frag.appendChild(renderScreen(s));
     });
+    state.canvasEl.appendChild(frag);
     drawArrows();
     syncToolbar();
   }

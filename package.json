@@ -11,7 +11,8 @@
     "release": "bash scripts/release.sh",
     "pretest": "tsup",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bench": "vitest bench --run"
   },
   "keywords": [
     "storyboard",

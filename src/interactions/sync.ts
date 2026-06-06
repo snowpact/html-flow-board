@@ -37,9 +37,12 @@ export function rebuildBoard(project: FlowProject, positions: Record<string, Pos
   while (state.svgEl.firstChild) state.svgEl.removeChild(state.svgEl.firstChild);
   state.screenEls = {};
 
+  // Build into a fragment so the canvas reflows once, not once per screen.
+  var frag = document.createDocumentFragment();
   (project.screens || []).forEach(function (s) {
-    state.canvasEl.appendChild(renderScreen(s));
+    frag.appendChild(renderScreen(s));
   });
+  state.canvasEl.appendChild(frag);
   drawArrows();
   syncToolbar(); // project name + epic legend may have changed in the text
 }
