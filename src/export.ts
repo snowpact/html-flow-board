@@ -174,7 +174,6 @@ export function doExportConfig(): void {
 
   var stateCopy = {
     positions: JSON.parse(JSON.stringify(state.positions)),
-    sizes: JSON.parse(JSON.stringify(state.sizes)),
     zoom: state.zoom,
     panX: state.panX,
     panY: state.panY,

@@ -20,7 +20,6 @@ export var state: FlowState = {
   screenEls: {},
   defaultPositions: {},
   positions: {},
-  sizes: {},
   showNotes: true,
   hiddenEpics: {},
   handleEls: [],
@@ -40,32 +39,17 @@ export function getEpic(epicId: string): Epic | null {
   return null;
 }
 
-// Default (unresized) body width: format, else explicit width, else legacy
-// size, else 320.
-export function baseWidth(s: Screen): number {
+// Body width from the format, else legacy explicit width / size, else 320.
+export function screenWidth(s: Screen): number {
   if (s.format && FORMATS[s.format]) return FORMATS[s.format].width;
   if (s.width) return s.width;
   if (s.size && SIZES[s.size]) return SIZES[s.size];
   return 320;
 }
 
-// Default (unresized) body height: format, else explicit height, else null
-// (content-driven / auto).
-export function baseHeight(s: Screen): number | null {
+// Body height from the format, else legacy explicit height, else null (auto).
+export function screenHeight(s: Screen): number | null {
   if (s.format && FORMATS[s.format]) return FORMATS[s.format].height;
   if (s.height) return s.height;
   return null;
-}
-
-// Effective dimensions: a user resize (state.sizes) overrides the base.
-export function screenWidth(s: Screen): number {
-  var sz = state.sizes[s.id];
-  if (sz && sz.width) return sz.width;
-  return baseWidth(s);
-}
-
-export function screenHeight(s: Screen): number | null {
-  var sz = state.sizes[s.id];
-  if (sz && sz.height) return sz.height;
-  return baseHeight(s);
 }

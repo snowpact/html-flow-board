@@ -2,7 +2,7 @@ import { Format, PresetId, Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
 import { escapeHtml } from '../core/geometry';
 import { getEpic, screenHeight, screenWidth, state } from '../core/state';
-import { saveHiddenScreens, saveSizes } from '../core/storage';
+import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { showScreenPopup } from './popups';
 import { isCustomPreset, skeletonHtml } from './presets';
@@ -108,11 +108,6 @@ export function renderScreen(screenData: Screen): HTMLElement {
     }
   });
 
-  // Resize handle (bottom-right corner)
-  var resizeHandle = document.createElement('div');
-  resizeHandle.className = 'fb-resize-handle';
-  el.appendChild(resizeHandle);
-
   state.screenEls[screenData.id] = el;
   return el;
 }
@@ -141,14 +136,12 @@ export function setScreenFormat(screenId: string, format: Format): void {
   }
   if (!screen) return;
   screen.format = format;
-  delete state.sizes[screenId];
   var el = state.screenEls[screenId];
   if (el) {
     el.style.width = screenWidth(screen) + 'px';
     var h = screenHeight(screen);
     el.style.height = h ? (h + 'px') : '';
   }
-  saveSizes();
   drawArrows();
 }
 

@@ -81,7 +81,6 @@ export interface FlowState {
   screenEls: Record<string, HTMLElement>;
   defaultPositions: Record<string, Position>;
   positions: Record<string, Position>;
-  sizes: Record<string, Size>;
   showNotes: boolean;
   hiddenEpics: Record<string, boolean>;
   handleEls: any[];

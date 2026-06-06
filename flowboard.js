@@ -7,12 +7,12 @@
   var ZOOM_STEP = 0.1;
   var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
   var FORMATS = {
-    desktop: { width: 380, height: 214 },
-    // ~16:9
-    phone: { width: 180, height: 380 },
-    // ~1:2.1
-    square: { width: 280, height: 280 }
-    // 1:1
+    desktop: { width: 400, height: 240 },
+    // lg width, landscape
+    phone: { width: 240, height: 420 },
+    // sm width, tall portrait
+    square: { width: 320, height: 320 }
+    // md width, 1:1
   };
   var GAP_X = 100;
   var GAP_Y = 40;
@@ -72,7 +72,6 @@
     screenEls: {},
     defaultPositions: {},
     positions: {},
-    sizes: {},
     showNotes: true,
     hiddenEpics: {},
     handleEls: [],
@@ -89,26 +88,16 @@
     }
     return null;
   }
-  function baseWidth(s) {
+  function screenWidth(s) {
     if (s.format && FORMATS[s.format]) return FORMATS[s.format].width;
     if (s.width) return s.width;
     if (s.size && SIZES[s.size]) return SIZES[s.size];
     return 320;
   }
-  function baseHeight(s) {
+  function screenHeight(s) {
     if (s.format && FORMATS[s.format]) return FORMATS[s.format].height;
     if (s.height) return s.height;
     return null;
-  }
-  function screenWidth(s) {
-    var sz = state.sizes[s.id];
-    if (sz && sz.width) return sz.width;
-    return baseWidth(s);
-  }
-  function screenHeight(s) {
-    var sz = state.sizes[s.id];
-    if (sz && sz.height) return sz.height;
-    return baseHeight(s);
   }
 
   // src/core/storage.ts
@@ -124,20 +113,6 @@
   function loadPositions() {
     try {
       var raw = localStorage.getItem(storageKey() + "-pos");
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) {
-      return null;
-    }
-  }
-  function saveSizes() {
-    try {
-      localStorage.setItem(storageKey() + "-sizes", JSON.stringify(state.sizes));
-    } catch (e) {
-    }
-  }
-  function loadSizes() {
-    try {
-      var raw = localStorage.getItem(storageKey() + "-sizes");
       return raw ? JSON.parse(raw) : null;
     } catch (e) {
       return null;
@@ -542,9 +517,6 @@
         scheduleHideAnchors();
       }
     });
-    var resizeHandle = document.createElement("div");
-    resizeHandle.className = "fb-resize-handle";
-    el.appendChild(resizeHandle);
     state.screenEls[screenData.id] = el;
     return el;
   }
@@ -570,14 +542,12 @@
     }
     if (!screen) return;
     screen.format = format;
-    delete state.sizes[screenId];
     var el = state.screenEls[screenId];
     if (el) {
       el.style.width = screenWidth(screen) + "px";
       var h = screenHeight(screen);
       el.style.height = h ? h + "px" : "";
     }
-    saveSizes();
     drawArrows();
   }
   function setScreenPreset(screenId, preset) {
@@ -1326,6 +1296,87 @@
     });
   }
 
+  // src/render/context-menu.ts
+  var openRoot = null;
+  var dismiss2 = null;
+  function closeContextMenu() {
+    if (openRoot && openRoot.parentNode) openRoot.parentNode.removeChild(openRoot);
+    openRoot = null;
+    if (dismiss2) {
+      document.removeEventListener("mousedown", dismiss2, true);
+      document.removeEventListener("keydown", dismiss2, true);
+      dismiss2 = null;
+    }
+  }
+  function buildMenu(items) {
+    var menu = document.createElement("div");
+    menu.className = "fb-ctx-menu";
+    items.forEach(function(item) {
+      var row = document.createElement("div");
+      row.className = "fb-ctx-item" + (item.active ? " fb-ctx-active" : "") + (item.submenu ? " fb-ctx-has-sub" : "");
+      var label = document.createElement("span");
+      label.className = "fb-ctx-label";
+      label.textContent = item.label;
+      row.appendChild(label);
+      if (item.submenu && item.submenu.length) {
+        var caret = document.createElement("span");
+        caret.className = "fb-ctx-caret";
+        caret.textContent = "\u25B8";
+        row.appendChild(caret);
+        row.addEventListener("mouseenter", function() {
+          var existing = menu.querySelectorAll(".fb-ctx-sub");
+          for (var i = 0; i < existing.length; i++) {
+            var e = existing[i];
+            if (e.parentNode) e.parentNode.removeChild(e);
+          }
+          var sub = buildMenu(item.submenu);
+          sub.classList.add("fb-ctx-sub");
+          row.appendChild(sub);
+          if (sub.getBoundingClientRect().right > window.innerWidth) {
+            sub.classList.add("fb-ctx-sub-left");
+          }
+        });
+        row.addEventListener("mouseleave", function() {
+          var s = row.querySelector(".fb-ctx-sub");
+          if (s && s.parentNode) s.parentNode.removeChild(s);
+        });
+      } else {
+        row.addEventListener("click", function(e) {
+          e.stopPropagation();
+          closeContextMenu();
+          if (item.onClick) item.onClick();
+        });
+      }
+      menu.appendChild(row);
+    });
+    return menu;
+  }
+  function showContextMenu(x, y, items) {
+    closeContextMenu();
+    var menu = buildMenu(items);
+    menu.style.left = x + "px";
+    menu.style.top = y + "px";
+    document.body.appendChild(menu);
+    openRoot = menu;
+    var r = menu.getBoundingClientRect();
+    if (r.width && r.right > window.innerWidth) menu.style.left = Math.max(0, x - r.width) + "px";
+    if (r.height && r.bottom > window.innerHeight) menu.style.top = Math.max(0, y - r.height) + "px";
+    dismiss2 = function(e) {
+      if (e.type === "keydown") {
+        if (e.key === "Escape") closeContextMenu();
+        return;
+      }
+      if (openRoot && !openRoot.contains(e.target)) closeContextMenu();
+    };
+    var fn = dismiss2;
+    setTimeout(function() {
+      if (dismiss2 !== fn) return;
+      document.addEventListener("mousedown", fn, true);
+      document.addEventListener("keydown", fn, true);
+    }, 0);
+    return menu;
+  }
+
   // src/interactions/create.ts
   var createCounter = 0;
   function screenExists(id) {
@@ -1367,9 +1418,14 @@
       e.preventDefault();
       var cx = e.clientX;
       var cy = e.clientY;
-      showPresetPicker(cx, cy, function(preset) {
-        createScreen(preset, cx, cy);
-      });
+      showContextMenu(cx, cy, [{
+        label: "Cr\xE9er un \xE9cran",
+        onClick: function() {
+          showPresetPicker(cx, cy, function(preset) {
+            createScreen(preset, cx, cy);
+          });
+        }
+      }]);
     });
   }
 
@@ -1428,7 +1484,6 @@
       closeScreenPopup();
       if (state.creatingArrow) return;
       if (e.button !== 0) return;
-      if (e.target.closest(".fb-resize-handle")) return;
       var screenEl = e.target.closest(".fb-screen");
       if (!screenEl) return;
       var id = screenEl.dataset.screenId;
@@ -1487,60 +1542,6 @@
           showAnchorDots(singleId);
         }
       }
-    });
-  }
-
-  // src/interactions/resize.ts
-  var MIN_FACTOR = 0.7;
-  var MAX_FACTOR = 1.3;
-  function findScreen(id) {
-    var screens = state.project && state.project.screens || [];
-    for (var i = 0; i < screens.length; i++) if (screens[i].id === id) return screens[i];
-    return null;
-  }
-  function clamp(v, lo, hi) {
-    return Math.max(lo, Math.min(hi, v));
-  }
-  function initResize() {
-    state.canvasEl.addEventListener("mousedown", function(e) {
-      var handle = e.target.closest(".fb-resize-handle");
-      if (!handle) return;
-      var screenEl = handle.closest(".fb-screen");
-      if (!screenEl) return;
-      var id = screenEl.dataset.screenId;
-      var screen = findScreen(id);
-      if (!screen) return;
-      e.stopPropagation();
-      e.preventDefault();
-      var baseW = baseWidth(screen);
-      var baseH = baseHeight(screen);
-      if (baseH == null) {
-        var prevH = screenEl.style.height;
-        screenEl.style.height = "";
-        baseH = screenEl.offsetHeight;
-        screenEl.style.height = prevH;
-      }
-      var minW = baseW * MIN_FACTOR, maxW = baseW * MAX_FACTOR;
-      var minH = baseH * MIN_FACTOR, maxH = baseH * MAX_FACTOR;
-      var startX = e.clientX, startY = e.clientY;
-      var startW = screenEl.offsetWidth, startH = screenEl.offsetHeight;
-      screenEl.classList.add("fb-resizing");
-      function onMove(ev) {
-        var w = clamp(startW + (ev.clientX - startX) / state.zoom, minW, maxW);
-        var h = clamp(startH + (ev.clientY - startY) / state.zoom, minH, maxH);
-        screenEl.style.width = w + "px";
-        screenEl.style.height = h + "px";
-        state.sizes[id] = { width: w, height: h };
-        drawArrows();
-      }
-      function onUp() {
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-        screenEl.classList.remove("fb-resizing");
-        saveSizes();
-      }
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
     });
   }
 
@@ -1689,7 +1690,7 @@
     wrapper.addEventListener("mousedown", function(e) {
       if (state.mode !== "drag") return;
       if (state.creatingArrow) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
       if (e.button !== 0) return;
       closeArrowPopup();
       closeScreenPopup();
@@ -1723,7 +1724,7 @@
       if (state.mode !== "select") return;
       if (state.creatingArrow) return;
       if (e.button !== 0) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-popup, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
       closeArrowPopup();
       closeScreenPopup();
       var additive = e.metaKey || e.ctrlKey || e.shiftKey;
@@ -2104,7 +2105,6 @@
     };
     var stateCopy = {
       positions: JSON.parse(JSON.stringify(state.positions)),
-      sizes: JSON.parse(JSON.stringify(state.sizes)),
       zoom: state.zoom,
       panX: state.panX,
       panY: state.panY,
@@ -2508,12 +2508,6 @@
         });
       }
     }
-    if (configState && configState.sizes) {
-      state.sizes = JSON.parse(JSON.stringify(configState.sizes));
-    } else {
-      var savedSizes = loadSizes();
-      if (savedSizes) state.sizes = savedSizes;
-    }
     var hasSavedZoom = false;
     if (configState && configState.zoom !== void 0) {
       hasSavedZoom = true;
@@ -2544,7 +2538,6 @@
     initSelection();
     initModeKeys();
     initCreateMenu();
-    initResize();
     setMode("drag");
     requestAnimationFrame(function() {
       var heights = {};

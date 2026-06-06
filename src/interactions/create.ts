@@ -3,6 +3,7 @@ import { drawArrows } from '../arrows';
 import { CANVAS_H, CANVAS_W } from '../core/constants';
 import { state } from '../core/state';
 import { savePositions } from '../core/storage';
+import { showContextMenu } from '../render/context-menu';
 import { showPresetPicker } from '../render/preset-picker';
 import { renderScreen } from '../render/screen';
 
@@ -57,6 +58,11 @@ export function initCreateMenu(): void {
     e.preventDefault();
     var cx = e.clientX;
     var cy = e.clientY;
-    showPresetPicker(cx, cy, function (preset) { createScreen(preset, cx, cy); });
+    showContextMenu(cx, cy, [{
+      label: 'Créer un écran',
+      onClick: function () {
+        showPresetPicker(cx, cy, function (preset) { createScreen(preset, cx, cy); });
+      },
+    }]);
   });
 }

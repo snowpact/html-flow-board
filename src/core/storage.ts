@@ -17,19 +17,6 @@ export function loadPositions() {
   } catch (e) { return null; }
 }
 
-export function saveSizes() {
-  try {
-    localStorage.setItem(storageKey() + '-sizes', JSON.stringify(state.sizes));
-  } catch (e) { /* quota */ }
-}
-
-export function loadSizes() {
-  try {
-    var raw = localStorage.getItem(storageKey() + '-sizes');
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
-}
-
 export function saveZoom() {
   try {
     localStorage.setItem(storageKey() + '-zoom', JSON.stringify({

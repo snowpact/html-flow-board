@@ -273,8 +273,12 @@ describe('context menu', () => {
 describe('preset create + modify', () => {
   beforeEach(() => { closeContextMenu(); closePresetPicker(); initBoard(); });
 
-  it('right-click on the empty board opens the preset picker (preview grid)', () => {
+  it('right-click → "Créer un écran" → preset picker (preview grid)', () => {
     state.wrapperEl.dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
+    const menu = document.querySelector('.fb-ctx-menu');
+    expect(menu).toBeTruthy();
+    expect(menu.textContent).toContain('Créer un écran');
+    menu.querySelector('.fb-ctx-item').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     const picker = document.querySelector('.fb-preset-picker');
     expect(picker).toBeTruthy();
     expect(picker.querySelectorAll('.fb-preset-tile').length).toBe(15); // 14 presets + custom
@@ -311,18 +315,16 @@ describe('preset create + modify', () => {
     const id = createScreen('blank', 0, 0);
     const s = state.project.screens.find((x) => x.id === id);
     expect(s.format).toBe('desktop');
-    expect(state.screenEls[id].style.width).toBe('380px');
-    expect(state.screenEls[id].style.height).toBe('214px');
+    expect(state.screenEls[id].style.width).toBe('400px');
+    expect(state.screenEls[id].style.height).toBe('240px');
   });
 
-  it('setScreenFormat applies the format dimensions and resets any free-resize', () => {
-    state.sizes['A'] = { width: 999, height: 999 }; // a prior resize
+  it('setScreenFormat applies the format dimensions', () => {
     setScreenFormat('A', 'phone');
     const sA = state.project.screens.find((x) => x.id === 'A');
     expect(sA.format).toBe('phone');
-    expect(state.sizes['A']).toBeUndefined(); // resize cleared
-    expect(state.screenEls['A'].style.width).toBe('180px');
-    expect(state.screenEls['A'].style.height).toBe('380px');
+    expect(state.screenEls['A'].style.width).toBe('240px');
+    expect(state.screenEls['A'].style.height).toBe('420px');
   });
 
   it('the screen popup offers the 3 device formats', () => {
@@ -330,5 +332,22 @@ describe('preset create + modify', () => {
     const btns = state.container.querySelectorAll('.fb-screen-popup-format');
     expect(btns.length).toBe(3);
     expect(Array.prototype.map.call(btns, (b) => b.textContent)).toEqual(['Desktop', 'Phone', 'Square']);
+  });
+
+  it('a mousedown inside the popup does not start a pan that closes it', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    const fmtBtn = state.container.querySelector('.fb-screen-popup-format');
+    fmtBtn.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, button: 0 }));
+    expect(state.panDrag).toBeFalsy(); // pan handler excluded the popup
+    expect(state.container.querySelector('.fb-screen-popup')).toBeTruthy(); // popup still open
+  });
+
+  it('the popup "Modifier le layout" button opens the preset picker', () => {
+    state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
+    const btns = state.container.querySelectorAll('.fb-screen-popup-btn');
+    const layoutBtn = Array.prototype.find.call(btns, (b) => b.textContent === 'Modifier le layout');
+    expect(layoutBtn).toBeTruthy();
+    layoutBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true, clientX: 40, clientY: 40 }));
+    expect(document.querySelector('.fb-preset-picker')).toBeTruthy();
   });
 });

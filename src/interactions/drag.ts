@@ -70,7 +70,6 @@ export function initDrag(): void {
     closeScreenPopup();
     if (state.creatingArrow) return;
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('.fb-resize-handle')) return; // resize, not drag
     var screenEl = (e.target as HTMLElement).closest('.fb-screen') as HTMLElement;
     if (!screenEl) return;
 
