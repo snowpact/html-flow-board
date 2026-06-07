@@ -191,7 +191,9 @@ exact layout matters.
 3. **Add screens** — choose a `preset` + `format`; only write `content` for `custom`.
 4. **Add arrows** for the navigation paths.
 5. **Write one HTML file** (boilerplate above) to the project's docs / `.context`.
-6. **Tell the user** to open it in a browser. They can then drag, wire, and edit it live —
+6. **Verify it (required)** — `node check-html.mjs <file>` (the validator next to this skill,
+   see [Quoting](#quoting)). It catches the syntax errors that blank the page. Fix until ✓.
+7. **Tell the user** to open it in a browser. They can then drag, wire, and edit it live —
    the board persists in `localStorage`.
 
 ### Update an existing flowboard
@@ -214,8 +216,10 @@ The generated `<script>` is real JavaScript — a single bad quote blanks the wh
 - Never put apostrophe-bearing text in a `'single-quoted'` string. ``title: 'C'est parti'``
   breaks; ``title: `C'est parti` `` is correct.
 - Inside a backtick string, only a literal backtick or `${` needs escaping (`` \` ``) — rare in UI copy.
-- **After writing the file, sanity-check the script is valid JS** (mentally or with
-  `node --check` on the extracted `<script>`); the page must not be blank.
+- **After writing the file, run the bundled validator** — it ships next to this skill:
+  `node check-html.mjs <file.html>` (full path: `.claude/skills/flowboard/check-html.mjs` for a
+  project install, or `~/.claude/skills/flowboard/check-html.mjs` for an account install). It
+  syntax-checks every `<script>` and fails if the page would be blank. Fix and re-run until ✓.
 
 ## Rules
 
