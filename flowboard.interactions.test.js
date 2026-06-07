@@ -327,7 +327,7 @@ describe('preset create + modify', () => {
     setScreenFormat('A', 'phone');
     const sA = state.project.screens.find((x) => x.id === 'A');
     expect(sA.format).toBe('phone');
-    expect(state.screenEls['A'].style.minWidth).toBe('270px');
+    expect(state.screenEls['A'].style.minWidth).toBe('260px');
     expect(state.screenEls['A'].style.minHeight).toBe('480px');
     expect(state.screenEls['A'].style.width).toBe('');
   });

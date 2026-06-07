@@ -185,7 +185,7 @@ scrolls).
 | Format | Min size (w × h) |
 |---|---|
 | `desktop` | 460 × 280 |
-| `phone` | 270 × 480 |
+| `phone` | 260 × 480 |
 | `square` | 360 × 360 |
 
 So a `custom` HTML body bigger than the format simply makes the card larger.
