@@ -9,7 +9,7 @@
   var FORMATS = {
     desktop: { width: 460, height: 280 },
     // landscape
-    phone: { width: 270, height: 510 },
+    phone: { width: 270, height: 480 },
     // tall portrait
     square: { width: 360, height: 360 }
     // 1:1
