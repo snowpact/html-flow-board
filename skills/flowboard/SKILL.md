@@ -79,7 +79,7 @@ Use **backtick** strings for every human-text field (`title`, `notes`, `name`, `
   title: `Login`,         // card header
   epic: 'auth',           // an epic id
   preset: 'form',         // body skeleton (see Presets); omit ⇒ 'custom'
-  format: 'phone',        // proportions: 'desktop' | 'phone' | 'fluid'
+  format: 'phone',        // min proportions: 'desktop' | 'phone' | 'square'
   notes: `OTP login flow`,// footer note (toggled by the Notes switch)
   content: `...`,         // raw HTML body — only rendered when preset is 'custom'
 }
@@ -114,11 +114,13 @@ detail · auth · feed · settings · kanban · modal · gallery · nav
 
 ## Formats (`format`)
 
-| Format    | Size                                 | Use for |
-|-----------|--------------------------------------|---------|
-| `desktop` | 400 × 240 (fixed)                    | dashboards, tables, sidebars |
-| `phone`   | 240 × 420 (fixed)                    | mobile screens |
-| `fluid`   | min 280 × 180, grows with content    | custom HTML of any size (never clipped) |
+Every format is a **minimum** — the card grows past it to fit content (never clips, never scrolls).
+
+| Format    | Min size  | Use for |
+|-----------|-----------|---------|
+| `desktop` | 520 × 320 | dashboards, tables, sidebars |
+| `phone`   | 300 × 600 | mobile screens |
+| `square`  | 400 × 400 | square-ish / flexible cards |
 
 ## Flow-ML (the in-app text format)
 

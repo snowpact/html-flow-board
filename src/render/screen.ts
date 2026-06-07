@@ -2,7 +2,7 @@ import { Format, PresetId, Screen, Position } from '../core/types';
 import { drawArrows } from '../arrows';
 import { FORMATS } from '../core/constants';
 import { escapeHtml } from '../core/geometry';
-import { getEpic, isFluidFormat, screenHeight, screenWidth, state } from '../core/state';
+import { getEpic, screenHeight, screenWidth, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { ICON_EYE } from './icons';
@@ -44,9 +44,9 @@ export function renderScreen(screenData: Screen): HTMLElement {
   el.className = 'fb-screen';
   el.dataset.screenId = screenData.id;
 
-  // Size — fixed formats set width(+height); `fluid` sets only a min so the card
-  // grows with its content.
-  if (isFluidFormat(screenData)) {
+  // Size — a format sets only a MIN so the card grows with its content; legacy
+  // explicit width/height stays fixed.
+  if (screenData.format && FORMATS[screenData.format]) {
     var ff = FORMATS[screenData.format];
     el.style.minWidth = ff.width + 'px';
     el.style.minHeight = ff.height + 'px';
@@ -148,7 +148,7 @@ export function setScreenFormat(screenId: string, format: Format): void {
   var el = state.screenEls[screenId];
   if (el) {
     el.style.width = ''; el.style.height = ''; el.style.minWidth = ''; el.style.minHeight = '';
-    if (isFluidFormat(screen)) {
+    if (FORMATS[format]) {
       var ff = FORMATS[format];
       el.style.minWidth = ff.width + 'px';
       el.style.minHeight = ff.height + 'px';

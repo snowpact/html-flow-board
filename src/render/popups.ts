@@ -5,8 +5,8 @@ import { deleteScreen, setScreenEpic, setScreenFormat, setScreenPreset, toggleSc
 import { showContextMenu, CtxItem } from './context-menu';
 import { showPresetPicker } from './preset-picker';
 import {
-  ICON_DESKTOP, ICON_EYE, ICON_EYE_OFF, ICON_FLUID, ICON_LAYOUT, ICON_LINE_DASHED,
-  ICON_LINE_SOLID, ICON_PHONE, ICON_SWAP, ICON_TAG, ICON_TRASH,
+  ICON_DESKTOP, ICON_EYE, ICON_EYE_OFF, ICON_LAYOUT, ICON_LINE_DASHED,
+  ICON_LINE_SOLID, ICON_PHONE, ICON_SQUARE, ICON_SWAP, ICON_TAG, ICON_TRASH,
 } from './icons';
 import { Arrow, Epic, Format, PresetId, Screen } from '../core/types';
 
@@ -279,7 +279,7 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   var fmtDefs: { id: Format; label: string; icon: string }[] = [
     { id: 'desktop', label: 'Desktop', icon: ICON_DESKTOP },
     { id: 'phone', label: 'Phone', icon: ICON_PHONE },
-    { id: 'fluid', label: 'Fluid', icon: ICON_FLUID },
+    { id: 'square', label: 'Square', icon: ICON_SQUARE },
   ];
   fmtDefs.forEach(function (def) {
     var btn = document.createElement('button');

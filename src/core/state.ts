@@ -53,12 +53,8 @@ export function recomputeHiddenEpics(): void {
   });
 }
 
-// A fluid format applies only min dimensions (content grows the card).
-export function isFluidFormat(s: Screen): boolean {
-  return !!(s.format && FORMATS[s.format] && FORMATS[s.format].fluid);
-}
-
-// Body width from the format (nominal for fluid), else legacy width / size, else 320.
+// Nominal body width (used by auto-layout for column packing): the format's MIN
+// width, else legacy explicit width / size, else 320.
 export function screenWidth(s: Screen): number {
   if (s.format && FORMATS[s.format]) return FORMATS[s.format].width;
   if (s.width) return s.width;
@@ -66,13 +62,7 @@ export function screenWidth(s: Screen): number {
   return 320;
 }
 
-// Body height from the format (null = auto/content-driven, incl. fluid), else
-// legacy explicit height, else null.
+// Legacy explicit height only — formats are min-sized (handled in renderScreen).
 export function screenHeight(s: Screen): number | null {
-  if (s.format && FORMATS[s.format]) {
-    var f = FORMATS[s.format];
-    return f.fluid ? null : f.height;
-  }
-  if (s.height) return s.height;
-  return null;
+  return s.height || null;
 }
