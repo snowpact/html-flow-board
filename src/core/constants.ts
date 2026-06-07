@@ -9,12 +9,10 @@ export var ZOOM_STEP = 0.1;
 export var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
 // Device formats → MINIMUM body dimensions (px). Every format is min-sized: the
 // card grows past these to fit its content (never clips, never scrolls).
-// `fluid` is a legacy alias of `square`.
 export var FORMATS: Record<string, { width: number; height: number }> = {
   desktop: { width: 520, height: 320 }, // landscape
   phone: { width: 300, height: 600 },   // tall portrait
   square: { width: 400, height: 400 },  // 1:1
-  fluid: { width: 400, height: 400 },   // legacy alias → square
 };
 export var GAP_X = 100;
 export var GAP_Y = 40;

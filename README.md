@@ -188,8 +188,7 @@ scrolls).
 | `phone` | 300 × 600 |
 | `square` | 400 × 400 |
 
-So a `custom` HTML body bigger than the format simply makes the card larger. (`fluid` is kept as a
-legacy alias of `square`.)
+So a `custom` HTML body bigger than the format simply makes the card larger.
 
 ---
 

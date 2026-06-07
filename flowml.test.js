@@ -179,9 +179,9 @@ describe('flow-ml hardening (round-trip edge cases)', () => {
     expect(project.screens[0].epic).toBe('e x');
   });
 
-  it('normalizes the legacy fluid format to square', () => {
-    expect(parse(':a, f=fluid\n').project.screens[0].format).toBe('square');
+  it('round-trips the square format', () => {
     expect(serialize({ screens: [{ id: 'a', format: 'square' }] }, {})).toContain('f=square');
+    expect(parse(':a, f=square\n').project.screens[0].format).toBe('square');
   });
 
   it('round-trips arrow side attributes (fs= / ts=)', () => {

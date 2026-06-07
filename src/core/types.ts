@@ -4,7 +4,7 @@
 
 export type Side = string; // 'right' | 'left-top' | ... (16 anchor names)
 export type ScreenSize = 'sm' | 'md' | 'lg' | 'xl';
-export type Format = 'desktop' | 'phone' | 'square'; // min proportions ('fluid' = legacy alias of square)
+export type Format = 'desktop' | 'phone' | 'square'; // min proportions; the card grows past them
 
 // Display preset for a screen's BODY. 'custom' (the default when absent) keeps
 // today's behavior: render the raw `content` HTML. The others render a grey

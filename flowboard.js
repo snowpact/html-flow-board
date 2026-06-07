@@ -11,10 +11,8 @@
     // landscape
     phone: { width: 300, height: 600 },
     // tall portrait
-    square: { width: 400, height: 400 },
+    square: { width: 400, height: 400 }
     // 1:1
-    fluid: { width: 400, height: 400 }
-    // legacy alias → square
   };
   var GAP_X = 100;
   var GAP_Y = 40;
@@ -1042,7 +1040,7 @@
     popup.appendChild(fmtLabel);
     var fmtRow = document.createElement("div");
     fmtRow.className = "fb-screen-popup-formats";
-    var currentFmt = screenData.format === "fluid" ? "square" : screenData.format || "";
+    var currentFmt = screenData.format || "";
     var fmtDefs = [
       { id: "desktop", label: "Desktop", icon: ICON_DESKTOP },
       { id: "phone", label: "Phone", icon: ICON_PHONE },
@@ -1525,7 +1523,7 @@
       var screen = { id };
       if (sa.t) screen.title = sa.t;
       if (sa.p) screen.preset = sa.p;
-      if (sa.f) screen.format = sa.f === "fluid" ? "square" : sa.f;
+      if (sa.f) screen.format = sa.f;
       if (sa.e) screen.epic = sa.e;
       if (sa.n) screen.notes = sa.n;
       if (sa.sz) screen.size = sa.sz;

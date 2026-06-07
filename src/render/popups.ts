@@ -275,7 +275,7 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
 
   var fmtRow = document.createElement('div');
   fmtRow.className = 'fb-screen-popup-formats';
-  var currentFmt = ((screenData.format as string) === 'fluid') ? 'square' : (screenData.format || '');
+  var currentFmt = screenData.format || '';
   var fmtDefs: { id: Format; label: string; icon: string }[] = [
     { id: 'desktop', label: 'Desktop', icon: ICON_DESKTOP },
     { id: 'phone', label: 'Phone', icon: ICON_PHONE },
