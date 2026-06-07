@@ -118,9 +118,9 @@ Every format is a **minimum** — the card grows past it to fit content (never c
 
 | Format    | Min size  | Use for |
 |-----------|-----------|---------|
-| `desktop` | 520 × 320 | dashboards, tables, sidebars |
-| `phone`   | 300 × 600 | mobile screens |
-| `square`  | 400 × 400 | square-ish / flexible cards |
+| `desktop` | 460 × 280 | dashboards, tables, sidebars |
+| `phone`   | 260 × 480 | mobile screens |
+| `square`  | 360 × 360 | square-ish / flexible cards |
 
 ## Flow-ML (the in-app text format)
 

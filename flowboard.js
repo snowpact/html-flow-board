@@ -7,11 +7,11 @@
   var ZOOM_STEP = 0.1;
   var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
   var FORMATS = {
-    desktop: { width: 520, height: 320 },
+    desktop: { width: 460, height: 280 },
     // landscape
-    phone: { width: 300, height: 600 },
+    phone: { width: 260, height: 480 },
     // tall portrait
-    square: { width: 400, height: 400 }
+    square: { width: 360, height: 360 }
     // 1:1
   };
   var GAP_X = 100;
@@ -2696,6 +2696,172 @@
     var old = state.container.querySelector(".fb-legend");
     if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
   }
+  var EPIC_PALETTE = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
+  function uniqueEpicId() {
+    var epics = state.project && state.project.epics || [];
+    var n = 1;
+    var id;
+    do {
+      id = "epic-" + n++;
+    } while (epics.some(function(e) {
+      return e.id === id;
+    }));
+    return id;
+  }
+  function addEpic() {
+    if (!state.project.epics) state.project.epics = [];
+    var epic = {
+      id: uniqueEpicId(),
+      label: "Epic " + (state.project.epics.length + 1),
+      color: EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length]
+    };
+    state.project.epics.push(epic);
+    syncToolbar();
+    if (state.commit) state.commit();
+    return epic;
+  }
+  function setEpicLabel(id, label) {
+    var epic = getEpic(id);
+    if (!epic) return;
+    epic.label = label;
+    syncToolbar();
+    if (state.commit) state.commit();
+  }
+  function setEpicColor(id, color) {
+    var epic = getEpic(id);
+    if (!epic) return;
+    epic.color = color;
+    (state.project.screens || []).forEach(function(s) {
+      if (s.epic === id) {
+        var el = state.screenEls[s.id];
+        if (el) {
+          var hdr = el.querySelector(".fb-screen-header");
+          if (hdr) hdr.style.background = color;
+        }
+      }
+    });
+    syncToolbar();
+    if (state.commit) state.commit();
+  }
+  function deleteEpic(id) {
+    if (!state.project || !state.project.epics) return false;
+    var epic = getEpic(id);
+    if (!epic) return false;
+    if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return false;
+    state.project.epics = state.project.epics.filter(function(e) {
+      return e.id !== id;
+    });
+    delete state.hiddenEpics[id];
+    (state.project.screens || []).forEach(function(s) {
+      if (s.epic === id) {
+        delete s.epic;
+        var el = state.screenEls[s.id];
+        if (el) {
+          var hdr = el.querySelector(".fb-screen-header");
+          if (hdr) hdr.style.background = "#666";
+        }
+      }
+    });
+    syncToolbar();
+    drawArrows();
+    if (state.commit) state.commit();
+    return true;
+  }
+  var epicsModalEl = null;
+  var epicsDismiss = null;
+  function closeEpicsModal() {
+    if (epicsModalEl && epicsModalEl.parentNode) epicsModalEl.parentNode.removeChild(epicsModalEl);
+    epicsModalEl = null;
+    if (epicsDismiss) {
+      document.removeEventListener("keydown", epicsDismiss, true);
+      epicsDismiss = null;
+    }
+  }
+  function epicRow(epic) {
+    var row = document.createElement("div");
+    row.className = "fb-epic-row";
+    row.setAttribute("data-testid", "epic-row-" + epic.id);
+    var color = document.createElement("input");
+    color.type = "color";
+    color.className = "fb-epic-color";
+    color.value = epic.color || "#666666";
+    color.title = "Color";
+    color.addEventListener("input", function() {
+      setEpicColor(epic.id, color.value);
+    });
+    row.appendChild(color);
+    var name = document.createElement("input");
+    name.type = "text";
+    name.className = "fb-epic-name";
+    name.value = epic.label || "";
+    name.addEventListener("input", function() {
+      epic.label = name.value;
+    });
+    name.addEventListener("change", function() {
+      setEpicLabel(epic.id, name.value.trim() || epic.id);
+    });
+    row.appendChild(name);
+    var del = document.createElement("button");
+    del.className = "fb-epic-del";
+    del.title = "Delete epic";
+    del.setAttribute("data-testid", "epic-del-" + epic.id);
+    del.innerHTML = ICON_TRASH;
+    del.addEventListener("click", function() {
+      if (deleteEpic(epic.id) && row.parentNode) row.parentNode.removeChild(row);
+    });
+    row.appendChild(del);
+    return row;
+  }
+  function showEpicsModal() {
+    closeEpicsModal();
+    var backdrop = document.createElement("div");
+    backdrop.className = "fb-modal-backdrop";
+    backdrop.setAttribute("data-testid", "epics-modal");
+    var modal = document.createElement("div");
+    modal.className = "fb-epics-modal";
+    var header = document.createElement("div");
+    header.className = "fb-epics-modal-header";
+    var h = document.createElement("span");
+    h.textContent = "Epics";
+    header.appendChild(h);
+    var close = document.createElement("button");
+    close.className = "fb-epics-modal-close";
+    close.textContent = "\xD7";
+    close.title = "Close";
+    close.addEventListener("click", closeEpicsModal);
+    header.appendChild(close);
+    modal.appendChild(header);
+    var list = document.createElement("div");
+    list.className = "fb-epics-list";
+    (state.project.epics || []).forEach(function(epic) {
+      list.appendChild(epicRow(epic));
+    });
+    modal.appendChild(list);
+    var add = document.createElement("button");
+    add.className = "fb-epics-add";
+    add.setAttribute("data-testid", "epic-add");
+    add.innerHTML = ICON_PLUS + "<span>Add epic</span>";
+    add.addEventListener("click", function() {
+      var row = epicRow(addEpic());
+      list.appendChild(row);
+      var input = row.querySelector(".fb-epic-name");
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+    modal.appendChild(add);
+    backdrop.appendChild(modal);
+    backdrop.addEventListener("mousedown", function(e) {
+      if (e.target === backdrop) closeEpicsModal();
+    });
+    document.body.appendChild(backdrop);
+    epicsModalEl = backdrop;
+    epicsDismiss = function(e) {
+      if (e.key === "Escape") closeEpicsModal();
+    };
+    document.addEventListener("keydown", epicsDismiss, true);
+  }
   function renderToolbar() {
     var header = document.createElement("div");
     header.className = "fb-header";
@@ -2709,6 +2875,13 @@
     sep1.className = "fb-header-separator";
     left.appendChild(sep1);
     left.appendChild(renderLegend());
+    var epicsBtn = document.createElement("button");
+    epicsBtn.className = "fb-epics-btn";
+    epicsBtn.title = "Manage epics";
+    epicsBtn.setAttribute("data-testid", "epics-btn");
+    epicsBtn.innerHTML = ICON_PLUS;
+    epicsBtn.addEventListener("click", showEpicsModal);
+    left.appendChild(epicsBtn);
     header.appendChild(left);
     var right = document.createElement("div");
     right.className = "fb-toolbar-group";
