@@ -7,11 +7,11 @@
   var ZOOM_STEP = 0.1;
   var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
   var FORMATS = {
-    desktop: { width: 520, height: 320 },
+    desktop: { width: 460, height: 280 },
     // landscape
-    phone: { width: 300, height: 600 },
+    phone: { width: 270, height: 510 },
     // tall portrait
-    square: { width: 400, height: 400 }
+    square: { width: 360, height: 360 }
     // 1:1
   };
   var GAP_X = 100;
@@ -2709,29 +2709,45 @@
     return id;
   }
   function addEpic() {
-    if (!state.project) return;
     if (!state.project.epics) state.project.epics = [];
-    var label = (prompt("New epic name", "Epic " + (state.project.epics.length + 1)) || "").trim();
-    if (!label) return;
-    var color = EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length];
-    state.project.epics.push({ id: uniqueEpicId(), label, color });
+    var epic = {
+      id: uniqueEpicId(),
+      label: "Epic " + (state.project.epics.length + 1),
+      color: EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length]
+    };
+    state.project.epics.push(epic);
     syncToolbar();
     if (state.commit) state.commit();
+    return epic;
   }
-  function renameEpic(id) {
+  function setEpicLabel(id, label) {
     var epic = getEpic(id);
     if (!epic) return;
-    var label = (prompt("Rename epic", epic.label) || "").trim();
-    if (!label || label === epic.label) return;
     epic.label = label;
     syncToolbar();
     if (state.commit) state.commit();
   }
-  function deleteEpic(id) {
-    if (!state.project || !state.project.epics) return;
+  function setEpicColor(id, color) {
     var epic = getEpic(id);
     if (!epic) return;
-    if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return;
+    epic.color = color;
+    (state.project.screens || []).forEach(function(s) {
+      if (s.epic === id) {
+        var el = state.screenEls[s.id];
+        if (el) {
+          var hdr = el.querySelector(".fb-screen-header");
+          if (hdr) hdr.style.background = color;
+        }
+      }
+    });
+    syncToolbar();
+    if (state.commit) state.commit();
+  }
+  function deleteEpic(id) {
+    if (!state.project || !state.project.epics) return false;
+    var epic = getEpic(id);
+    if (!epic) return false;
+    if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return false;
     state.project.epics = state.project.epics.filter(function(e) {
       return e.id !== id;
     });
@@ -2749,25 +2765,102 @@
     syncToolbar();
     drawArrows();
     if (state.commit) state.commit();
+    return true;
   }
-  function showEpicsMenu(x, y) {
-    var items = [{ label: "Add epic", icon: ICON_PLUS, testid: "epic-add", onClick: addEpic }];
-    (state.project.epics || []).forEach(function(epic) {
-      items.push({
-        label: epic.label || epic.id,
-        icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
-        testid: "epic-row-" + epic.id,
-        submenu: [
-          { label: "Rename", onClick: function() {
-            renameEpic(epic.id);
-          } },
-          { label: "Delete", danger: true, icon: ICON_TRASH, onClick: function() {
-            deleteEpic(epic.id);
-          } }
-        ]
-      });
+  var epicsModalEl = null;
+  var epicsDismiss = null;
+  function closeEpicsModal() {
+    if (epicsModalEl && epicsModalEl.parentNode) epicsModalEl.parentNode.removeChild(epicsModalEl);
+    epicsModalEl = null;
+    if (epicsDismiss) {
+      document.removeEventListener("keydown", epicsDismiss, true);
+      epicsDismiss = null;
+    }
+  }
+  function epicRow(epic) {
+    var row = document.createElement("div");
+    row.className = "fb-epic-row";
+    row.setAttribute("data-testid", "epic-row-" + epic.id);
+    var color = document.createElement("input");
+    color.type = "color";
+    color.className = "fb-epic-color";
+    color.value = epic.color || "#666666";
+    color.title = "Color";
+    color.addEventListener("input", function() {
+      setEpicColor(epic.id, color.value);
     });
-    showContextMenu(x, y, items);
+    row.appendChild(color);
+    var name = document.createElement("input");
+    name.type = "text";
+    name.className = "fb-epic-name";
+    name.value = epic.label || "";
+    name.addEventListener("input", function() {
+      epic.label = name.value;
+    });
+    name.addEventListener("change", function() {
+      setEpicLabel(epic.id, name.value.trim() || epic.id);
+    });
+    row.appendChild(name);
+    var del = document.createElement("button");
+    del.className = "fb-epic-del";
+    del.title = "Delete epic";
+    del.setAttribute("data-testid", "epic-del-" + epic.id);
+    del.innerHTML = ICON_TRASH;
+    del.addEventListener("click", function() {
+      if (deleteEpic(epic.id) && row.parentNode) row.parentNode.removeChild(row);
+    });
+    row.appendChild(del);
+    return row;
+  }
+  function showEpicsModal() {
+    closeEpicsModal();
+    var backdrop = document.createElement("div");
+    backdrop.className = "fb-modal-backdrop";
+    backdrop.setAttribute("data-testid", "epics-modal");
+    var modal = document.createElement("div");
+    modal.className = "fb-epics-modal";
+    var header = document.createElement("div");
+    header.className = "fb-epics-modal-header";
+    var h = document.createElement("span");
+    h.textContent = "Epics";
+    header.appendChild(h);
+    var close = document.createElement("button");
+    close.className = "fb-epics-modal-close";
+    close.textContent = "\xD7";
+    close.title = "Close";
+    close.addEventListener("click", closeEpicsModal);
+    header.appendChild(close);
+    modal.appendChild(header);
+    var list = document.createElement("div");
+    list.className = "fb-epics-list";
+    (state.project.epics || []).forEach(function(epic) {
+      list.appendChild(epicRow(epic));
+    });
+    modal.appendChild(list);
+    var add = document.createElement("button");
+    add.className = "fb-epics-add";
+    add.setAttribute("data-testid", "epic-add");
+    add.innerHTML = ICON_PLUS + "<span>Add epic</span>";
+    add.addEventListener("click", function() {
+      var row = epicRow(addEpic());
+      list.appendChild(row);
+      var input = row.querySelector(".fb-epic-name");
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+    modal.appendChild(add);
+    backdrop.appendChild(modal);
+    backdrop.addEventListener("mousedown", function(e) {
+      if (e.target === backdrop) closeEpicsModal();
+    });
+    document.body.appendChild(backdrop);
+    epicsModalEl = backdrop;
+    epicsDismiss = function(e) {
+      if (e.key === "Escape") closeEpicsModal();
+    };
+    document.addEventListener("keydown", epicsDismiss, true);
   }
   function renderToolbar() {
     var header = document.createElement("div");
@@ -2784,13 +2877,10 @@
     left.appendChild(renderLegend());
     var epicsBtn = document.createElement("button");
     epicsBtn.className = "fb-epics-btn";
-    epicsBtn.title = "Add or manage epics";
-    epicsBtn.setAttribute("data-testid", "epics-menu");
+    epicsBtn.title = "Manage epics";
+    epicsBtn.setAttribute("data-testid", "epics-btn");
     epicsBtn.innerHTML = ICON_PLUS;
-    epicsBtn.addEventListener("click", function() {
-      var r = epicsBtn.getBoundingClientRect();
-      showEpicsMenu(r.left, r.bottom + 4);
-    });
+    epicsBtn.addEventListener("click", showEpicsModal);
     left.appendChild(epicsBtn);
     header.appendChild(left);
     var right = document.createElement("div");

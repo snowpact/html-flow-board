@@ -10,9 +10,9 @@ export var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
 // Device formats → MINIMUM body dimensions (px). Every format is min-sized: the
 // card grows past these to fit its content (never clips, never scrolls).
 export var FORMATS: Record<string, { width: number; height: number }> = {
-  desktop: { width: 520, height: 320 }, // landscape
-  phone: { width: 300, height: 600 },   // tall portrait
-  square: { width: 400, height: 400 },  // 1:1
+  desktop: { width: 460, height: 280 }, // landscape
+  phone: { width: 270, height: 510 },   // tall portrait
+  square: { width: 360, height: 360 },  // 1:1
 };
 export var GAP_X = 100;
 export var GAP_Y = 40;

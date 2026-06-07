@@ -4,7 +4,7 @@ import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
 import { setScreenPreset, setScreenFormat, toggleScreen, deleteScreen, setScreenEpic } from './src/render/screen';
-import { addEpic, renameEpic, deleteEpic } from './src/render/toolbar';
+import { addEpic, deleteEpic, setEpicLabel, setEpicColor, showEpicsModal, closeEpicsModal } from './src/render/toolbar';
 import { closePresetPicker } from './src/render/preset-picker';
 import { rebuildBoard, commit } from './src/interactions/sync';
 import { parse } from './src/flowml/parse';
@@ -318,8 +318,8 @@ describe('preset create + modify', () => {
     const id = createScreen('blank', 0, 0);
     const s = state.project.screens.find((x) => x.id === id);
     expect(s.format).toBe('desktop');
-    expect(state.screenEls[id].style.minWidth).toBe('520px'); // min — card grows past it
-    expect(state.screenEls[id].style.minHeight).toBe('320px');
+    expect(state.screenEls[id].style.minWidth).toBe('460px'); // min — card grows past it
+    expect(state.screenEls[id].style.minHeight).toBe('280px');
     expect(state.screenEls[id].style.width).toBe('');
   });
 
@@ -327,8 +327,8 @@ describe('preset create + modify', () => {
     setScreenFormat('A', 'phone');
     const sA = state.project.screens.find((x) => x.id === 'A');
     expect(sA.format).toBe('phone');
-    expect(state.screenEls['A'].style.minWidth).toBe('300px');
-    expect(state.screenEls['A'].style.minHeight).toBe('600px');
+    expect(state.screenEls['A'].style.minWidth).toBe('270px');
+    expect(state.screenEls['A'].style.minHeight).toBe('510px');
     expect(state.screenEls['A'].style.width).toBe('');
   });
 
@@ -503,8 +503,8 @@ describe('Flow-ML UX additions', () => {
   it('the square format sets a min size (not a fixed width)', () => {
     setScreenFormat('A', 'square');
     const el = state.screenEls.A;
-    expect(el.style.minWidth).toBe('400px');
-    expect(el.style.minHeight).toBe('400px');
+    expect(el.style.minWidth).toBe('360px');
+    expect(el.style.minHeight).toBe('360px');
     expect(el.style.width).toBe('');
     expect(state.panelTextarea.value).toContain('f=square');
   });
@@ -553,36 +553,29 @@ describe('Flow-ML UX additions', () => {
 });
 
 describe('epic management', () => {
-  beforeEach(() => { initBoard(); closeContextMenu(); });
+  beforeEach(() => { initBoard(); closeEpicsModal(); });
 
-  it('addEpic appends an epic + legend entry and re-serializes', () => {
-    window.prompt = () => 'Marketing';
-    addEpic();
-    const e = state.project.epics.find((x) => x.label === 'Marketing');
-    expect(e).toBeTruthy();
+  it('addEpic appends an epic (palette color) + legend entry + text', () => {
+    const e = addEpic();
+    expect(state.project.epics.some((x) => x.id === e.id)).toBe(true);
     expect(e.color).toBeTruthy();
     expect(document.querySelector('.fb-legend-checkbox[data-epic-id="' + e.id + '"]')).toBeTruthy();
-    expect(loadDoc()).toContain('Marketing');
+    expect(loadDoc()).toContain(e.label);
   });
 
-  it('addEpic does nothing when the prompt is cancelled/empty', () => {
-    window.prompt = () => null;
-    const before = state.project.epics.length;
-    addEpic();
-    expect(state.project.epics.length).toBe(before);
-  });
-
-  it('renameEpic updates the label + legend + text', () => {
-    window.prompt = () => 'Authentication';
-    renameEpic('e1');
+  it('setEpicLabel + setEpicColor update model, legend, headers and text', () => {
+    setEpicLabel('e1', 'Authentication');
     expect(state.project.epics.find((x) => x.id === 'e1').label).toBe('Authentication');
     expect(document.querySelector('.fb-legend').textContent).toContain('Authentication');
-    expect(loadDoc()).toContain('Authentication');
+    setEpicColor('e1', '#0000ff');
+    expect(state.project.epics.find((x) => x.id === 'e1').color).toBe('#0000ff');
+    expect(state.screenEls['A'].querySelector('.fb-screen-header').style.background).toBe('rgb(0, 0, 255)');
+    expect(loadDoc()).toContain('#0000ff');
   });
 
   it('deleteEpic removes it and un-assigns its screens (kept, header greyed)', () => {
     window.confirm = () => true;
-    deleteEpic('e1');
+    expect(deleteEpic('e1')).toBe(true);
     expect(state.project.epics.some((x) => x.id === 'e1')).toBe(false);
     expect(state.project.screens.find((s) => s.id === 'A').epic).toBeUndefined();
     expect(state.project.screens.length).toBe(3); // screens kept
@@ -591,12 +584,38 @@ describe('epic management', () => {
     expect(loadDoc()).not.toContain('@e1');
   });
 
-  it('the toolbar epics button opens an add/manage menu', () => {
-    document.querySelector('[data-testid="epics-menu"]').click();
-    const menu = document.querySelector('.fb-ctx-menu');
-    expect(menu).toBeTruthy();
-    expect(menu.querySelector('[data-testid="epic-add"]')).toBeTruthy();
-    expect(menu.querySelector('[data-testid="epic-row-e1"]')).toBeTruthy();
+  it('deleteEpic is a no-op when cancelled', () => {
+    window.confirm = () => false;
+    expect(deleteEpic('e1')).toBe(false);
+    expect(state.project.epics.some((x) => x.id === 'e1')).toBe(true);
+  });
+
+  it('the epics button opens a manage popup with a row per epic + add', () => {
+    document.querySelector('[data-testid="epics-btn"]').click();
+    const modal = document.querySelector('.fb-epics-modal');
+    expect(modal).toBeTruthy();
+    expect(modal.querySelector('[data-testid="epic-row-e1"]')).toBeTruthy();
+    expect(modal.querySelector('[data-testid="epic-add"]')).toBeTruthy();
+    // inline rename
+    const nameInput = modal.querySelector('[data-testid="epic-row-e1"] .fb-epic-name');
+    nameInput.value = 'Renamed';
+    nameInput.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(state.project.epics.find((x) => x.id === 'e1').label).toBe('Renamed');
+  });
+
+  it('the popup Add button creates a new epic + row', () => {
+    showEpicsModal();
+    const before = state.project.epics.length;
+    document.querySelector('[data-testid="epic-add"]').click();
+    expect(state.project.epics.length).toBe(before + 1);
+    expect(document.querySelectorAll('.fb-epic-row').length).toBe(before + 1);
+  });
+
+  it('the popup closes on backdrop click', () => {
+    showEpicsModal();
+    const backdrop = document.querySelector('[data-testid="epics-modal"]');
+    backdrop.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true }));
+    expect(document.querySelector('.fb-epics-modal')).toBeFalsy();
   });
 
   it('legend checkbox still toggles epic visibility (as before)', () => {

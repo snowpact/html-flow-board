@@ -154,6 +154,56 @@
 }
 .fb-epics-btn:hover { color: #2b3138; border-color: #8a93a0; background: #eef1f4; }
 
+/* --- Manage-epics popup --- */
+.fb-modal-backdrop {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(20, 28, 40, 0.35);
+  display: flex; align-items: center; justify-content: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.fb-epics-modal {
+  width: 360px; max-width: calc(100vw - 32px); max-height: 70vh;
+  display: flex; flex-direction: column;
+  background: #fff; border: 1px solid #d0d3d8; border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(20, 28, 40, 0.25);
+  color: #2b3138; overflow: hidden;
+}
+.fb-epics-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid #eef1f4;
+  font-size: 13px; font-weight: 700;
+}
+.fb-epics-modal-close {
+  border: none; background: transparent; cursor: pointer;
+  font-size: 20px; line-height: 1; color: #9aa3af; padding: 0 4px; border-radius: 6px;
+}
+.fb-epics-modal-close:hover { color: #2b3138; background: #eef1f4; }
+.fb-epics-list { flex: 1; overflow-y: auto; padding: 8px; }
+.fb-epic-row { display: flex; align-items: center; gap: 8px; padding: 5px 4px; }
+.fb-epic-color {
+  flex: none; width: 28px; height: 28px; padding: 0;
+  border: 1px solid #dfe3e8; border-radius: 7px; background: none; cursor: pointer;
+}
+.fb-epic-name {
+  flex: 1; height: 30px; box-sizing: border-box;
+  border: 1px solid #dfe3e8; border-radius: 7px; padding: 0 8px;
+  font: inherit; font-size: 13px; outline: none; color: #2b3138;
+}
+.fb-epic-name:focus { border-color: #6366f1; }
+.fb-epic-del {
+  flex: none; width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: transparent; border-radius: 7px; cursor: pointer; color: #97a0ad;
+}
+.fb-epic-del:hover { color: #dc2626; background: #fef2f2; }
+.fb-epics-add {
+  display: flex; align-items: center; gap: 8px;
+  margin: 4px 8px 12px; padding: 8px 10px;
+  border: 1px dashed #c2c9d2; border-radius: 8px;
+  background: transparent; cursor: pointer; color: #5b636e; font: inherit; font-size: 13px;
+}
+.fb-epics-add:hover { color: #2b3138; border-color: #8a93a0; background: #f3f4f6; }
+
 .fb-legend-item {
   display: inline-flex;
   align-items: center;

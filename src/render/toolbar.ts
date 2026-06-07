@@ -6,7 +6,6 @@ import { saveHiddenScreens } from '../core/storage';
 import { doExport } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
-import { showContextMenu, CtxItem } from './context-menu';
 import { ICON_PLUS, ICON_TRASH } from './icons';
 import { applyScreenVisibility } from './screen';
 import { Epic, Screen } from '../core/types';
@@ -70,35 +69,50 @@ function uniqueEpicId(): string {
   return id;
 }
 
-// Add a new epic (prompt for the name; auto-pick a palette color).
-export function addEpic(): void {
-  if (!state.project) return;
+// Add a new epic (default name + next palette color); returns it.
+export function addEpic(): Epic {
   if (!state.project.epics) state.project.epics = [];
-  var label = (prompt('New epic name', 'Epic ' + (state.project.epics.length + 1)) || '').trim();
-  if (!label) return;
-  var color = EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length];
-  state.project.epics.push({ id: uniqueEpicId(), label: label, color: color });
+  var epic: Epic = {
+    id: uniqueEpicId(),
+    label: 'Epic ' + (state.project.epics.length + 1),
+    color: EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length],
+  };
+  state.project.epics.push(epic);
   syncToolbar();
   if (state.commit) state.commit();
+  return epic;
 }
 
-// Rename an epic.
-export function renameEpic(id: string): void {
+export function setEpicLabel(id: string, label: string): void {
   var epic = getEpic(id);
   if (!epic) return;
-  var label = (prompt('Rename epic', epic.label) || '').trim();
-  if (!label || label === epic.label) return;
   epic.label = label;
   syncToolbar();
   if (state.commit) state.commit();
 }
 
-// Delete an epic; its screens stay but lose the group (header turns grey).
-export function deleteEpic(id: string): void {
-  if (!state.project || !state.project.epics) return;
+// Recolor an epic: update the model, its screens' headers, and the legend.
+export function setEpicColor(id: string, color: string): void {
   var epic = getEpic(id);
   if (!epic) return;
-  if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return;
+  epic.color = color;
+  (state.project.screens || []).forEach(function (s: Screen) {
+    if (s.epic === id) {
+      var el = state.screenEls[s.id];
+      if (el) { var hdr = el.querySelector('.fb-screen-header') as HTMLElement; if (hdr) hdr.style.background = color; }
+    }
+  });
+  syncToolbar();
+  if (state.commit) state.commit();
+}
+
+// Delete an epic; its screens stay but lose the group (header turns grey).
+// Returns true if it was deleted (false if cancelled / not found).
+export function deleteEpic(id: string): boolean {
+  if (!state.project || !state.project.epics) return false;
+  var epic = getEpic(id);
+  if (!epic) return false;
+  if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return false;
   state.project.epics = state.project.epics.filter(function (e: Epic) { return e.id !== id; });
   delete state.hiddenEpics[id];
   (state.project.screens || []).forEach(function (s: Screen) {
@@ -114,23 +128,100 @@ export function deleteEpic(id: string): void {
   syncToolbar();
   drawArrows();
   if (state.commit) state.commit();
+  return true;
 }
 
-// Cursor menu: "Add epic" + a submenu (Rename / Delete) per existing epic.
-export function showEpicsMenu(x: number, y: number): void {
-  var items: CtxItem[] = [{ label: 'Add epic', icon: ICON_PLUS, testid: 'epic-add', onClick: addEpic }];
-  (state.project.epics || []).forEach(function (epic: Epic) {
-    items.push({
-      label: epic.label || epic.id,
-      icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
-      testid: 'epic-row-' + epic.id,
-      submenu: [
-        { label: 'Rename', onClick: function () { renameEpic(epic.id); } },
-        { label: 'Delete', danger: true, icon: ICON_TRASH, onClick: function () { deleteEpic(epic.id); } },
-      ],
-    });
+// -- Manage-epics popup (scrollable list; inline name + color edit; add/delete) --
+
+var epicsModalEl: HTMLElement | null = null;
+var epicsDismiss: ((e: Event) => void) | null = null;
+
+export function closeEpicsModal(): void {
+  if (epicsModalEl && epicsModalEl.parentNode) epicsModalEl.parentNode.removeChild(epicsModalEl);
+  epicsModalEl = null;
+  if (epicsDismiss) { document.removeEventListener('keydown', epicsDismiss, true); epicsDismiss = null; }
+}
+
+function epicRow(epic: Epic): HTMLElement {
+  var row = document.createElement('div');
+  row.className = 'fb-epic-row';
+  row.setAttribute('data-testid', 'epic-row-' + epic.id);
+
+  var color = document.createElement('input');
+  color.type = 'color';
+  color.className = 'fb-epic-color';
+  color.value = epic.color || '#666666';
+  color.title = 'Color';
+  color.addEventListener('input', function () { setEpicColor(epic.id, color.value); });
+  row.appendChild(color);
+
+  var name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'fb-epic-name';
+  name.value = epic.label || '';
+  name.addEventListener('input', function () { epic.label = name.value; }); // live model
+  name.addEventListener('change', function () { setEpicLabel(epic.id, name.value.trim() || epic.id); });
+  row.appendChild(name);
+
+  var del = document.createElement('button');
+  del.className = 'fb-epic-del';
+  del.title = 'Delete epic';
+  del.setAttribute('data-testid', 'epic-del-' + epic.id);
+  del.innerHTML = ICON_TRASH;
+  del.addEventListener('click', function () {
+    if (deleteEpic(epic.id) && row.parentNode) row.parentNode.removeChild(row);
   });
-  showContextMenu(x, y, items);
+  row.appendChild(del);
+  return row;
+}
+
+export function showEpicsModal(): void {
+  closeEpicsModal();
+
+  var backdrop = document.createElement('div');
+  backdrop.className = 'fb-modal-backdrop';
+  backdrop.setAttribute('data-testid', 'epics-modal');
+
+  var modal = document.createElement('div');
+  modal.className = 'fb-epics-modal';
+
+  var header = document.createElement('div');
+  header.className = 'fb-epics-modal-header';
+  var h = document.createElement('span');
+  h.textContent = 'Epics';
+  header.appendChild(h);
+  var close = document.createElement('button');
+  close.className = 'fb-epics-modal-close';
+  close.textContent = '×';
+  close.title = 'Close';
+  close.addEventListener('click', closeEpicsModal);
+  header.appendChild(close);
+  modal.appendChild(header);
+
+  var list = document.createElement('div');
+  list.className = 'fb-epics-list';
+  (state.project.epics || []).forEach(function (epic: Epic) { list.appendChild(epicRow(epic)); });
+  modal.appendChild(list);
+
+  var add = document.createElement('button');
+  add.className = 'fb-epics-add';
+  add.setAttribute('data-testid', 'epic-add');
+  add.innerHTML = ICON_PLUS + '<span>Add epic</span>';
+  add.addEventListener('click', function () {
+    var row = epicRow(addEpic());
+    list.appendChild(row);
+    var input = row.querySelector('.fb-epic-name') as HTMLInputElement;
+    if (input) { input.focus(); input.select(); }
+  });
+  modal.appendChild(add);
+
+  backdrop.appendChild(modal);
+  backdrop.addEventListener('mousedown', function (e: MouseEvent) { if (e.target === backdrop) closeEpicsModal(); });
+  document.body.appendChild(backdrop);
+  epicsModalEl = backdrop;
+
+  epicsDismiss = function (e: Event) { if ((e as KeyboardEvent).key === 'Escape') closeEpicsModal(); };
+  document.addEventListener('keydown', epicsDismiss, true);
 }
 
 // -- Get epic by id --
@@ -158,13 +249,10 @@ export function renderToolbar(): HTMLElement {
   // Manage epics (add / rename / delete)
   var epicsBtn = document.createElement('button');
   epicsBtn.className = 'fb-epics-btn';
-  epicsBtn.title = 'Add or manage epics';
-  epicsBtn.setAttribute('data-testid', 'epics-menu');
+  epicsBtn.title = 'Manage epics';
+  epicsBtn.setAttribute('data-testid', 'epics-btn');
   epicsBtn.innerHTML = ICON_PLUS;
-  epicsBtn.addEventListener('click', function () {
-    var r = epicsBtn.getBoundingClientRect();
-    showEpicsMenu(r.left, r.bottom + 4);
-  });
+  epicsBtn.addEventListener('click', showEpicsModal);
   left.appendChild(epicsBtn);
 
   header.appendChild(left);
