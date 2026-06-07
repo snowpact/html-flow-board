@@ -59,9 +59,9 @@ Group screens by feature/domain. Each epic colors its screens' headers and the l
 
 ```js
 epics: [
-  { id: 'auth',   label: 'Authentication', color: '#6366f1' },
-  { id: 'home',   label: 'Home',           color: '#264653' },
-  { id: 'report', label: 'Reports',        color: '#2a9d8f' },
+  { id: 'auth',   label: `Authentication`, color: '#6366f1' },
+  { id: 'home',   label: `Home`,           color: '#264653' },
+  { id: 'report', label: `Reports`,        color: '#2a9d8f' },
 ]
 ```
 
@@ -70,14 +70,17 @@ epics: [
 Each screen is a card. Pick a **preset** for the body (a grey wireframe skeleton) OR keep
 `custom` and supply your own `content` HTML.
 
+Use **backtick** strings for every human-text field (`title`, `notes`, `name`, `label`,
+`content`) — see [Quoting](#quoting). Text often contains apostrophes (`c'est`, `l'écran`).
+
 ```js
 {
   id: 'login',            // unique, kebab-case (used in arrows)
-  title: 'Login',         // card header
+  title: `Login`,         // card header
   epic: 'auth',           // an epic id
   preset: 'form',         // body skeleton (see Presets); omit ⇒ 'custom'
   format: 'phone',        // proportions: 'desktop' | 'phone' | 'fluid'
-  notes: 'OTP login flow',// footer note (toggled by the Notes switch)
+  notes: `OTP login flow`,// footer note (toggled by the Notes switch)
   content: `...`,         // raw HTML body — only rendered when preset is 'custom'
 }
 ```
@@ -90,7 +93,7 @@ Each screen is a card. Pick a **preset** for the body (a grey wireframe skeleton
 
 ```js
 arrows: [
-  { from: 'login', to: 'home', label: 'Login OK' },
+  { from: 'login', to: 'home', label: `Login OK` },
   { from: 'home',  to: 'report', dashed: true },           // dashed = secondary path
   { from: 'home',  to: 'report', fs: 'right', ts: 'left' },// pin anchor sides (optional)
 ]
@@ -188,7 +191,9 @@ exact layout matters.
 3. **Add screens** — choose a `preset` + `format`; only write `content` for `custom`.
 4. **Add arrows** for the navigation paths.
 5. **Write one HTML file** (boilerplate above) to the project's docs / `.context`.
-6. **Tell the user** to open it in a browser. They can then drag, wire, and edit it live —
+6. **Verify it (required)** — run the one-line syntax check from [Quoting](#quoting) on the file;
+   fix until it prints `script OK`.
+7. **Tell the user** to open it in a browser. They can then drag, wire, and edit it live —
    the board persists in `localStorage`.
 
 ### Update an existing flowboard
@@ -201,6 +206,23 @@ change preset/format/epic/hide/delete) and auto-saves. To carry changes back int
   HTML boilerplate (DOCTYPE, head CDN links, `#app` container). Preserve any `state` object
   (`positions`, `zoom`, `panX`, `panY`, `hiddenScreens`) and arrow `fromSide`/`toSide`.
 
+## Quoting
+
+The generated `<script>` is real JavaScript — a single bad quote blanks the whole page
+(`Uncaught SyntaxError` aborts the script, so `FlowBoard.init` never runs).
+
+- **Wrap every human-text value in backticks** (`` `…` ``): `title`, `notes`, `name`, `label`,
+  `content`. Apostrophes (`c'est`, `l'écran`, `d'un`) and quotes then need **no escaping**.
+- Never put apostrophe-bearing text in a `'single-quoted'` string. ``title: 'C'est parti'``
+  breaks; ``title: `C'est parti` `` is correct.
+- Inside a backtick string, only a literal backtick or `${` needs escaping (`` \` ``) — rare in UI copy.
+- **After writing, syntax-check the file** — a bad quote blanks the page. Run this one-liner
+  (no extra files needed); it prints `script OK`, or throws a `SyntaxError` to fix:
+
+  ```bash
+  node -e 'const fs=require("fs"),vm=require("vm");for(const m of fs.readFileSync(process.argv[1],"utf8").matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi))if(m[1].trim())new vm.Script(m[1]);console.log("script OK")' FILE.html
+  ```
+
 ## Rules
 
 - Match the wireframe text to the app's language.
@@ -208,3 +230,4 @@ change preset/format/epic/hide/delete) and auto-saves. To carry changes back int
 - Screen ids unique + kebab-case; every screen's `epic` must exist in `epics`.
 - Container must be `#app` with `width:100vw;height:100vh`.
 - Prefer `preset` skeletons; use inline styles for custom layout, `fb-*` classes for components.
+- Quote human text with backticks (see [Quoting](#quoting)) — this is the #1 cause of a blank page.

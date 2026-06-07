@@ -61,9 +61,8 @@ async function main() {
   const file = path.join(dir, 'SKILL.md');
   const existed = fs.existsSync(file);
 
-  const content = await loadSkill();
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(file, content, 'utf8');
+  fs.writeFileSync(file, await loadSkill(), 'utf8');
 
   console.log((existed ? '↻ Updated' : '✓ Installed') + ' FlowBoard skill → ' + file);
   console.log('  Open Claude Code (or run /skills) to pick it up. Re-run this command to update.');
