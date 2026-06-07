@@ -14,19 +14,18 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const SKILL = 'flowboard';
-const FILES = ['SKILL.md', 'check-html.mjs']; // the skill + its output validator
-const CDN_BASE = 'https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/skills/' + SKILL + '/';
+const CDN = 'https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/skills/' + SKILL + '/SKILL.md';
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// Read a skill file: prefer the copy shipped next to this script; fall back to the CDN.
-async function readFile(name) {
-  const local = path.join(here, '..', 'skills', SKILL, name);
+// Prefer the SKILL.md shipped next to this script; fall back to the CDN.
+async function loadSkill() {
+  const local = path.join(here, '..', 'skills', SKILL, 'SKILL.md');
   if (fs.existsSync(local)) return fs.readFileSync(local, 'utf8');
   if (typeof fetch !== 'function') {
-    throw new Error(name + ' not found locally and this Node has no fetch (need Node 18+).');
+    throw new Error('SKILL.md not found locally and this Node has no fetch (need Node 18+).');
   }
-  const res = await fetch(CDN_BASE + name);
-  if (!res.ok) throw new Error('failed to download ' + name + ' (HTTP ' + res.status + ')');
+  const res = await fetch(CDN);
+  if (!res.ok) throw new Error('failed to download SKILL.md (HTTP ' + res.status + ')');
   return await res.text();
 }
 
@@ -59,15 +58,13 @@ async function main() {
 
   const base = scope === 'user' ? os.homedir() : process.cwd();
   const dir = path.join(base, '.claude', 'skills', SKILL);
-  const existed = fs.existsSync(path.join(dir, 'SKILL.md'));
+  const file = path.join(dir, 'SKILL.md');
+  const existed = fs.existsSync(file);
 
   fs.mkdirSync(dir, { recursive: true });
-  for (const name of FILES) {
-    fs.writeFileSync(path.join(dir, name), await readFile(name), 'utf8');
-  }
+  fs.writeFileSync(file, await loadSkill(), 'utf8');
 
-  console.log((existed ? '↻ Updated' : '✓ Installed') + ' FlowBoard skill → ' + dir);
-  console.log('  Files: ' + FILES.join(', '));
+  console.log((existed ? '↻ Updated' : '✓ Installed') + ' FlowBoard skill → ' + file);
   console.log('  Open Claude Code (or run /skills) to pick it up. Re-run this command to update.');
 }
 
