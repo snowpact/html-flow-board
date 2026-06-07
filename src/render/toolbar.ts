@@ -1,11 +1,13 @@
 import { drawArrows } from '../arrows';
 import { cycleLayout, doReset } from '../board';
 import { ZOOM_STEP } from '../core/constants';
-import { state } from '../core/state';
+import { getEpic, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { doExport } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
+import { showContextMenu, CtxItem } from './context-menu';
+import { ICON_PLUS, ICON_TRASH } from './icons';
 import { applyScreenVisibility } from './screen';
 import { Epic, Screen } from '../core/types';
 
@@ -56,6 +58,81 @@ export function syncToolbar(): void {
   if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
 }
 
+// -- Epic management (add / rename / delete) --
+
+var EPIC_PALETTE = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
+
+function uniqueEpicId(): string {
+  var epics: Epic[] = (state.project && state.project.epics) || [];
+  var n = 1;
+  var id: string;
+  do { id = 'epic-' + n++; } while (epics.some(function (e: Epic) { return e.id === id; }));
+  return id;
+}
+
+// Add a new epic (prompt for the name; auto-pick a palette color).
+export function addEpic(): void {
+  if (!state.project) return;
+  if (!state.project.epics) state.project.epics = [];
+  var label = (prompt('New epic name', 'Epic ' + (state.project.epics.length + 1)) || '').trim();
+  if (!label) return;
+  var color = EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length];
+  state.project.epics.push({ id: uniqueEpicId(), label: label, color: color });
+  syncToolbar();
+  if (state.commit) state.commit();
+}
+
+// Rename an epic.
+export function renameEpic(id: string): void {
+  var epic = getEpic(id);
+  if (!epic) return;
+  var label = (prompt('Rename epic', epic.label) || '').trim();
+  if (!label || label === epic.label) return;
+  epic.label = label;
+  syncToolbar();
+  if (state.commit) state.commit();
+}
+
+// Delete an epic; its screens stay but lose the group (header turns grey).
+export function deleteEpic(id: string): void {
+  if (!state.project || !state.project.epics) return;
+  var epic = getEpic(id);
+  if (!epic) return;
+  if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return;
+  state.project.epics = state.project.epics.filter(function (e: Epic) { return e.id !== id; });
+  delete state.hiddenEpics[id];
+  (state.project.screens || []).forEach(function (s: Screen) {
+    if (s.epic === id) {
+      delete s.epic;
+      var el = state.screenEls[s.id];
+      if (el) {
+        var hdr = el.querySelector('.fb-screen-header') as HTMLElement;
+        if (hdr) hdr.style.background = '#666';
+      }
+    }
+  });
+  syncToolbar();
+  drawArrows();
+  if (state.commit) state.commit();
+}
+
+// Cursor menu: "Add epic" + a submenu (Rename / Delete) per existing epic.
+export function showEpicsMenu(x: number, y: number): void {
+  var items: CtxItem[] = [{ label: 'Add epic', icon: ICON_PLUS, testid: 'epic-add', onClick: addEpic }];
+  (state.project.epics || []).forEach(function (epic: Epic) {
+    items.push({
+      label: epic.label || epic.id,
+      icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
+      testid: 'epic-row-' + epic.id,
+      submenu: [
+        { label: 'Rename', onClick: function () { renameEpic(epic.id); } },
+        { label: 'Delete', danger: true, icon: ICON_TRASH, onClick: function () { deleteEpic(epic.id); } },
+      ],
+    });
+  });
+  showContextMenu(x, y, items);
+}
+
 // -- Get epic by id --
 export function renderToolbar(): HTMLElement {
   var header = document.createElement('div');
@@ -77,6 +154,18 @@ export function renderToolbar(): HTMLElement {
 
   // Legend with checkboxes
   left.appendChild(renderLegend());
+
+  // Manage epics (add / rename / delete)
+  var epicsBtn = document.createElement('button');
+  epicsBtn.className = 'fb-epics-btn';
+  epicsBtn.title = 'Add or manage epics';
+  epicsBtn.setAttribute('data-testid', 'epics-menu');
+  epicsBtn.innerHTML = ICON_PLUS;
+  epicsBtn.addEventListener('click', function () {
+    var r = epicsBtn.getBoundingClientRect();
+    showEpicsMenu(r.left, r.bottom + 4);
+  });
+  left.appendChild(epicsBtn);
 
   header.appendChild(left);
 

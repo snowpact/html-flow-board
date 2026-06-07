@@ -200,8 +200,9 @@ So a `custom` HTML body bigger than the format simply makes the card larger.
 - **Drag screens** — free repositioning; positions live in the Flow-ML text.
 - **Anchor dots** — hover a screen to reveal anchors, click-drag to create a new arrow.
 - **Arrow popup** (click a handle) — swap direction, toggle dashed, edit label, delete.
-- **Screen popup** (right-click) — change layout/format, edit title, hide/show, **delete**.
-- **Legend** (toolbar) — toggle epic visibility with accent-colored checkboxes.
+- **Screen popup** (right-click) — change layout/format/**epic**, edit title, hide/show, **delete**.
+- **Legend** (toolbar) — toggle epic visibility with accent-colored checkboxes; the **＋** button
+  next to it adds / renames / deletes epics.
 - **Auto-layout** — cycle Flow (BFS columns) / Epics (grouped) / Grid.
 - **Dotted grid** — constant on-screen size at any zoom; excluded from PNG export.
 - **Code panel** — syntax highlighting, line-number gutter, current-line indicator, a
@@ -362,7 +363,7 @@ to the latest version (it overwrites the installed `SKILL.md`). The skill source
 npm run dev         # watch-rebuild src/ + static server on :3000 (loads the built bundle)
 npm run build       # bundle src/ -> flowboard.js + flowboard.min.js (tsup/esbuild)
 npm run typecheck   # tsc --noEmit (the type gate; CI-enforced)
-npm test            # build, then run the vitest + jsdom suite (178 tests)
+npm test            # build, then run the vitest + jsdom suite
 npm run test:watch  # vitest watch
 npm run bench       # vitest bench (Flow-ML serialize/parse/highlight + rebuild)
 ```

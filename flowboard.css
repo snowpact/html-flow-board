@@ -138,6 +138,22 @@
   flex-wrap: wrap;
 }
 
+/* Add / manage epics button (next to the legend) */
+.fb-epics-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px dashed #c2c9d2;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a93a0;
+  cursor: pointer;
+  flex: none;
+}
+.fb-epics-btn:hover { color: #2b3138; border-color: #8a93a0; background: #eef1f4; }
+
 .fb-legend-item {
   display: inline-flex;
   align-items: center;

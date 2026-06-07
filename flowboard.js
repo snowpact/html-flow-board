@@ -2696,6 +2696,79 @@
     var old = state.container.querySelector(".fb-legend");
     if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
   }
+  var EPIC_PALETTE = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
+  function uniqueEpicId() {
+    var epics = state.project && state.project.epics || [];
+    var n = 1;
+    var id;
+    do {
+      id = "epic-" + n++;
+    } while (epics.some(function(e) {
+      return e.id === id;
+    }));
+    return id;
+  }
+  function addEpic() {
+    if (!state.project) return;
+    if (!state.project.epics) state.project.epics = [];
+    var label = (prompt("New epic name", "Epic " + (state.project.epics.length + 1)) || "").trim();
+    if (!label) return;
+    var color = EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length];
+    state.project.epics.push({ id: uniqueEpicId(), label, color });
+    syncToolbar();
+    if (state.commit) state.commit();
+  }
+  function renameEpic(id) {
+    var epic = getEpic(id);
+    if (!epic) return;
+    var label = (prompt("Rename epic", epic.label) || "").trim();
+    if (!label || label === epic.label) return;
+    epic.label = label;
+    syncToolbar();
+    if (state.commit) state.commit();
+  }
+  function deleteEpic(id) {
+    if (!state.project || !state.project.epics) return;
+    var epic = getEpic(id);
+    if (!epic) return;
+    if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return;
+    state.project.epics = state.project.epics.filter(function(e) {
+      return e.id !== id;
+    });
+    delete state.hiddenEpics[id];
+    (state.project.screens || []).forEach(function(s) {
+      if (s.epic === id) {
+        delete s.epic;
+        var el = state.screenEls[s.id];
+        if (el) {
+          var hdr = el.querySelector(".fb-screen-header");
+          if (hdr) hdr.style.background = "#666";
+        }
+      }
+    });
+    syncToolbar();
+    drawArrows();
+    if (state.commit) state.commit();
+  }
+  function showEpicsMenu(x, y) {
+    var items = [{ label: "Add epic", icon: ICON_PLUS, testid: "epic-add", onClick: addEpic }];
+    (state.project.epics || []).forEach(function(epic) {
+      items.push({
+        label: epic.label || epic.id,
+        icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
+        testid: "epic-row-" + epic.id,
+        submenu: [
+          { label: "Rename", onClick: function() {
+            renameEpic(epic.id);
+          } },
+          { label: "Delete", danger: true, icon: ICON_TRASH, onClick: function() {
+            deleteEpic(epic.id);
+          } }
+        ]
+      });
+    });
+    showContextMenu(x, y, items);
+  }
   function renderToolbar() {
     var header = document.createElement("div");
     header.className = "fb-header";
@@ -2709,6 +2782,16 @@
     sep1.className = "fb-header-separator";
     left.appendChild(sep1);
     left.appendChild(renderLegend());
+    var epicsBtn = document.createElement("button");
+    epicsBtn.className = "fb-epics-btn";
+    epicsBtn.title = "Add or manage epics";
+    epicsBtn.setAttribute("data-testid", "epics-menu");
+    epicsBtn.innerHTML = ICON_PLUS;
+    epicsBtn.addEventListener("click", function() {
+      var r = epicsBtn.getBoundingClientRect();
+      showEpicsMenu(r.left, r.bottom + 4);
+    });
+    left.appendChild(epicsBtn);
     header.appendChild(left);
     var right = document.createElement("div");
     right.className = "fb-toolbar-group";
