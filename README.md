@@ -179,14 +179,17 @@ HTML you authored — it is kept in the model and reused if you switch back to `
 
 `f=` sets a screen's proportions:
 
-| Format | Size (w × h) |
-|---|---|
-| `desktop` | 400 × 240 (fixed) |
-| `phone` | 240 × 420 (fixed) |
-| `fluid` | min 280 × 180, grows with content |
+Every format is a **minimum** — the card grows past it to fit its content (never clips, never
+scrolls).
 
-`fluid` is the right pick for `custom` HTML bodies: it sets only a minimum and lets the
-card size to its content (so nothing is clipped).
+| Format | Min size (w × h) |
+|---|---|
+| `desktop` | 520 × 320 |
+| `phone` | 300 × 600 |
+| `square` | 400 × 400 |
+
+So a `custom` HTML body bigger than the format simply makes the card larger. (`fluid` is kept as a
+legacy alias of `square`.)
 
 ---
 
@@ -244,7 +247,7 @@ card size to its content (so nothing is clipped).
 | `title` | `string` | Header title |
 | `epic` | `string` | Epic id (drives the header color) |
 | `preset` | `PresetId` | Body skeleton; absent ⇒ `custom` |
-| `format` | `"desktop" \| "phone" \| "fluid"` | Proportions (`fluid` = min-size, content-driven) |
+| `format` | `"desktop" \| "phone" \| "square"` | Min proportions — the card grows past them to fit content |
 | `notes` | `string` | Footer annotation (togglable) |
 | `content` | `string` | Raw HTML body (used by the `custom` preset) |
 | `hidden` | `boolean` | Hidden via the legend/eye toggle |

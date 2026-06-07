@@ -317,22 +317,24 @@ describe('preset create + modify', () => {
     const id = createScreen('blank', 0, 0);
     const s = state.project.screens.find((x) => x.id === id);
     expect(s.format).toBe('desktop');
-    expect(state.screenEls[id].style.width).toBe('400px');
-    expect(state.screenEls[id].style.height).toBe('240px');
+    expect(state.screenEls[id].style.minWidth).toBe('520px'); // min — card grows past it
+    expect(state.screenEls[id].style.minHeight).toBe('320px');
+    expect(state.screenEls[id].style.width).toBe('');
   });
 
-  it('setScreenFormat applies the format dimensions', () => {
+  it('setScreenFormat applies the format min dimensions', () => {
     setScreenFormat('A', 'phone');
     const sA = state.project.screens.find((x) => x.id === 'A');
     expect(sA.format).toBe('phone');
-    expect(state.screenEls['A'].style.width).toBe('240px');
-    expect(state.screenEls['A'].style.height).toBe('420px');
+    expect(state.screenEls['A'].style.minWidth).toBe('300px');
+    expect(state.screenEls['A'].style.minHeight).toBe('600px');
+    expect(state.screenEls['A'].style.width).toBe('');
   });
 
   it('the screen popup offers the 3 device formats', () => {
     state.screenEls['A'].dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 }));
     expect(state.container.querySelectorAll('.fb-screen-popup-format').length).toBe(3);
-    ['fmt-desktop', 'fmt-phone', 'fmt-fluid'].forEach((id) => {
+    ['fmt-desktop', 'fmt-phone', 'fmt-square'].forEach((id) => {
       expect(state.container.querySelector('[data-testid="' + id + '"]')).toBeTruthy();
     });
   });
@@ -497,13 +499,13 @@ describe('Flow-ML UX additions', () => {
     expect(labels).not.toContain('Copy Init');
   });
 
-  it('the fluid format sets a min size (not a fixed width)', () => {
-    setScreenFormat('A', 'fluid');
+  it('the square format sets a min size (not a fixed width)', () => {
+    setScreenFormat('A', 'square');
     const el = state.screenEls.A;
-    expect(el.style.minWidth).toBe('280px');
-    expect(el.style.minHeight).toBe('180px');
+    expect(el.style.minWidth).toBe('400px');
+    expect(el.style.minHeight).toBe('400px');
     expect(el.style.width).toBe('');
-    expect(state.panelTextarea.value).toContain('f=fluid');
+    expect(state.panelTextarea.value).toContain('f=square');
   });
 
   it('the panel copy button writes the doc to the clipboard', async () => {

@@ -7,12 +7,14 @@
   var ZOOM_STEP = 0.1;
   var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
   var FORMATS = {
-    desktop: { width: 400, height: 240 },
-    // lg width, landscape
-    phone: { width: 240, height: 420 },
-    // sm width, tall portrait
-    fluid: { width: 280, height: 180, fluid: true }
-    // min-w × min-h, content-driven
+    desktop: { width: 520, height: 320 },
+    // landscape
+    phone: { width: 300, height: 600 },
+    // tall portrait
+    square: { width: 400, height: 400 },
+    // 1:1
+    fluid: { width: 400, height: 400 }
+    // legacy alias → square
   };
   var GAP_X = 100;
   var GAP_Y = 40;
@@ -104,9 +106,6 @@
       }
     });
   }
-  function isFluidFormat(s) {
-    return !!(s.format && FORMATS[s.format] && FORMATS[s.format].fluid);
-  }
   function screenWidth(s) {
     if (s.format && FORMATS[s.format]) return FORMATS[s.format].width;
     if (s.width) return s.width;
@@ -114,12 +113,7 @@
     return 320;
   }
   function screenHeight(s) {
-    if (s.format && FORMATS[s.format]) {
-      var f = FORMATS[s.format];
-      return f.fluid ? null : f.height;
-    }
-    if (s.height) return s.height;
-    return null;
+    return s.height || null;
   }
 
   // src/core/storage.ts
@@ -393,7 +387,7 @@
   var ICON_LINE_DASHED = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="3 3"><line x1="3" y1="12" x2="21" y2="12"/></svg>';
   var ICON_DESKTOP = icon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>');
   var ICON_PHONE = icon('<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>');
-  var ICON_FLUID = icon('<polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>');
+  var ICON_SQUARE = icon('<rect x="4" y="4" width="16" height="16" rx="2"/>');
 
   // src/render/presets.ts
   var bar = '<i class="fb-skel-bar"></i>';
@@ -514,7 +508,7 @@
     var el = document.createElement("div");
     el.className = "fb-screen";
     el.dataset.screenId = screenData.id;
-    if (isFluidFormat(screenData)) {
+    if (screenData.format && FORMATS[screenData.format]) {
       var ff = FORMATS[screenData.format];
       el.style.minWidth = ff.width + "px";
       el.style.minHeight = ff.height + "px";
@@ -599,7 +593,7 @@
       el.style.height = "";
       el.style.minWidth = "";
       el.style.minHeight = "";
-      if (isFluidFormat(screen)) {
+      if (FORMATS[format]) {
         var ff = FORMATS[format];
         el.style.minWidth = ff.width + "px";
         el.style.minHeight = ff.height + "px";
@@ -1048,11 +1042,11 @@
     popup.appendChild(fmtLabel);
     var fmtRow = document.createElement("div");
     fmtRow.className = "fb-screen-popup-formats";
-    var currentFmt = screenData.format || "";
+    var currentFmt = screenData.format === "fluid" ? "square" : screenData.format || "";
     var fmtDefs = [
       { id: "desktop", label: "Desktop", icon: ICON_DESKTOP },
       { id: "phone", label: "Phone", icon: ICON_PHONE },
-      { id: "fluid", label: "Fluid", icon: ICON_FLUID }
+      { id: "square", label: "Square", icon: ICON_SQUARE }
     ];
     fmtDefs.forEach(function(def) {
       var btn = document.createElement("button");
@@ -1531,7 +1525,7 @@
       var screen = { id };
       if (sa.t) screen.title = sa.t;
       if (sa.p) screen.preset = sa.p;
-      if (sa.f) screen.format = sa.f;
+      if (sa.f) screen.format = sa.f === "fluid" ? "square" : sa.f;
       if (sa.e) screen.epic = sa.e;
       if (sa.n) screen.notes = sa.n;
       if (sa.sz) screen.size = sa.sz;

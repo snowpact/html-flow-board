@@ -76,7 +76,7 @@ export function parse(text: string): ParseResult {
     var screen: Screen = { id: id };
     if (sa.t) screen.title = sa.t;
     if (sa.p) screen.preset = sa.p as PresetId;
-    if (sa.f) screen.format = sa.f;
+    if (sa.f) screen.format = (sa.f === 'fluid' ? 'square' : sa.f); // legacy alias
     if (sa.e) screen.epic = sa.e;
     if (sa.n) screen.notes = sa.n;
     if (sa.sz) screen.size = sa.sz as ScreenSize;
