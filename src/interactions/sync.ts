@@ -2,6 +2,7 @@ import { drawArrows } from '../arrows';
 import { recomputeHiddenEpics, state } from '../core/state';
 import { FlowProject, Position } from '../core/types';
 import { autoLayout } from '../layout';
+import { exitFocus, persistedPositions } from '../focus';
 import { saveDoc } from '../core/storage';
 import { parse } from '../flowml/parse';
 import { serialize } from '../flowml/serialize';
@@ -13,6 +14,8 @@ import { syncToolbar } from '../render/toolbar';
 // from the model; missing ones fall back to auto-layout. Callers MUST set
 // state.syncing while this runs: nothing it invokes may call state.commit().
 export function rebuildBoard(project: FlowProject, positions: Record<string, Position>): void {
+  // A text edit rebuilds the model: drop any focus view (positions come from the text).
+  exitFocus(false);
   state.project = project;
   state.hiddenScreens = {};
   (project.screens || []).forEach(function (s) { if (s.hidden) state.hiddenScreens[s.id] = true; });
@@ -52,7 +55,7 @@ export function rebuildBoard(project: FlowProject, positions: Record<string, Pos
 export function commit(): void {
   if (state.syncing) return;
   (state.project.screens || []).forEach(function (s) { s.hidden = !!state.hiddenScreens[s.id]; });
-  var text = serialize(state.project, state.positions);
+  var text = serialize(state.project, persistedPositions());
   setPanelText(text);
   saveDoc(text);
 }

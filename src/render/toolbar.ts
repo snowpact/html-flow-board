@@ -1,50 +1,25 @@
 import { drawArrows } from '../arrows';
 import { cycleLayout, doReset } from '../board';
 import { ZOOM_STEP } from '../core/constants';
-import { getEpic, state } from '../core/state';
+import { getEpic, inEpic, screenEpics, setEpicList, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { doExport } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
-import { ICON_PLUS, ICON_TRASH } from './icons';
+import { ICON_DOWNLOAD, ICON_FIT, ICON_GRID, ICON_MINUS, ICON_PLUS, ICON_RESET, ICON_TRASH } from './icons';
 import { applyScreenVisibility } from './screen';
+import { renderViewPicker } from './view-picker';
+import { refreshScreenEpics } from './screen';
+import { exitFocus } from '../focus';
+import { fitToContent } from '../interactions/transform';
 import { Epic, Screen } from '../core/types';
 
 export function updateLayoutButton(): void {
   var btn = document.getElementById('fb-layout-btn');
   if (btn) {
-    var name = LAYOUT_STRATEGIES[state.layoutIndex].name;
-    btn.textContent = 'Auto-Layout (' + name + ')';
+    var name = btn.querySelector('.fb-layout-name');
+    if (name) name.textContent = LAYOUT_STRATEGIES[state.layoutIndex].name;
   }
-}
-
-// Build the epic legend (checkbox + color dot + label) from the current project.
-export function renderLegend(): HTMLElement {
-  var legend = document.createElement('div');
-  legend.className = 'fb-legend';
-  (state.project.epics || []).forEach(function (epic: Epic) {
-    var label = document.createElement('label');
-    label.className = 'fb-legend-item' + (state.hiddenEpics[epic.id] ? ' fb-dimmed' : '');
-
-    var cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.checked = !state.hiddenEpics[epic.id];
-    cb.className = 'fb-legend-checkbox';
-    cb.style.accentColor = epic.color;
-    cb.dataset.epicId = epic.id;
-    cb.addEventListener('change', function () {
-      toggleEpic(epic.id);
-    });
-    label.appendChild(cb);
-
-    var dot = document.createElement('span');
-    dot.className = 'fb-legend-dot';
-    dot.style.background = epic.color;
-    label.appendChild(dot);
-    label.appendChild(document.createTextNode(epic.label));
-    legend.appendChild(label);
-  });
-  return legend;
 }
 
 // Refresh the toolbar pieces that depend on the project model (title + legend),
@@ -53,8 +28,10 @@ export function syncToolbar(): void {
   if (!state.container) return;
   var title = state.container.querySelector('.fb-project-title');
   if (title) title.textContent = state.project.name || 'FlowBoard';
-  var old = state.container.querySelector('.fb-legend');
-  if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
+  // Stories / epics feed the View picker: rebuild it (it is small, and only on a
+  // model change — never on hover, drag or zoom).
+  var oldView = state.container.querySelector('.fb-view');
+  if (oldView && oldView.parentNode) oldView.parentNode.replaceChild(renderViewPicker(), oldView);
 }
 
 // -- Epic management (add / rename / delete) --
@@ -97,10 +74,7 @@ export function setEpicColor(id: string, color: string): void {
   if (!epic) return;
   epic.color = color;
   (state.project.screens || []).forEach(function (s: Screen) {
-    if (s.epic === id) {
-      var el = state.screenEls[s.id];
-      if (el) { var hdr = el.querySelector('.fb-screen-header') as HTMLElement; if (hdr) hdr.style.background = color; }
-    }
+    if (inEpic(s, id)) refreshScreenEpics(s);
   });
   syncToolbar();
   if (state.commit) state.commit();
@@ -116,15 +90,12 @@ export function deleteEpic(id: string): boolean {
   state.project.epics = state.project.epics.filter(function (e: Epic) { return e.id !== id; });
   delete state.hiddenEpics[id];
   (state.project.screens || []).forEach(function (s: Screen) {
-    if (s.epic === id) {
-      delete s.epic;
-      var el = state.screenEls[s.id];
-      if (el) {
-        var hdr = el.querySelector('.fb-screen-header') as HTMLElement;
-        if (hdr) hdr.style.background = '#666';
-      }
+    if (inEpic(s, id)) {
+      setEpicList(s, screenEpics(s).filter(function (e) { return e !== id; }));
+      refreshScreenEpics(s);
     }
   });
+  if (state.focus && state.focus.id === id) exitFocus();
   syncToolbar();
   drawArrows();
   if (state.commit) state.commit();
@@ -224,119 +195,83 @@ export function showEpicsModal(): void {
   document.addEventListener('keydown', epicsDismiss, true);
 }
 
-// -- Get epic by id --
+// -- Toolbar --
+
+function el(tag: string, cls: string, html?: string): HTMLElement {
+  var e = document.createElement(tag);
+  e.className = cls;
+  if (html) e.innerHTML = html;
+  return e;
+}
+
+// A labelled on/off switch (a styled checkbox: no JS beyond the change handler).
+function makeSwitch(text: string, checked: boolean, title: string, testid: string, onChange: (on: boolean) => void): HTMLElement {
+  var label = el('label', 'fb-switch');
+  label.title = title;
+  var cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = checked;
+  if (testid) cb.setAttribute('data-testid', testid);
+  cb.addEventListener('change', function () { onChange(cb.checked); });
+  label.appendChild(cb);
+  label.appendChild(el('span', 'fb-switch-track'));
+  label.appendChild(document.createTextNode(text));
+  return label;
+}
+
+function iconBtn(cls: string, icon: string, title: string, onClick: () => void): HTMLButtonElement {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = cls;
+  b.title = title;
+  b.innerHTML = icon;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
 export function renderToolbar(): HTMLElement {
-  var header = document.createElement('div');
-  header.className = 'fb-header';
+  var header = el('div', 'fb-header');
 
-  // Left: title + legend
-  var left = document.createElement('div');
-  left.className = 'fb-toolbar-group';
-
-  var title = document.createElement('span');
-  title.className = 'fb-project-title';
+  // Left: title + View picker (whole board / story / epic)
+  var left = el('div', 'fb-toolbar-group');
+  var title = el('span', 'fb-project-title');
   title.textContent = state.project.name || 'FlowBoard';
   left.appendChild(title);
-
-  // Separator
-  var sep1 = document.createElement('div');
-  sep1.className = 'fb-header-separator';
-  left.appendChild(sep1);
-
-  // Legend with checkboxes
-  left.appendChild(renderLegend());
-
-  // Manage epics (add / rename / delete)
-  var epicsBtn = document.createElement('button');
-  epicsBtn.className = 'fb-epics-btn';
-  epicsBtn.title = 'Manage epics';
-  epicsBtn.setAttribute('data-testid', 'epics-btn');
-  epicsBtn.innerHTML = ICON_PLUS;
-  epicsBtn.addEventListener('click', showEpicsModal);
-  left.appendChild(epicsBtn);
-
+  left.appendChild(renderViewPicker());
   header.appendChild(left);
 
-  // Right: controls
-  var right = document.createElement('div');
-  right.className = 'fb-toolbar-group';
+  // Right: display switches · zoom · layout / export / reset
+  var right = el('div', 'fb-toolbar-group');
 
-  // Toggle notes
-  var toggleLabel = document.createElement('label');
-  toggleLabel.className = 'fb-toggle-label';
-  var checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.checked = state.showNotes;
-  checkbox.addEventListener('change', function () {
-    state.showNotes = checkbox.checked;
+  var switches = el('div', 'fb-switches');
+  switches.appendChild(makeSwitch('Notes', state.showNotes, 'Show screen notes', 'toggle-notes', function (on) {
+    state.showNotes = on;
     toggleNotesVisibility();
-  });
-  toggleLabel.appendChild(checkbox);
-  toggleLabel.appendChild(document.createTextNode('Notes'));
-  right.appendChild(toggleLabel);
+  }));
+  switches.appendChild(makeSwitch('Nav', state.showNav !== false, 'Show navigation arrows (menus, back links)', 'toggle-nav', function (on) {
+    state.showNav = on;
+    drawArrows();
+  }));
+  right.appendChild(switches);
 
-  // Separator
-  var sep2 = document.createElement('div');
-  sep2.className = 'fb-header-separator';
-  right.appendChild(sep2);
-
-  // Zoom out
-  var zoomOut = document.createElement('button');
-  zoomOut.className = 'fb-toolbar-btn';
-  zoomOut.textContent = '−';
-  zoomOut.title = 'Zoom out';
-  zoomOut.addEventListener('click', function () { setZoom(state.zoom - ZOOM_STEP); });
-  right.appendChild(zoomOut);
-
-  // Zoom label
-  var zoomLabel = document.createElement('span');
-  zoomLabel.className = 'fb-zoom-label';
+  var zoom = el('div', 'fb-seg');
+  zoom.appendChild(iconBtn('fb-toolbar-btn', ICON_MINUS, 'Zoom out', function () { setZoom(state.zoom - ZOOM_STEP); }));
+  var zoomLabel = el('span', 'fb-zoom-label');
   zoomLabel.id = 'fb-zoom-label';
   zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
-  right.appendChild(zoomLabel);
+  zoom.appendChild(zoomLabel);
+  zoom.appendChild(iconBtn('fb-toolbar-btn', ICON_PLUS, 'Zoom in', function () { setZoom(state.zoom + ZOOM_STEP); }));
+  zoom.appendChild(iconBtn('fb-toolbar-btn', ICON_FIT, 'Fit to screen', function () { fitToContent(); }));
+  right.appendChild(zoom);
 
-  // Zoom in
-  var zoomIn = document.createElement('button');
-  zoomIn.className = 'fb-toolbar-btn';
-  zoomIn.textContent = '+';
-  zoomIn.title = 'Zoom in';
-  zoomIn.addEventListener('click', function () { setZoom(state.zoom + ZOOM_STEP); });
-  right.appendChild(zoomIn);
-
-  // Separator
-  var sep3 = document.createElement('div');
-  sep3.className = 'fb-header-separator';
-  right.appendChild(sep3);
-
-  // Auto-Layout (cycle)
-  var layoutBtn = document.createElement('button');
-  layoutBtn.className = 'fb-action-btn';
+  var layoutBtn = iconBtn('fb-action-btn', ICON_GRID + '<span class="fb-layout-name">' + LAYOUT_STRATEGIES[state.layoutIndex].name + '</span>', 'Auto-layout: switch strategy', cycleLayout);
   layoutBtn.id = 'fb-layout-btn';
-  layoutBtn.title = 'Change layout';
-  layoutBtn.textContent = 'Auto-Layout (' + LAYOUT_STRATEGIES[state.layoutIndex].name + ')';
-  layoutBtn.addEventListener('click', cycleLayout);
   right.appendChild(layoutBtn);
 
-  // Export PNG
-  var exportBtn = document.createElement('button');
-  exportBtn.className = 'fb-action-btn';
-  exportBtn.textContent = 'Export PNG';
-  exportBtn.title = 'Export as PNG';
-  exportBtn.addEventListener('click', doExport);
-  right.appendChild(exportBtn);
+  right.appendChild(iconBtn('fb-action-btn', ICON_DOWNLOAD + '<span>PNG</span>', 'Export as PNG', doExport));
 
-  // Separator
-  var sep4 = document.createElement('div');
-  sep4.className = 'fb-header-separator';
-  right.appendChild(sep4);
-
-  // Reset
-  var resetBtn = document.createElement('button');
-  resetBtn.className = 'fb-action-btn';
+  var resetBtn = iconBtn('fb-action-btn fb-ghost', ICON_RESET + '<span>Reset</span>', 'Reset to the default layout', doReset);
   resetBtn.setAttribute('data-testid', 'toolbar-reset');
-  resetBtn.textContent = 'Reset';
-  resetBtn.title = 'Reset to the default layout';
-  resetBtn.addEventListener('click', doReset);
   right.appendChild(resetBtn);
 
   header.appendChild(right);
@@ -360,7 +295,7 @@ export function toggleEpic(epicId: string): void {
   // If any screen of this epic is visible → hide all; otherwise show all
   var hasVisible = false;
   state.project.screens.forEach(function (s: Screen) {
-    if (s.epic === epicId && !state.hiddenScreens[s.id]) hasVisible = true;
+    if (inEpic(s, epicId) && !state.hiddenScreens[s.id]) hasVisible = true;
   });
   var isHiding = hasVisible;
 
@@ -387,7 +322,7 @@ export function toggleEpic(epicId: string): void {
 
   // Toggle each screen of this epic individually
   state.project.screens.forEach(function (s: Screen) {
-    if (s.epic !== epicId) return;
+    if (!inEpic(s, epicId)) return;
     if (isHiding) {
       state.hiddenScreens[s.id] = true;
     } else {

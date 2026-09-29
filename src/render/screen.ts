@@ -1,8 +1,8 @@
 import { Format, PresetId, Screen, Position } from '../core/types';
-import { drawArrows } from '../arrows';
+import { drawArrows, setHighlightedScreen } from '../arrows';
 import { FORMATS } from '../core/constants';
 import { escapeHtml } from '../core/geometry';
-import { getEpic, screenHeight, screenWidth, state } from '../core/state';
+import { getEpic, screenEpics, screenHeight, screenWidth, setEpicList, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { cancelHideAnchors, scheduleHideAnchors, showAnchorDots } from './anchors';
 import { ICON_EYE } from './icons';
@@ -43,6 +43,11 @@ export function renderScreen(screenData: Screen): HTMLElement {
   var el = document.createElement('div');
   el.className = 'fb-screen';
   el.dataset.screenId = screenData.id;
+  // Hover emphasis: this screen's arrows come forward, the others fade.
+  el.addEventListener('mouseenter', function () { setHighlightedScreen(screenData.id); });
+  el.addEventListener('mouseleave', function () {
+    if (state.highlightScreen === screenData.id) setHighlightedScreen(null);
+  });
 
   // Size — a format sets only a MIN so the card grows with its content; legacy
   // explicit width/height stays fixed.
@@ -66,6 +71,7 @@ export function renderScreen(screenData: Screen): HTMLElement {
   hdr.className = 'fb-screen-header';
   hdr.style.background = color;
   hdr.innerHTML = '<span>' + escapeHtml(screenData.title) + '</span>';
+  hdr.appendChild(renderEpicDots(screenData));
 
   var toggleBtn = document.createElement('button');
   toggleBtn.className = 'fb-screen-toggle';
@@ -185,21 +191,61 @@ export function deleteScreen(screenId: string): void {
   if (state.commit) state.commit();
 }
 
-// Assign a screen to an epic (or null to clear); recolor its header + re-serialize.
-export function setScreenEpic(screenId: string, epicId: string | null): void {
+// Small dots in the header for the screen's secondary epics (the primary one is
+// the header color itself).
+export function renderEpicDots(screen: Screen): HTMLElement {
+  var wrap = document.createElement('span');
+  wrap.className = 'fb-epic-dots';
+  screenEpics(screen).slice(1).forEach(function (id) {
+    var e = getEpic(id);
+    if (!e) return;
+    var d = document.createElement('span');
+    d.className = 'fb-epic-dot';
+    d.style.background = e.color;
+    d.title = e.label || e.id;
+    wrap.appendChild(d);
+  });
+  return wrap;
+}
+
+// Re-apply a screen's header color + secondary-epic dots from the model.
+export function refreshScreenEpics(screen: Screen): void {
+  var el = state.screenEls[screen.id];
+  if (!el) return;
+  var hdr = el.querySelector('.fb-screen-header') as HTMLElement;
+  if (!hdr) return;
+  var epic = getEpic(screen.epic);
+  hdr.style.background = epic ? epic.color : '#666';
+  var old = hdr.querySelector('.fb-epic-dots');
+  var dots = renderEpicDots(screen);
+  if (old && old.parentNode) old.parentNode.replaceChild(dots, old);
+  else hdr.insertBefore(dots, hdr.querySelector('.fb-screen-toggle'));
+}
+
+function findScreen(screenId: string): Screen | null {
   var screens: Screen[] = (state.project && state.project.screens) || [];
-  var screen: Screen = null;
-  for (var i = 0; i < screens.length; i++) {
-    if (screens[i].id === screenId) { screen = screens[i]; break; }
-  }
+  for (var i = 0; i < screens.length; i++) if (screens[i].id === screenId) return screens[i];
+  return null;
+}
+
+// Assign a screen to a single epic (or null to clear every epic).
+export function setScreenEpic(screenId: string, epicId: string | null): void {
+  var screen = findScreen(screenId);
   if (!screen) return;
-  if (epicId) screen.epic = epicId; else delete screen.epic;
-  var el = state.screenEls[screenId];
-  if (el) {
-    var epic = getEpic(screen.epic);
-    var hdr = el.querySelector('.fb-screen-header') as HTMLElement;
-    if (hdr) hdr.style.background = epic ? epic.color : '#666';
-  }
+  setEpicList(screen, epicId ? [epicId] : []);
+  refreshScreenEpics(screen);
+  if (state.commit) state.commit();
+}
+
+// Add / remove one epic on a screen (a screen can belong to several epics).
+export function toggleScreenEpic(screenId: string, epicId: string): void {
+  var screen = findScreen(screenId);
+  if (!screen) return;
+  var list = screenEpics(screen).slice();
+  var at = list.indexOf(epicId);
+  if (at === -1) list.push(epicId); else list.splice(at, 1);
+  setEpicList(screen, list);
+  refreshScreenEpics(screen);
   if (state.commit) state.commit();
 }
 

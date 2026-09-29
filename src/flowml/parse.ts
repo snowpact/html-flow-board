@@ -1,4 +1,5 @@
 import { Arrow, Epic, FlowProject, Position, PresetId, ScreenSize, Screen } from '../core/types';
+import { setEpicList } from '../core/state';
 
 export interface ParseResult {
   project: FlowProject;
@@ -77,7 +78,12 @@ export function parse(text: string): ParseResult {
     if (sa.t) screen.title = sa.t;
     if (sa.p) screen.preset = sa.p as PresetId;
     if (sa.f) screen.format = sa.f;
-    if (sa.e) screen.epic = sa.e;
+    if (sa.e) {
+      // e=a, or several epics e="a b". A value that is itself a known epic id is
+      // kept whole (legacy ids containing spaces).
+      var known = project.epics.some(function (ep) { return ep.id === sa.e; });
+      setEpicList(screen, known ? [sa.e] : String(sa.e).split(/\s+/));
+    }
     if (sa.n) screen.notes = sa.n;
     if (sa.sz) screen.size = sa.sz as ScreenSize;
     if (sa.w !== undefined) { var w = parseFloat(sa.w); if (!isNaN(w)) screen.width = w; }
@@ -153,6 +159,7 @@ export function parse(text: string): ParseResult {
       if (aattrs.l) arrow.label = aattrs.l;
       if (aattrs.fs) arrow.fromSide = aattrs.fs;
       if (aattrs.ts) arrow.toSide = aattrs.ts;
+      if (aattrs.k === 'main' || aattrs.k === 'nav') arrow.kind = aattrs.k;
       project.arrows.push(arrow);
       lastScreen = null;
       i++; continue;

@@ -1,4 +1,4 @@
-import { drawArrows } from '../arrows';
+import { flushDrawArrows, scheduleDrawArrows } from '../arrows';
 import { CANVAS_H, CANVAS_W } from '../core/constants';
 import { toggleSelection } from '../core/geometry';
 import { state } from '../core/state';
@@ -125,7 +125,7 @@ export function initDrag(): void {
       state.positions[it.id] = { x: newX, y: newY };
     }
 
-    drawArrows(!!state.draggingHandle);
+    scheduleDrawArrows(!!state.draggingHandle);
   });
 
   document.addEventListener('mouseup', function (e: MouseEvent) {
@@ -138,6 +138,7 @@ export function initDrag(): void {
     var singleId = items.length === 1 ? items[0].id : null;
     state.screenDrag = null;
     state.wrapperEl.classList.remove('fb-dragging-screen');
+    flushDrawArrows(); // settle the last frame before saving
     savePositions();
 
     // Re-show anchor dots if cursor is still over a single dragged card
