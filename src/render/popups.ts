@@ -1,7 +1,8 @@
 import { drawArrows } from '../arrows';
 import { state } from '../core/state';
 import { saveArrowMutations } from '../core/storage';
-import { deleteScreen, setScreenEpic, setScreenFormat, setScreenPreset, toggleScreen } from './screen';
+import { deleteScreen, setScreenEpic, setScreenFormat, setScreenPreset, toggleScreen, toggleScreenEpic } from './screen';
+import { inEpic } from '../core/state';
 import { showContextMenu, CtxItem } from './context-menu';
 import { showPresetPicker } from './preset-picker';
 import {
@@ -95,6 +96,20 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   });
   popup.appendChild(styleBtn);
 
+  // Arrow kind: default → main (journey) → nav (secondary) → default
+  var kindBtn = document.createElement('button');
+  kindBtn.className = 'fb-arrow-popup-btn fb-arrow-popup-kind';
+  kindBtn.setAttribute('data-testid', 'arrow-kind');
+  var curKind = arrow.kind || 'default';
+  kindBtn.textContent = curKind === 'main' ? 'Main' : curKind === 'nav' ? 'Nav' : 'Std';
+  kindBtn.title = 'Arrow weight: Main (journey) / Nav (menu, secondary) / Std';
+  kindBtn.addEventListener('click', function (ev: MouseEvent) {
+    ev.stopPropagation();
+    cycleArrowKind(arrowIndex);
+    closeArrowPopup();
+  });
+  popup.appendChild(kindBtn);
+
   // Delete
   var deleteBtn = document.createElement('button');
   deleteBtn.className = 'fb-arrow-popup-btn fb-arrow-popup-delete';
@@ -135,6 +150,16 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   setTimeout(function () {
     document.addEventListener('mousedown', handlePopupOutsideClick);
   }, 0);
+}
+
+export function cycleArrowKind(arrowIndex: number): void {
+  var arrow = state.project.arrows[arrowIndex];
+  if (!arrow) return;
+  if (!arrow.kind) arrow.kind = 'main';
+  else if (arrow.kind === 'main') arrow.kind = 'nav';
+  else delete arrow.kind;
+  saveArrowMutations();
+  drawArrows();
 }
 
 export function swapArrowDirection(arrowIndex: number): void {
@@ -328,24 +353,24 @@ export function showScreenPopup(e: MouseEvent, screenId: string): void {
   });
   popup.appendChild(layoutBtn);
 
-  // -- Change epic (assign an existing epic, or clear) --
-  var epicBtn = mkBtn(ICON_TAG, 'Change epic', 'screen-epic');
+  // -- Epics (a screen can be in several: each item toggles one, None clears) --
+  var epicBtn = mkBtn(ICON_TAG, 'Epics', 'screen-epic');
   epicBtn.addEventListener('click', function (ev: MouseEvent) {
     ev.stopPropagation();
     var cx = ev.clientX;
     var cy = ev.clientY;
-    var cur = screenData.epic;
+    var hasAny = !!screenData.epic;
     closeScreenPopup();
     var items: CtxItem[] = (state.project.epics || []).map(function (epic: Epic): CtxItem {
       return {
         label: epic.label || epic.id,
         icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
-        active: cur === epic.id,
+        active: inEpic(screenData, epic.id),
         testid: 'epic-' + epic.id,
-        onClick: function () { setScreenEpic(screenId, epic.id); },
+        onClick: function () { toggleScreenEpic(screenId, epic.id); },
       };
     });
-    items.push({ label: 'None', active: !cur, testid: 'epic-none', onClick: function () { setScreenEpic(screenId, null); } });
+    items.push({ label: 'None', active: !hasAny, testid: 'epic-none', onClick: function () { setScreenEpic(screenId, null); } });
     showContextMenu(cx, cy, items);
   });
   popup.appendChild(epicBtn);

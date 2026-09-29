@@ -101,6 +101,12 @@ export function computeControlPoints(start: Position, end: Position, fromSide: S
 
 // Resolve the sides for a given arrow: arrow props → auto-spread → auto-detect.
 export function resolveArrowSides(arrow: Arrow, idx: number, spreadMap: Record<number, SidePair>): SidePair {
+  // In a focus view screens are temporarily re-laid out: frozen sides would point
+  // the wrong way, so pick the best sides from the focus positions.
+  if (state.focus) {
+    var fe = state.screenEls[arrow.from], te = state.screenEls[arrow.to];
+    if (fe && te) return getBestSides(fe, te);
+  }
   if (arrow.fromSide && arrow.toSide) {
     return { from: arrow.fromSide, to: arrow.toSide };
   }
@@ -205,6 +211,201 @@ export function freezeArrowSides(): void {
   });
 }
 
+// Visual weight per arrow kind. `undefined` keeps the classic look.
+var KIND_STYLE: Record<string, { color: string; width: string; marker: string }> = {
+  main: { color: '#374151', width: '3', marker: 'fb-arrowhead-main' },
+  nav: { color: '#b8bfca', width: '1.4', marker: 'fb-arrowhead-nav' },
+  default: { color: '#888', width: '2', marker: 'fb-arrowhead' },
+};
+
+// Draw order: nav under default under main, so the journey always stays on top.
+var KIND_RANK: Record<string, number> = { nav: 0, default: 1, main: 2 };
+
+// Is this arrow drawn at all? Hidden when an end is out of the current focus, or
+// when it is a nav arrow and nav arrows are toggled off.
+export function isArrowShown(arrow: Arrow): boolean {
+  if (state.focus && (!state.focus.visible[arrow.from] || !state.focus.visible[arrow.to])) return false;
+  if (arrow.kind === 'nav' && state.showNav === false) return false;
+  return true;
+}
+
+// Label width without touching the DOM: getBBox() forces a synchronous layout per
+// label (the #1 cost of a redraw while dragging). A detached canvas measures the
+// same font instantly; results are cached per (font, text).
+var LABEL_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+var measureCtx: CanvasRenderingContext2D | null | undefined;
+var widthCache: Record<string, number> = {};
+
+export function measureLabel(text: string, fontSize: number, bold: boolean): number {
+  var key = fontSize + (bold ? 'b' : '') + '|' + text;
+  var hit = widthCache[key];
+  if (hit !== undefined) return hit;
+  if (measureCtx === undefined) {
+    try { measureCtx = document.createElement('canvas').getContext('2d'); } catch (e) { measureCtx = null; }
+  }
+  var w: number;
+  if (measureCtx) {
+    measureCtx.font = (bold ? '600 ' : '') + fontSize + 'px ' + LABEL_FONT_FAMILY;
+    w = measureCtx.measureText(text).width;
+  } else {
+    w = text.length * fontSize * 0.56; // no canvas (e.g. jsdom): close estimate
+  }
+  widthCache[key] = w;
+  return w;
+}
+
+function makeMarker(ns: string, id: string, size: number, color: string): Element {
+  var marker = document.createElementNS(ns, 'marker');
+  marker.setAttribute('id', id);
+  marker.setAttribute('markerUnits', 'userSpaceOnUse');
+  marker.setAttribute('markerWidth', String(size));
+  marker.setAttribute('markerHeight', String(size));
+  marker.setAttribute('refX', String(size));
+  marker.setAttribute('refY', String(size / 2));
+  marker.setAttribute('orient', 'auto');
+  var polygon = document.createElementNS(ns, 'polygon');
+  polygon.setAttribute('points', '0 0, ' + size + ' ' + (size / 2) + ', 0 ' + size);
+  polygon.setAttribute('fill', color);
+  marker.appendChild(polygon);
+  return marker;
+}
+
+// -- Arrow labels: wrapped, on the curve, nudged along it to avoid overlaps --
+
+interface LabelJob {
+  g: Element; arrow: Arrow; kind: string; dimmed: boolean;
+  start: Position; cp1: Position; cp2: Position; end: Position;
+}
+interface Box { x: number; y: number; w: number; h: number; }
+
+var LABEL_MAX_W = 170;  // px before wrapping
+var LABEL_MAX_LINES = 3;
+var LABEL_TS = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82]; // positions tried along the curve
+
+export function bezierPoint(p0: Position, p1: Position, p2: Position, p3: Position, t: number): Position {
+  var u = 1 - t;
+  var a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+  return { x: a * p0.x + b * p1.x + c * p2.x + d * p3.x, y: a * p0.y + b * p1.y + c * p2.y + d * p3.y };
+}
+
+// Greedy word wrap to LABEL_MAX_W, at most LABEL_MAX_LINES (last one ellipsized).
+export function wrapLabel(text: string, fontSize: number, bold: boolean): string[] {
+  var words = String(text).split(/\s+/).filter(function (w) { return w !== ''; });
+  var lines: string[] = [];
+  var cur = '';
+  for (var i = 0; i < words.length; i++) {
+    var next = cur ? cur + ' ' + words[i] : words[i];
+    if (cur && measureLabel(next, fontSize, bold) > LABEL_MAX_W) {
+      lines.push(cur);
+      cur = words[i];
+      if (lines.length === LABEL_MAX_LINES) { cur = ''; break; }
+    } else {
+      cur = next;
+    }
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > LABEL_MAX_LINES || (i < words.length && lines.length === LABEL_MAX_LINES)) {
+    lines = lines.slice(0, LABEL_MAX_LINES);
+    lines[LABEL_MAX_LINES - 1] = lines[LABEL_MAX_LINES - 1].replace(/\s*\S*$/, '') + '…';
+  }
+  return lines.length ? lines : [String(text)];
+}
+
+function overlapArea(a: Box, b: Box): number {
+  var w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  var h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return (w > 0 && h > 0) ? w * h : 0;
+}
+
+// Rects of the screens currently on the board (label obstacles), measured once.
+function screenBoxes(): Box[] {
+  var out: Box[] = [];
+  (state.project.screens || []).forEach(function (s) {
+    if (state.focus && !state.focus.visible[s.id]) return;
+    var el = state.screenEls[s.id];
+    var p = state.positions[s.id];
+    if (!el || !p) return;
+    out.push({ x: p.x - 6, y: p.y - 6, w: el.offsetWidth + 12, h: el.offsetHeight + 12 });
+  });
+  return out;
+}
+
+var KIND_PRIORITY: Record<string, number> = { main: 0, default: 1, nav: 2 };
+
+function placeLabels(ns: string, jobs: LabelJob[]): void {
+  if (!jobs.length) return;
+  var screens = screenBoxes();
+  var placed: Box[] = [];
+  jobs.sort(function (a, b) { return KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind]; });
+
+  jobs.forEach(function (job) {
+    var kind = job.kind;
+    var bold = kind === 'main';
+    var fontSize = kind === 'nav' ? 10 : 11;
+    var lineH = Math.round(fontSize * 1.3);
+    var lines = wrapLabel(job.arrow.label, fontSize, bold);
+    var w = 0;
+    lines.forEach(function (l) { w = Math.max(w, measureLabel(l, fontSize, bold)); });
+    var bw = w + 10, bh = lines.length * lineH + 6;
+
+    // Try spots along the curve; keep the first free one, else the least covered.
+    var best: Position = null, bestScore = Infinity;
+    for (var k = 0; k < LABEL_TS.length; k++) {
+      var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, LABEL_TS[k]);
+      var box = { x: pt.x - bw / 2, y: pt.y - bh / 2, w: bw, h: bh };
+      var score = 0;
+      for (var si = 0; si < screens.length; si++) score += overlapArea(box, screens[si]) * 3;
+      for (var li = 0; li < placed.length; li++) score += overlapArea(box, placed[li]);
+      if (score < bestScore) { bestScore = score; best = pt; }
+      if (score === 0) break;
+    }
+    // Nav labels only show on hover: they never reserve room from the others.
+    if (kind !== 'nav') placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
+
+    var labelGroup = document.createElementNS(ns, 'g');
+    labelGroup.setAttribute('class', 'fb-arrow-label-group' + (job.dimmed ? ' fb-arrow-dimmed' : ''));
+
+    var bgRect = document.createElementNS(ns, 'rect');
+    bgRect.setAttribute('x', String(best.x - bw / 2));
+    bgRect.setAttribute('y', String(best.y - bh / 2));
+    bgRect.setAttribute('width', String(bw));
+    bgRect.setAttribute('height', String(bh));
+    bgRect.setAttribute('class', 'fb-arrow-label-bg');
+    bgRect.setAttribute('fill', kind === 'main' ? '#ffffff' : '#f0f2f5');
+    if (kind === 'main') { bgRect.setAttribute('stroke', '#374151'); bgRect.setAttribute('stroke-width', '1'); }
+    bgRect.setAttribute('rx', '4');
+    bgRect.setAttribute('ry', '4');
+
+    var text = document.createElementNS(ns, 'text');
+    text.setAttribute('class', 'fb-arrow-label');
+    text.setAttribute('fill', kind === 'main' ? '#1f2937' : '#555');
+    text.setAttribute('font-size', String(fontSize));
+    if (bold) text.setAttribute('font-weight', '600');
+    text.setAttribute('font-family', LABEL_FONT_FAMILY);
+    text.setAttribute('text-anchor', 'middle');
+    text.setAttribute('dominant-baseline', 'central');
+    text.setAttribute('x', String(best.x));
+    var y0 = best.y - ((lines.length - 1) * lineH) / 2;
+    if (lines.length === 1) {
+      text.setAttribute('y', String(best.y));
+      text.textContent = lines[0];
+    } else {
+      text.setAttribute('y', String(y0));
+      lines.forEach(function (l, idx) {
+        var ts = document.createElementNS(ns, 'tspan');
+        ts.setAttribute('x', String(best.x));
+        ts.setAttribute('y', String(y0 + idx * lineH));
+        ts.textContent = l;
+        text.appendChild(ts);
+      });
+    }
+
+    labelGroup.appendChild(bgRect);
+    labelGroup.appendChild(text);
+    job.g.appendChild(labelGroup);
+  });
+}
+
 export function drawArrows(skipHandles?: boolean): void {
   if (!state.svgEl || !state.project) return;
 
@@ -213,28 +414,34 @@ export function drawArrows(skipHandles?: boolean): void {
   var spreadMap = buildSpreadMap();
   state.svgEl.innerHTML = '';
 
-  // Arrow marker — equilateral shape, fixed size, auto-orient follows curve angle
+  // Arrow markers — equilateral shape, fixed size, auto-orient follows curve angle
   var defs = document.createElementNS(ns, 'defs');
-  var marker = document.createElementNS(ns, 'marker');
-  marker.setAttribute('id', 'fb-arrowhead');
-  marker.setAttribute('markerUnits', 'userSpaceOnUse');
-  marker.setAttribute('markerWidth', '14');
-  marker.setAttribute('markerHeight', '14');
-  marker.setAttribute('refX', '14');
-  marker.setAttribute('refY', '7');
-  marker.setAttribute('orient', 'auto');
-  var polygon = document.createElementNS(ns, 'polygon');
-  polygon.setAttribute('points', '0 0, 14 7, 0 14');
-  polygon.setAttribute('fill', '#888');
-  marker.appendChild(polygon);
-  defs.appendChild(marker);
+  defs.appendChild(makeMarker(ns, 'fb-arrowhead', 14, KIND_STYLE.default.color));
+  defs.appendChild(makeMarker(ns, 'fb-arrowhead-main', 16, KIND_STYLE.main.color));
+  defs.appendChild(makeMarker(ns, 'fb-arrowhead-nav', 10, KIND_STYLE.nav.color));
   state.svgEl.appendChild(defs);
 
-  arrows.forEach(function (arrow: Arrow, idx: number) {
+  // screenId → its arrow groups, so hover emphasis only touches those.
+  var byScreen: Record<string, Element[]> = {};
+  state.arrowGroupsByScreen = byScreen;
+  hlGroups = [];
+
+  var labelJobs: LabelJob[] = [];
+
+  var order = arrows.map(function (_a: Arrow, i: number) { return i; });
+  order.sort(function (a: number, b: number) {
+    return KIND_RANK[arrows[a].kind || 'default'] - KIND_RANK[arrows[b].kind || 'default'] || a - b;
+  });
+
+  order.forEach(function (idx: number) {
+    var arrow = arrows[idx];
     var fromEl = state.screenEls[arrow.from];
     var toEl = state.screenEls[arrow.to];
     if (!fromEl || !toEl) return;
+    if (!isArrowShown(arrow)) return;
 
+    var kind = arrow.kind || 'default';
+    var style = KIND_STYLE[kind];
     var sides = resolveArrowSides(arrow, idx, spreadMap);
 
     var start = getAnchor(arrow.from, sides.from);
@@ -252,21 +459,25 @@ export function drawArrows(skipHandles?: boolean): void {
     // Check if either endpoint screen is individually hidden
     var isDimmed = state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to];
 
-    // Group for arrow path
+    // Group for arrow path (+ its label, so hover styles can reach both)
     var g = document.createElementNS(ns, 'g');
-    g.setAttribute('class', 'fb-arrow-group' + (isDimmed ? ' fb-arrow-dimmed' : ''));
+    g.setAttribute('class', 'fb-arrow-group fb-arrow-' + kind + (isDimmed ? ' fb-arrow-dimmed' : ''));
+    g.setAttribute('data-from', arrow.from);
+    g.setAttribute('data-to', arrow.to);
+    (byScreen[arrow.from] = byScreen[arrow.from] || []).push(g);
+    if (arrow.to !== arrow.from) (byScreen[arrow.to] = byScreen[arrow.to] || []).push(g);
 
     // Main visible path
     var path = document.createElementNS(ns, 'path');
     path.setAttribute('d', d);
     path.setAttribute('class', 'fb-arrow-path' + (arrow.dashed ? ' fb-dashed' : ''));
     path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', '#888');
-    path.setAttribute('stroke-width', '2');
+    path.setAttribute('stroke', style.color);
+    path.setAttribute('stroke-width', style.width);
     if (arrow.dashed) {
       path.setAttribute('stroke-dasharray', '6 4');
     }
-    path.setAttribute('marker-end', 'url(#fb-arrowhead)');
+    path.setAttribute('marker-end', 'url(#' + style.marker + ')');
     g.appendChild(path);
 
     // Wider invisible hit area for hover + click
@@ -288,50 +499,62 @@ export function drawArrows(skipHandles?: boolean): void {
 
     state.svgEl.appendChild(g);
 
-    // Label
+    // Label: placed after every path, by priority (see placeLabels)
     if (arrow.label) {
-      var midX = (start.x + end.x + cp1.x + cp2.x) / 4;
-      var midY = (start.y + end.y + cp1.y + cp2.y) / 4;
-
-      var labelGroup = document.createElementNS(ns, 'g');
-      if (isDimmed) labelGroup.setAttribute('class', 'fb-arrow-dimmed');
-
-      var text = document.createElementNS(ns, 'text');
-      text.setAttribute('x', String(midX));
-      text.setAttribute('y', String(midY));
-      text.setAttribute('class', 'fb-arrow-label');
-      text.setAttribute('fill', '#555');
-      text.setAttribute('font-size', '11');
-      text.setAttribute('font-family', '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif');
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('dominant-baseline', 'central');
-      text.textContent = arrow.label;
-
-      // Temporarily add text to measure
-      state.svgEl.appendChild(text);
-      var bbox;
-      try { bbox = (text as SVGTextElement).getBBox(); } catch (e) { bbox = { x: midX - 20, y: midY - 8, width: 40, height: 16 }; }
-      state.svgEl.removeChild(text);
-
-      var bgRect = document.createElementNS(ns, 'rect');
-      bgRect.setAttribute('x', String(bbox.x - 4));
-      bgRect.setAttribute('y', String(bbox.y - 2));
-      bgRect.setAttribute('width', String(bbox.width + 8));
-      bgRect.setAttribute('height', String(bbox.height + 4));
-      bgRect.setAttribute('class', 'fb-arrow-label-bg');
-      bgRect.setAttribute('fill', '#f0f2f5');
-      bgRect.setAttribute('rx', '3');
-      bgRect.setAttribute('ry', '3');
-
-      labelGroup.appendChild(bgRect);
-      labelGroup.appendChild(text);
-      state.svgEl.appendChild(labelGroup);
+      labelJobs.push({ g: g, arrow: arrow, kind: kind, start: start, cp1: cp1, cp2: cp2, end: end, dimmed: !!isDimmed });
     }
   });
+
+  placeLabels(ns, labelJobs);
+
+  applyArrowHighlight();
 
   if (!skipHandles) {
     updateHandles();
   }
+}
+
+// -- Coalesced redraw: at most one drawArrows per animation frame (drag moves fire
+// far more often than the screen refreshes). flushDrawArrows() forces it now.
+var drawPending = false;
+var pendingSkip = false;
+
+export function scheduleDrawArrows(skipHandles?: boolean): void {
+  pendingSkip = !!skipHandles;
+  if (drawPending) return;
+  drawPending = true;
+  var raf = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame : function (f: () => void) { return setTimeout(f, 16); };
+  raf(function () {
+    if (!drawPending) return;
+    drawPending = false;
+    drawArrows(pendingSkip);
+  });
+}
+
+export function flushDrawArrows(): void {
+  if (!drawPending) return;
+  drawPending = false;
+  drawArrows(pendingSkip);
+}
+
+// -- Hover emphasis: hovering a screen brings its arrows forward, fades the rest --
+
+export function setHighlightedScreen(screenId: string | null): void {
+  state.highlightScreen = screenId;
+  applyArrowHighlight();
+}
+
+var hlGroups: Element[] = [];
+
+// O(arrows of the hovered screen): the fade of every other arrow is one class on
+// the SVG root (CSS), not a loop over all groups.
+export function applyArrowHighlight(): void {
+  if (!state.svgEl) return;
+  var id = state.highlightScreen;
+  for (var i = 0; i < hlGroups.length; i++) hlGroups[i].classList.remove('fb-arrow-hl');
+  hlGroups = (id && state.arrowGroupsByScreen && state.arrowGroupsByScreen[id]) || [];
+  for (var j = 0; j < hlGroups.length; j++) hlGroups[j].classList.add('fb-arrow-hl');
+  state.svgEl.classList.toggle('fb-hl-active', !!id && hlGroups.length > 0);
 }
 
 export function updateHandles(): void {
@@ -349,8 +572,9 @@ export function updateHandles(): void {
     var toEl = state.screenEls[arrow.to];
     if (!fromEl || !toEl) return;
 
-    // Skip handles for arrows connected to a dimmed screen
+    // Skip handles for arrows connected to a dimmed screen, or not drawn at all
     if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
+    if (!isArrowShown(arrow)) return;
 
     var sides = resolveArrowSides(arrow, idx, spreadMap);
 

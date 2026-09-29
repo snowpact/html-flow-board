@@ -47,6 +47,7 @@
             id: "dashboard",
             title: "Dashboard",
             epic: "dashboard",
+            epics: ["dashboard", "team", "content"],
             size: "lg",
             label: "Main dashboard",
             notes: "US-2.1 — Overview with KPIs",
@@ -205,13 +206,13 @@
           }
         ],
         arrows: [
-          { from: "login", to: "dashboard", label: "Login OK" },
-          { from: "dashboard", to: "team-list", label: "Team menu" },
-          { from: "dashboard", to: "content-list", label: "Content menu" },
-          { from: "team-list", to: "member-detail", label: "Click member" },
-          { from: "content-list", to: "content-edit", label: "Edit" },
-          { from: "member-detail", to: "content-list", label: "View content", dashed: true },
-          { from: "content-edit", to: "content-list", label: "Save", dashed: true }
+          { from: "login", to: "dashboard", label: "Sign in and land on the dashboard", kind: "main" },
+          { from: "dashboard", to: "team-list", label: "Open the team", kind: "nav" },
+          { from: "dashboard", to: "content-list", label: "Open the content", kind: "nav" },
+          { from: "team-list", to: "member-detail", label: "Review a member profile", kind: "main" },
+          { from: "content-list", to: "content-edit", label: "Edit an article", kind: "main" },
+          { from: "member-detail", to: "content-list", label: "See what they wrote", dashed: true },
+          { from: "content-edit", to: "content-list", label: "Save and go back", kind: "nav" }
         ]
       }
     });

@@ -15,13 +15,13 @@ Two build outputs live at the repo root and are committed (so jsDelivr serves th
 
 - `src/` — TS modules grouped by responsibility:
   - `core/` — `constants`, `state` (+ data accessors), `storage` (localStorage), `geometry` (pure helpers)
-  - `render/` — `toolbar`, `screen`, `mode-switch`, `popups`, `anchors`
+  - `render/` — `toolbar`, `view-picker` (epic picker), `screen`, `mode-switch`, `popups`, `anchors`
   - `interactions/` — `transform` (zoom/pan apply), `pan`, `drag`, `selection`, `arrow-drag`, `mode`
-  - flat: `index` (entry → `window.FlowBoard`), `board` (`init` + orchestration), `layout`, `arrows`, `export`
+  - flat: `index` (entry → `window.FlowBoard`), `board` (`init` + orchestration), `layout`, `arrows`, `focus` (epic focus view), `export`
 - `flowboard.js` / `flowboard.min.js` — **build outputs**, committed, served on the CDN. Do not hand-edit.
 - `flowboard.css` — all styles, every class prefixed `fb-` (hand-authored, root).
 - `index.html` — demo / GitHub Pages entry point (loads `flowboard.js` + `flowboard.css`).
-- `flowboard.test.js`, `flowboard.interactions.test.js`, `flowboard.min.test.js` — vitest + jsdom, 106 tests (direct module imports).
+- `flowboard.test.js`, `flowboard.interactions.test.js`, `flowboard.min.test.js`, `flowml.test.js`, `epics.test.js` — vitest + jsdom (direct module imports).
 
 ## Conventions
 
@@ -55,7 +55,9 @@ A tag push triggers `.github/workflows/release.yml` to purge jsDelivr's `@main`/
 - `FlowBoard.init(config)` — initialize with `{ container, project, state? }`
 - `config.state` — optional: restore positions, zoom, hiddenScreens
 - `config.project` — `{ name, epics[], screens[], arrows[] }`
-- Arrow objects carry `fromSide`/`toSide`/`label`/`dashed` directly (no separate overrides).
+- Arrow objects carry `fromSide`/`toSide`/`label`/`dashed`/`kind` (`main` | `nav`) directly (no separate overrides).
+- Screens: `epic` = primary epic (header color); `epics` = all epics (primary first) when more than one. Use `screenEpics()` / `inEpic()` / `setEpicList()` from `core/state` — never compare `s.epic` alone.
+- Epic focus (`src/focus.ts`) is a view: real positions live in `state.focus.savedPositions` and are what `commit()` persists.
 - Screen sizes: `sm` (240px), `md` (320px), `lg` (400px), `xl` (520px)
 
 ## Features

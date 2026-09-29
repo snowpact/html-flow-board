@@ -6,6 +6,7 @@ import {
   getBestSides, buildSpreadMap, resolveArrowSides,
 } from './src/arrows';
 import { autoLayout, bfsDepth, centerPositions, layoutByEpics, layoutGrid } from './src/layout';
+import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y } from './src/core/constants';
 import { PRESETS, getPreset, isCustomPreset, skeletonHtml } from './src/render/presets';
 import { renderScreen } from './src/render/screen';
 
@@ -396,8 +397,8 @@ describe('autoLayout', () => {
       { id: 'b', size: 'md' },
     ];
     var pos = autoLayout(screens, [], { a: 100, b: 100 });
-    // b.y = a.y + 100 (height) + 40 (GAP_Y)
-    expect(pos.b.y - pos.a.y).toBe(140);
+    // b.y = a.y + 100 (height) + GAP_Y
+    expect(pos.b.y - pos.a.y).toBe(100 + GAP_Y);
   });
 
   it('respects screen sizes for column width', () => {
@@ -408,7 +409,7 @@ describe('autoLayout', () => {
     var arrows = [{ from: 'a', to: 'b' }];
     var pos = autoLayout(screens, arrows);
     // a is lg (400), gap is 100 → b.x - a.x = 500
-    expect(pos.b.x - pos.a.x).toBe(500);
+    expect(pos.b.x - pos.a.x).toBe(400 + GAP_X); // lg width + gap
   });
 
   it('handles xl size screens', () => {
@@ -419,7 +420,7 @@ describe('autoLayout', () => {
     var arrows = [{ from: 'a', to: 'b' }];
     var pos = autoLayout(screens, arrows);
     // xl = 520, gap = 100
-    expect(pos.b.x - pos.a.x).toBe(620);
+    expect(pos.b.x - pos.a.x).toBe(520 + GAP_X); // xl width + gap
   });
 
   it('handles branching arrows (one root, two children)', () => {
@@ -521,19 +522,18 @@ describe('centerPositions', () => {
     var screens = [{ id: 'a' }, { id: 'b' }];
     var positions = { a: { x: 0, y: 0 }, b: { x: 100, y: 0 } };
     centerPositions(positions, screens, 100, 200);
-    // CANVAS_W = 10000, totalW = 100 → cx = (10000 - 100) / 2 = 4950
-    // CANVAS_H = 8000, totalH = 200 → cy = (8000 - 200) / 2 = 3900
-    expect(positions.a.x).toBe(4950);
-    expect(positions.a.y).toBe(3900);
-    expect(positions.b.x).toBe(5050);
-    expect(positions.b.y).toBe(3900);
+    var cx = (CANVAS_W - 100) / 2, cy = (CANVAS_H - 200) / 2;
+    expect(positions.a.x).toBe(cx);
+    expect(positions.a.y).toBe(cy);
+    expect(positions.b.x).toBe(cx + 100);
+    expect(positions.b.y).toBe(cy);
   });
 
   it('does not go below 0 for very large content', () => {
     var screens = [{ id: 'a' }];
     var positions = { a: { x: 0, y: 0 } };
-    centerPositions(positions, screens, 20000, 20000);
-    // (10000 - 20000) / 2 = -5000 → max(0, -5000) = 0
+    centerPositions(positions, screens, CANVAS_W * 2, CANVAS_H * 2);
+    // negative offset → clamped to 0
     expect(positions.a.x).toBe(0);
     expect(positions.a.y).toBe(0);
   });
@@ -553,28 +553,26 @@ describe('centerPositions', () => {
 describe('layoutByEpics', () => {
   beforeEach(() => { resetState(); });
 
-  it('groups screens by epic in separate columns', () => {
+  it('puts each epic on its own row', () => {
     var screens = [
       { id: 'a', epic: 'e1', size: 'md' },
       { id: 'b', epic: 'e2', size: 'md' },
     ];
     var pos = layoutByEpics(screens, []);
-    // Different epics → different columns → different x
-    expect(pos.a.x).not.toBe(pos.b.x);
+    expect(pos.a.y).not.toBe(pos.b.y);
   });
 
-  it('stacks screens of same epic vertically', () => {
+  it('lines up screens of the same epic left to right', () => {
     var screens = [
       { id: 'a', epic: 'e1', size: 'md' },
       { id: 'b', epic: 'e1', size: 'md' },
     ];
     var pos = layoutByEpics(screens, []);
-    // Same epic → same column → same x offset (before centering)
-    expect(pos.a.x).toBe(pos.b.x);
-    expect(pos.a.y).not.toBe(pos.b.y);
+    expect(pos.a.y).toBe(pos.b.y);
+    expect(pos.b.x - pos.a.x).toBe(320 + GAP_X); // md width + gap
   });
 
-  it('sorts screens within epic by BFS depth', () => {
+  it('orders screens within an epic by journey depth', () => {
     var screens = [
       { id: 'c', epic: 'e1', size: 'md' },
       { id: 'a', epic: 'e1', size: 'md' },
@@ -582,10 +580,8 @@ describe('layoutByEpics', () => {
     ];
     var arrows = [{ from: 'a', to: 'b' }, { from: 'b', to: 'c' }];
     var pos = layoutByEpics(screens, arrows);
-    // a depth 0, b depth 1, c depth 2 → sorted by depth
-    // So a.y < b.y < c.y
-    expect(pos.a.y).toBeLessThan(pos.b.y);
-    expect(pos.b.y).toBeLessThan(pos.c.y);
+    expect(pos.a.x).toBeLessThan(pos.b.x);
+    expect(pos.b.x).toBeLessThan(pos.c.x);
   });
 
   it('handles screens without epic as _none group', () => {
@@ -596,18 +592,24 @@ describe('layoutByEpics', () => {
     var pos = layoutByEpics(screens, []);
     expect(pos.a).toBeDefined();
     expect(pos.b).toBeDefined();
-    // Different groups → different x
-    expect(pos.a.x).not.toBe(pos.b.x);
+    expect(pos.a.y).not.toBe(pos.b.y);
   });
 
-  it('uses provided heights for spacing', () => {
+  it('spaces rows by the tallest screen + a double gap (room for labels)', () => {
     var screens = [
       { id: 'a', epic: 'e1', size: 'md' },
-      { id: 'b', epic: 'e1', size: 'md' },
+      { id: 'b', epic: 'e2', size: 'md' },
     ];
     var pos = layoutByEpics(screens, [], { a: 150, b: 150 });
-    // b.y - a.y = 150 + 40 (GAP_Y) = 190
-    expect(pos.b.y - pos.a.y).toBe(190);
+    expect(pos.b.y - pos.a.y).toBe(150 + GAP_Y * 2);
+  });
+
+  it('wraps a long epic after MAX_PER_ROW screens', () => {
+    var screens = [];
+    for (var i = 0; i < 10; i++) screens.push({ id: 's' + i, epic: 'e1', size: 'md' });
+    var pos = layoutByEpics(screens, []);
+    expect(pos.s8.y).toBeGreaterThan(pos.s0.y);
+    expect(pos.s8.x).toBe(pos.s0.x);
   });
 });
 
@@ -661,8 +663,8 @@ describe('layoutGrid', () => {
     ];
     // cols = 2, so a,b in row 0, c in row 1
     var pos = layoutGrid(screens, [], { a: 120, b: 120, c: 120 });
-    // Row 0 maxH = 120, GAP_Y = 40 → c.y - a.y = 160
-    expect(pos.c.y - pos.a.y).toBe(160);
+    // Row 0 maxH = 120 → c.y - a.y = 120 + GAP_Y
+    expect(pos.c.y - pos.a.y).toBe(120 + GAP_Y);
   });
 
   it('respects different screen sizes for horizontal spacing', () => {
@@ -676,7 +678,7 @@ describe('layoutGrid', () => {
     var pos = layoutGrid(screens, []);
     // 4 screens → cols = round(sqrt(4)) = 2
     // a is sm (240), gap = 100 → b.x - a.x = 340
-    expect(pos.b.x - pos.a.x).toBe(340);
+    expect(pos.b.x - pos.a.x).toBe(240 + GAP_X); // sm width + gap
   });
 });
 

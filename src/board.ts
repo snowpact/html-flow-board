@@ -17,9 +17,17 @@ import { LAYOUT_STRATEGIES, autoLayout } from './layout';
 import { renderModeSwitch } from './render/mode-switch';
 import { renderScreen } from './render/screen';
 import { renderToolbar, updateLayoutButton } from './render/toolbar';
+import { exitFocus } from './focus';
 
 export function cycleLayout(): void {
-  state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
+  exitFocus();
+  // Next strategy, skipping those not applicable to this board (e.g. Stories
+  // without any story).
+  for (var n = 0; n < LAYOUT_STRATEGIES.length; n++) {
+    state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
+    var strat = LAYOUT_STRATEGIES[state.layoutIndex];
+    if (!strat.available || strat.available()) break;
+  }
 
   var heights: Record<string, number> = {};
   var screens = state.project.screens || [];
@@ -41,6 +49,11 @@ export function cycleLayout(): void {
     }
   });
 
+  // A new layout moves everything: re-pick every arrow's anchor sides for it.
+  arrows.forEach(function (a) { delete a.fromSide; delete a.toSide; });
+  drawArrows();
+  freezeArrowSides();
+
   updateLayoutButton();
   savePositions();
   drawArrows();
@@ -49,6 +62,7 @@ export function cycleLayout(): void {
 
 export function doReset(): void {
   if (!confirm('Reset to the default layout?')) return;
+  exitFocus();
 
   var key = storageKey();
   try {
@@ -131,6 +145,9 @@ export function init(config: FlowConfig): void {
   }
 
   state.showNotes = true;
+  state.showNav = true;
+  state.focus = null;
+  state.highlightScreen = null;
   state.hiddenScreens = {};
   state.hiddenEpics = {};
   state.arrowPopup = null;

@@ -10,7 +10,8 @@ Generate interactive storyboard HTML files using the [html-flow-board](https://g
 ## What is html-flow-board
 
 A zero-dependency JS/CSS library that renders a zoomable, pannable board of **screens**
-(wireframe cards) grouped into **epics** and linked by **arrows**. One HTML file = one
+(wireframe cards) grouped into **epics** (a screen can be in several) and linked by **arrows**
+(bold journey steps vs light navigation links). One HTML file = one
 complete storyboard. The board has a left **Flow-ML** panel (diagram-as-code) that is the
 source of truth and two-way-syncs with the canvas; a board persists itself in `localStorage`.
 
@@ -22,7 +23,7 @@ You author a storyboard in **either** representation — they describe the same 
 ## Output format (HTML file)
 
 Always produce a **single self-contained HTML file**. Pin a released version when you can
-(`@v0.4.0`); `@main` always serves the latest.
+(`@v0.5.0`); `@main` always serves the latest.
 
 ```html
 <!DOCTYPE html>
@@ -55,7 +56,10 @@ FlowBoard.init({
 
 ### Epics
 
-Group screens by feature/domain. Each epic colors its screens' headers and the legend.
+An epic is a **user journey or feature** ("Sign in", "Close an intervention"). The toolbar's
+**Epic picker** focuses one epic: only its screens stay, laid out along their arrows and numbered.
+A screen shared by several journeys (a menu, a scanner) belongs to **several epics** — the first
+one colors its header, the others show as dots.
 
 ```js
 epics: [
@@ -77,7 +81,8 @@ Use **backtick** strings for every human-text field (`title`, `notes`, `name`, `
 {
   id: 'login',            // unique, kebab-case (used in arrows)
   title: `Login`,         // card header
-  epic: 'auth',           // an epic id
+  epic: 'auth',           // primary epic id (header color)
+  epics: ['auth', 'home'],// optional: every epic, primary first, when the screen is in several
   preset: 'form',         // body skeleton (see Presets); omit ⇒ 'custom'
   format: 'phone',        // min proportions: 'desktop' | 'phone' | 'square'
   notes: `OTP login flow`,// footer note (toggled by the Notes switch)
@@ -86,21 +91,30 @@ Use **backtick** strings for every human-text field (`title`, `notes`, `name`, `
 ```
 
 - `preset` and `content` coexist: switching presets never destroys authored HTML.
-- `hidden: true` hides a screen (legend/eye toggle).
+- `hidden: true` hides a screen (eye toggle).
 - Legacy `size: 'sm'|'md'|'lg'|'xl'` is still accepted but prefer `format`.
 
 ### Arrows
 
 ```js
 arrows: [
-  { from: 'login', to: 'home', label: `Login OK` },
+  { from: 'login', to: 'home', label: `Login OK`, kind: 'main' }, // journey step: bold
+  { from: 'menu',  to: 'report', label: `Open reports`, kind: 'nav' }, // menu/back link: light
   { from: 'home',  to: 'report', dashed: true },           // dashed = secondary path
   { from: 'home',  to: 'report', fs: 'right', ts: 'left' },// pin anchor sides (optional)
 ]
 ```
 
-Fields: `from`, `to` (screen ids), `label`, `dashed` (bool), `fromSide`/`toSide` (anchor sides).
-There is no arrow `color`.
+Fields: `from`, `to` (screen ids), `label`, `dashed` (bool), `kind` (`'main'` | `'nav'`),
+`fromSide`/`toSide` (anchor sides). There is no arrow `color`.
+
+**Always set `kind`** — it is what keeps a big board readable:
+- `kind: 'main'` for the steps of a journey (the tunnel the user goes through);
+- `kind: 'nav'` for menu entries, tabs, back links — drawn thin, label on hover, hideable, and
+  ignored by the auto-layout (so a menu doesn't drag every screen into one column).
+
+Write the label as **what the action lets the user do** (`Valider le départ : clôture envoyée`),
+not the button name. Labels wrap on up to 3 lines (~170px each).
 
 ## Presets (`preset`)
 
@@ -132,14 +146,15 @@ The left panel edits the board as text. Each line is identified by its first cha
 @auth, t=Authentication, c=#6366f1   # epic (t = title, c = color)
 
 :login, t=Login, p=form, f=phone, e=auth   # screen — note the ":" prefix
-:home,  t=Dashboard, p=dashboard, f=desktop, e=auth, x=560, y=80
+:home,  t=Dashboard, p=dashboard, f=desktop, e="auth admin", x=560, y=80   # 2 epics
 
-login -> home, l=Login OK      # arrow (solid),  l = label
-login --> home                 # arrow (dashed)
+login -> home, l="Login OK", k=main   # arrow (solid), l = label, k = main (journey step)
+home -> login, l=Logout, k=nav        # k = nav (menu / back link)
+login --> home                        # arrow (dashed)
 ```
 
-- Screen attrs: `t` title · `p` preset · `f` format · `e` epic · `n` note · `x y` position · `h` hidden.
-- Epic attrs: `t` title · `c` color. Arrow attrs: `l` label · `fs` from side · `ts` to side.
+- Screen attrs: `t` title · `p` preset · `f` format · `e` epic(s), space-separated · `n` note · `x y` position · `h` hidden.
+- Epic attrs: `t` title · `c` color. Arrow attrs: `l` label · `k` kind (`main`/`nav`) · `fs` from side · `ts` to side.
 - Fenced ` ``` ` block right after a `:screen` line = its custom HTML body.
 - Values with spaces/commas/quotes are wrapped in `"…"`. `#` starts a comment.
 
@@ -189,9 +204,10 @@ exact layout matters.
 
 ### Create a new flowboard
 1. **Ask** what screens are needed (or derive from specs/screenshots).
-2. **Define epics** first — group by feature domain.
+2. **Define epics** first — one per user journey / feature (put shared screens in several).
 3. **Add screens** — choose a `preset` + `format`; only write `content` for `custom`.
-4. **Add arrows** for the navigation paths.
+4. **Add arrows** for the navigation paths — `kind: 'main'` for journey steps, `kind: 'nav'` for
+   menus / back links; label = what the action allows.
 5. **Write one HTML file** (boilerplate above) to the project's docs / `.context`.
 6. **Verify it (required)** — run the one-line syntax check from [Quoting](#quoting) on the file;
    fix until it prints `script OK`.
@@ -229,7 +245,8 @@ The generated `<script>` is real JavaScript — a single bad quote blanks the wh
 
 - Match the wireframe text to the app's language.
 - Keep wireframes low-fi — `fb-img` placeholders, no real images.
-- Screen ids unique + kebab-case; every screen's `epic` must exist in `epics`.
+- Screen ids unique + kebab-case; every screen's `epic` / `epics` must exist in `epics`.
+- Epic ids kebab-case (no spaces: `e="a b"` means two epics).
 - Container must be `#app` with `width:100vw;height:100vh`.
 - Prefer `preset` skeletons; use inline styles for custom layout, `fb-*` classes for components.
 - Quote human text with backticks (see [Quoting](#quoting)) — this is the #1 cause of a blank page.

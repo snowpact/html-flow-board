@@ -40,13 +40,34 @@ export function getEpic(epicId: string): Epic | null {
   return null;
 }
 
+// Every epic a screen belongs to, primary first.
+export function screenEpics(s: Screen): string[] {
+  if (s.epics && s.epics.length) return s.epics;
+  return s.epic ? [s.epic] : [];
+}
+
+export function inEpic(s: Screen, epicId: string): boolean {
+  if (s.epic === epicId) return true;
+  return !!(s.epics && s.epics.indexOf(epicId) !== -1);
+}
+
+// Set a screen's epics (deduped, primary first) in the canonical shape:
+// none → no field, one → `epic`, several → `epic` + `epics`.
+export function setEpicList(s: Screen, list: string[]): void {
+  var seen: Record<string, boolean> = {};
+  var clean = list.filter(function (e) { if (!e || seen[e]) return false; seen[e] = true; return true; });
+  if (!clean.length) { delete s.epic; delete s.epics; return; }
+  s.epic = clean[0];
+  if (clean.length > 1) s.epics = clean; else delete s.epics;
+}
+
 // An epic counts as hidden when every one of its screens is hidden. Derived from
 // hiddenScreens; recomputed after any rebuild so the legend stays in sync.
 export function recomputeHiddenEpics(): void {
   state.hiddenEpics = {};
   var screens = (state.project && state.project.screens) || [];
   ((state.project && state.project.epics) || []).forEach(function (epic: Epic) {
-    var es = screens.filter(function (s: Screen) { return s.epic === epic.id; });
+    var es = screens.filter(function (s: Screen) { return inEpic(s, epic.id); });
     if (es.length && es.every(function (s: Screen) { return state.hiddenScreens[s.id]; })) {
       state.hiddenEpics[epic.id] = true;
     }

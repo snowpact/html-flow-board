@@ -4,7 +4,7 @@ import { state } from './src/core/state';
 import { showContextMenu, closeContextMenu } from './src/render/context-menu';
 import { createScreen } from './src/interactions/create';
 import { setScreenPreset, setScreenFormat, toggleScreen, deleteScreen, setScreenEpic } from './src/render/screen';
-import { addEpic, deleteEpic, setEpicLabel, setEpicColor, showEpicsModal, closeEpicsModal } from './src/render/toolbar';
+import { addEpic, deleteEpic, setEpicLabel, setEpicColor, showEpicsModal, closeEpicsModal, toggleEpic } from './src/render/toolbar';
 import { closePresetPicker } from './src/render/preset-picker';
 import { rebuildBoard, commit } from './src/interactions/sync';
 import { parse } from './src/flowml/parse';
@@ -206,9 +206,7 @@ describe('mode switch + selection', () => {
     selectMode();
     mdown(state.screenEls['A']); mup();
     expect(state.selected).toEqual({ A: true });
-    const cb = state.container.querySelector('.fb-legend-checkbox[data-epic-id="e1"]');
-    cb.checked = false;
-    cb.dispatchEvent(new window.Event('change', { bubbles: true }));
+    toggleEpic('e1');
     expect(state.hiddenScreens['A']).toBe(true);
     expect(state.selected['A']).toBeUndefined();
     expect(state.screenEls['A'].classList.contains('fb-selected')).toBe(false);
@@ -448,11 +446,11 @@ describe('Flow-ML sync hardening', () => {
     expect(window.localStorage.getItem('fb-Renamed-flowml')).toBeNull(); // no orphan key
   });
 
-  it('changing epics in the text rebuilds the toolbar legend', () => {
+  it('changing epics in the text rebuilds the View picker', () => {
     const { project, positions } = parse('@e2, t=New, c=#0f0\n:x1, t=One, e=e2\n');
     state.syncing = true; rebuildBoard(project, positions); state.syncing = false;
-    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e2"]')).toBeTruthy();
-    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e1"]')).toBeFalsy();
+    expect(document.querySelector('.fb-view-item[data-view="e2"]')).toBeTruthy();
+    expect(document.querySelector('.fb-view-item[data-view="e1"]')).toBeFalsy();
   });
 
   it('rebuild prunes selection entries for deleted screens', () => {
@@ -555,18 +553,18 @@ describe('Flow-ML UX additions', () => {
 describe('epic management', () => {
   beforeEach(() => { initBoard(); closeEpicsModal(); });
 
-  it('addEpic appends an epic (palette color) + legend entry + text', () => {
+  it('addEpic appends an epic (palette color) + View entry + text', () => {
     const e = addEpic();
     expect(state.project.epics.some((x) => x.id === e.id)).toBe(true);
     expect(e.color).toBeTruthy();
-    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="' + e.id + '"]')).toBeTruthy();
+    expect(document.querySelector('.fb-view-item[data-view="' + e.id + '"]')).toBeTruthy();
     expect(loadDoc()).toContain(e.label);
   });
 
-  it('setEpicLabel + setEpicColor update model, legend, headers and text', () => {
+  it('setEpicLabel + setEpicColor update model, View picker, headers and text', () => {
     setEpicLabel('e1', 'Authentication');
     expect(state.project.epics.find((x) => x.id === 'e1').label).toBe('Authentication');
-    expect(document.querySelector('.fb-legend').textContent).toContain('Authentication');
+    expect(document.querySelector('.fb-view-list').textContent).toContain('Authentication');
     setEpicColor('e1', '#0000ff');
     expect(state.project.epics.find((x) => x.id === 'e1').color).toBe('#0000ff');
     expect(state.screenEls['A'].querySelector('.fb-screen-header').style.background).toBe('rgb(0, 0, 255)');
@@ -580,7 +578,7 @@ describe('epic management', () => {
     expect(state.project.screens.find((s) => s.id === 'A').epic).toBeUndefined();
     expect(state.project.screens.length).toBe(3); // screens kept
     expect(state.screenEls['A'].querySelector('.fb-screen-header').style.background).toBe('rgb(102, 102, 102)');
-    expect(document.querySelector('.fb-legend-checkbox[data-epic-id="e1"]')).toBeFalsy();
+    expect(document.querySelector('.fb-view-item[data-view="e1"]')).toBeFalsy();
     expect(loadDoc()).not.toContain('@e1');
   });
 
@@ -618,11 +616,9 @@ describe('epic management', () => {
     expect(document.querySelector('.fb-epics-modal')).toBeFalsy();
   });
 
-  it('legend checkbox still toggles epic visibility (as before)', () => {
-    const cb = document.querySelector('.fb-legend-checkbox[data-epic-id="e1"]');
+  it('toggleEpic still toggles epic visibility (API kept)', () => {
     expect(state.hiddenEpics.e1).toBeFalsy();
-    cb.checked = false;
-    cb.dispatchEvent(new window.Event('change', { bubbles: true }));
+    toggleEpic('e1');
     expect(state.hiddenEpics.e1).toBe(true);
     expect(state.hiddenScreens.A).toBe(true); // its screens hidden
   });

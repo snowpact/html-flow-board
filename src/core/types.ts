@@ -23,7 +23,8 @@ export interface Epic {
 export interface Screen {
   id: string;
   title?: string;
-  epic?: string;
+  epic?: string;      // primary epic (header color)
+  epics?: string[];   // every epic the screen belongs to (primary first), when more than one
   size?: ScreenSize;  // legacy; mapped to a default width for backward-compat
   format?: Format;    // device proportions (sets base width × height)
   width?: number;     // explicit body width (px)
@@ -44,8 +45,14 @@ export interface Arrow {
   toSide?: Side;
   label?: string;
   dashed?: boolean;
+  // Visual weight. 'main' = the user journey (a tunnel step, drawn bold);
+  // 'nav' = secondary navigation (menus, back links: drawn thin, label on hover).
+  // Absent ⇒ the classic default style.
+  kind?: ArrowKind;
   [k: string]: any;
 }
+
+export type ArrowKind = 'main' | 'nav';
 
 export interface Position { x: number; y: number; }
 export interface Rect { left: number; top: number; right: number; bottom: number; }
@@ -55,6 +62,16 @@ export interface FlowProject {
   epics?: Epic[];
   screens?: Screen[];
   arrows?: Arrow[];
+}
+
+// Temporary "focus" view: only one epic's screens are shown, laid out for
+// reading. The real positions are kept aside and restored on exit; they are
+// what gets persisted while the focus is on.
+export interface FocusState {
+  type: 'epic';
+  id: string;
+  savedPositions: Record<string, Position>;
+  visible: Record<string, boolean>;
 }
 
 export interface FlowConfig {
@@ -90,6 +107,8 @@ export interface FlowState {
   layoutIndex: number;
   screenPopup: any;
   panDrag: any;
+  showNav?: boolean;       // draw 'nav' arrows (toolbar toggle)
+  focus?: FocusState | null; // active epic focus view, or null
   // Escape hatch for the various ad-hoc fields touched across modules.
   [k: string]: any;
 }

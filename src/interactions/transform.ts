@@ -49,6 +49,7 @@ export function fitToContent(): void {
 
   screens.forEach(function (s: Screen) {
     if (state.hiddenScreens[s.id]) return;
+    if (state.focus && !state.focus.visible[s.id]) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (!el || !pos) return;

@@ -1,9 +1,9 @@
 
 
 // -- Constants --
-export var CANVAS_W = 10000;
-export var CANVAS_H = 8000;
-export var ZOOM_MIN = 0.2;
+export var CANVAS_W = 20000;
+export var CANVAS_H = 16000;
+export var ZOOM_MIN = 0.1;
 export var ZOOM_MAX = 2;
 export var ZOOM_STEP = 0.1;
 export var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
@@ -14,8 +14,10 @@ export var FORMATS: Record<string, { width: number; height: number }> = {
   phone: { width: 260, height: 480 },   // tall portrait
   square: { width: 360, height: 360 },  // 1:1
 };
-export var GAP_X = 100;
-export var GAP_Y = 40;
+// Default spacing between screens in the auto-layouts: wide enough for an arrow
+// and its (wrapped) label to sit between two columns / rows without overlap.
+export var GAP_X = 260;
+export var GAP_Y = 90;
 export var ARROW_OFFSET = 60;
 export var ARROW_BLEND = 0.15;
 export var SELECT_DRAG_THRESHOLD = 3; // px before a background drag counts as a rubber-band

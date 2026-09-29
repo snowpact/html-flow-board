@@ -1,8 +1,8 @@
 (() => {
   // src/core/constants.ts
-  var CANVAS_W = 1e4;
-  var CANVAS_H = 8e3;
-  var ZOOM_MIN = 0.2;
+  var CANVAS_W = 2e4;
+  var CANVAS_H = 16e3;
+  var ZOOM_MIN = 0.1;
   var ZOOM_MAX = 2;
   var ZOOM_STEP = 0.1;
   var SIZES = { sm: 240, md: 320, lg: 400, xl: 520 };
@@ -14,8 +14,8 @@
     square: { width: 360, height: 360 }
     // 1:1
   };
-  var GAP_X = 100;
-  var GAP_Y = 40;
+  var GAP_X = 260;
+  var GAP_Y = 90;
   var ARROW_OFFSET = 60;
   var ARROW_BLEND = 0.15;
   var SELECT_DRAG_THRESHOLD = 3;
@@ -90,12 +90,36 @@
     }
     return null;
   }
+  function screenEpics(s) {
+    if (s.epics && s.epics.length) return s.epics;
+    return s.epic ? [s.epic] : [];
+  }
+  function inEpic(s, epicId) {
+    if (s.epic === epicId) return true;
+    return !!(s.epics && s.epics.indexOf(epicId) !== -1);
+  }
+  function setEpicList(s, list) {
+    var seen = {};
+    var clean = list.filter(function(e) {
+      if (!e || seen[e]) return false;
+      seen[e] = true;
+      return true;
+    });
+    if (!clean.length) {
+      delete s.epic;
+      delete s.epics;
+      return;
+    }
+    s.epic = clean[0];
+    if (clean.length > 1) s.epics = clean;
+    else delete s.epics;
+  }
   function recomputeHiddenEpics() {
     state.hiddenEpics = {};
     var screens = state.project && state.project.screens || [];
     (state.project && state.project.epics || []).forEach(function(epic) {
       var es = screens.filter(function(s) {
-        return s.epic === epic.id;
+        return inEpic(s, epic.id);
       });
       if (es.length && es.every(function(s) {
         return state.hiddenScreens[s.id];
@@ -204,32 +228,32 @@
     if (state.hiddenScreens[screenId]) return;
     var anchors = getAllAnchorPoints(screenId);
     anchors.forEach(function(anchor) {
-      var dot = document.createElement("div");
-      dot.className = "fb-anchor-dot";
-      dot.style.left = anchor.x - 6 + "px";
-      dot.style.top = anchor.y - 6 + "px";
-      dot.dataset.screenId = screenId;
-      dot.dataset.anchorName = anchor.name;
-      dot.addEventListener("mouseenter", function() {
+      var dot2 = document.createElement("div");
+      dot2.className = "fb-anchor-dot";
+      dot2.style.left = anchor.x - 6 + "px";
+      dot2.style.top = anchor.y - 6 + "px";
+      dot2.dataset.screenId = screenId;
+      dot2.dataset.anchorName = anchor.name;
+      dot2.addEventListener("mouseenter", function() {
         cancelHideAnchors();
-        dot.classList.add("fb-anchor-dot-hover");
+        dot2.classList.add("fb-anchor-dot-hover");
       });
-      dot.addEventListener("mouseleave", function() {
-        dot.classList.remove("fb-anchor-dot-hover");
+      dot2.addEventListener("mouseleave", function() {
+        dot2.classList.remove("fb-anchor-dot-hover");
         scheduleHideAnchors();
       });
-      dot.addEventListener("mousedown", function(e) {
+      dot2.addEventListener("mousedown", function(e) {
         e.stopPropagation();
         e.preventDefault();
         startArrowCreation(screenId, anchor.name);
       });
-      state.canvasEl.appendChild(dot);
-      state.anchorDotsEls.push(dot);
+      state.canvasEl.appendChild(dot2);
+      state.anchorDotsEls.push(dot2);
     });
   }
   function hideAnchorDots() {
-    state.anchorDotsEls.forEach(function(el) {
-      if (el.parentNode) el.parentNode.removeChild(el);
+    state.anchorDotsEls.forEach(function(el2) {
+      if (el2.parentNode) el2.parentNode.removeChild(el2);
     });
     state.anchorDotsEls = [];
   }
@@ -240,33 +264,33 @@
       if (state.hiddenScreens[s.id]) return;
       var anchors = getAllAnchorPoints(s.id);
       anchors.forEach(function(anchor) {
-        var dot = document.createElement("div");
-        dot.className = "fb-anchor-dot";
-        dot.style.left = anchor.x - 6 + "px";
-        dot.style.top = anchor.y - 6 + "px";
-        dot.dataset.screenId = s.id;
-        dot.dataset.anchorName = anchor.name;
-        dot.addEventListener("mouseenter", function() {
-          dot.classList.add("fb-anchor-dot-hover");
+        var dot2 = document.createElement("div");
+        dot2.className = "fb-anchor-dot";
+        dot2.style.left = anchor.x - 6 + "px";
+        dot2.style.top = anchor.y - 6 + "px";
+        dot2.dataset.screenId = s.id;
+        dot2.dataset.anchorName = anchor.name;
+        dot2.addEventListener("mouseenter", function() {
+          dot2.classList.add("fb-anchor-dot-hover");
         });
-        dot.addEventListener("mouseleave", function() {
-          dot.classList.remove("fb-anchor-dot-hover");
+        dot2.addEventListener("mouseleave", function() {
+          dot2.classList.remove("fb-anchor-dot-hover");
         });
-        dot.addEventListener("mousedown", function(e) {
+        dot2.addEventListener("mousedown", function(e) {
           e.stopPropagation();
           e.preventDefault();
           if (state.creatingArrow && s.id !== state.creatingArrow.fromScreenId) {
             completeArrowCreation(s.id, anchor.name);
           }
         });
-        state.canvasEl.appendChild(dot);
-        state.anchorDotsEls.push(dot);
+        state.canvasEl.appendChild(dot2);
+        state.anchorDotsEls.push(dot2);
       });
     });
     if (state.creatingArrow) {
-      state.anchorDotsEls.forEach(function(dot) {
-        if (dot.dataset.screenId === state.creatingArrow.fromScreenId && dot.dataset.anchorName === state.creatingArrow.fromSide) {
-          dot.classList.add("fb-anchor-dot-source");
+      state.anchorDotsEls.forEach(function(dot2) {
+        if (dot2.dataset.screenId === state.creatingArrow.fromScreenId && dot2.dataset.anchorName === state.creatingArrow.fromSide) {
+          dot2.classList.add("fb-anchor-dot-source");
         }
       });
     }
@@ -386,6 +410,15 @@
   var ICON_DESKTOP = icon('<rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>');
   var ICON_PHONE = icon('<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>');
   var ICON_SQUARE = icon('<rect x="4" y="4" width="16" height="16" rx="2"/>');
+  var ICON_MINUS = icon('<line x1="5" y1="12" x2="19" y2="12"/>');
+  var ICON_FIT = icon('<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>');
+  var ICON_DOWNLOAD = icon('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>');
+  var ICON_RESET = icon('<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>');
+  var ICON_CHEVRON = icon('<polyline points="6 9 12 15 18 9"/>', 14);
+  var ICON_GRID = icon('<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>');
+  var ICON_SLIDERS = icon('<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>', 14);
+  var ICON_X = icon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 14);
+  var ICON_LAYERS = icon('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>');
 
   // src/render/presets.ts
   var bar = '<i class="fb-skel-bar"></i>';
@@ -488,40 +521,47 @@
     drawArrows();
   }
   function applyScreenVisibility(screenId) {
-    var el = state.screenEls[screenId];
-    if (!el) return;
+    var el2 = state.screenEls[screenId];
+    if (!el2) return;
     if (state.hiddenScreens[screenId]) {
-      el.classList.add("fb-screen-dimmed");
+      el2.classList.add("fb-screen-dimmed");
       if (state.selected[screenId]) {
         delete state.selected[screenId];
-        el.classList.remove("fb-selected");
+        el2.classList.remove("fb-selected");
       }
     } else {
-      el.classList.remove("fb-screen-dimmed");
+      el2.classList.remove("fb-screen-dimmed");
     }
   }
   function renderScreen(screenData) {
     var epic = getEpic(screenData.epic);
     var color = epic ? epic.color : "#666";
-    var el = document.createElement("div");
-    el.className = "fb-screen";
-    el.dataset.screenId = screenData.id;
+    var el2 = document.createElement("div");
+    el2.className = "fb-screen";
+    el2.dataset.screenId = screenData.id;
+    el2.addEventListener("mouseenter", function() {
+      setHighlightedScreen(screenData.id);
+    });
+    el2.addEventListener("mouseleave", function() {
+      if (state.highlightScreen === screenData.id) setHighlightedScreen(null);
+    });
     if (screenData.format && FORMATS[screenData.format]) {
       var ff = FORMATS[screenData.format];
-      el.style.minWidth = ff.width + "px";
-      el.style.minHeight = ff.height + "px";
+      el2.style.minWidth = ff.width + "px";
+      el2.style.minHeight = ff.height + "px";
     } else {
-      el.style.width = screenWidth(screenData) + "px";
+      el2.style.width = screenWidth(screenData) + "px";
       var h = screenHeight(screenData);
-      if (h) el.style.height = h + "px";
+      if (h) el2.style.height = h + "px";
     }
     var pos = state.positions[screenData.id] || { x: 100, y: 100 };
-    el.style.left = pos.x + "px";
-    el.style.top = pos.y + "px";
+    el2.style.left = pos.x + "px";
+    el2.style.top = pos.y + "px";
     var hdr = document.createElement("div");
     hdr.className = "fb-screen-header";
     hdr.style.background = color;
     hdr.innerHTML = "<span>" + escapeHtml(screenData.title) + "</span>";
+    hdr.appendChild(renderEpicDots(screenData));
     var toggleBtn = document.createElement("button");
     toggleBtn.className = "fb-screen-toggle";
     toggleBtn.title = "Hide this screen";
@@ -531,37 +571,37 @@
       toggleScreen(screenData.id);
     });
     hdr.appendChild(toggleBtn);
-    el.appendChild(hdr);
+    el2.appendChild(hdr);
     var body = document.createElement("div");
     applyScreenBody(body, screenData);
-    el.appendChild(body);
+    el2.appendChild(body);
     if (screenData.notes) {
       var footer = document.createElement("div");
       footer.className = "fb-screen-footer" + (state.showNotes ? "" : " fb-hidden");
       footer.textContent = screenData.notes;
-      el.appendChild(footer);
+      el2.appendChild(footer);
     }
     if (state.hiddenScreens[screenData.id]) {
-      el.classList.add("fb-screen-dimmed");
+      el2.classList.add("fb-screen-dimmed");
     }
-    el.addEventListener("contextmenu", function(e) {
+    el2.addEventListener("contextmenu", function(e) {
       e.preventDefault();
       e.stopPropagation();
       showScreenPopup(e, screenData.id);
     });
-    el.addEventListener("mouseenter", function() {
+    el2.addEventListener("mouseenter", function() {
       if (!state.creatingArrow && !state.screenDrag && !state.selectBox) {
         cancelHideAnchors();
         showAnchorDots(screenData.id);
       }
     });
-    el.addEventListener("mouseleave", function() {
+    el2.addEventListener("mouseleave", function() {
       if (!state.creatingArrow) {
         scheduleHideAnchors();
       }
     });
-    state.screenEls[screenData.id] = el;
-    return el;
+    state.screenEls[screenData.id] = el2;
+    return el2;
   }
   function applyScreenBody(body, screenData) {
     body.className = "fb-screen-body";
@@ -585,20 +625,20 @@
     }
     if (!screen) return;
     screen.format = format;
-    var el = state.screenEls[screenId];
-    if (el) {
-      el.style.width = "";
-      el.style.height = "";
-      el.style.minWidth = "";
-      el.style.minHeight = "";
+    var el2 = state.screenEls[screenId];
+    if (el2) {
+      el2.style.width = "";
+      el2.style.height = "";
+      el2.style.minWidth = "";
+      el2.style.minHeight = "";
       if (FORMATS[format]) {
         var ff = FORMATS[format];
-        el.style.minWidth = ff.width + "px";
-        el.style.minHeight = ff.height + "px";
+        el2.style.minWidth = ff.width + "px";
+        el2.style.minHeight = ff.height + "px";
       } else {
-        el.style.width = screenWidth(screen) + "px";
+        el2.style.width = screenWidth(screen) + "px";
         var h = screenHeight(screen);
-        if (h) el.style.height = h + "px";
+        if (h) el2.style.height = h + "px";
       }
     }
     drawArrows();
@@ -619,8 +659,8 @@
     state.project.arrows = arrows.filter(function(a) {
       return a.from !== screenId && a.to !== screenId;
     });
-    var el = state.screenEls[screenId];
-    if (el && el.parentNode) el.parentNode.removeChild(el);
+    var el2 = state.screenEls[screenId];
+    if (el2 && el2.parentNode) el2.parentNode.removeChild(el2);
     delete state.screenEls[screenId];
     delete state.hiddenScreens[screenId];
     delete state.selected[screenId];
@@ -628,24 +668,53 @@
     drawArrows();
     if (state.commit) state.commit();
   }
-  function setScreenEpic(screenId, epicId) {
+  function renderEpicDots(screen) {
+    var wrap = document.createElement("span");
+    wrap.className = "fb-epic-dots";
+    screenEpics(screen).slice(1).forEach(function(id) {
+      var e = getEpic(id);
+      if (!e) return;
+      var d = document.createElement("span");
+      d.className = "fb-epic-dot";
+      d.style.background = e.color;
+      d.title = e.label || e.id;
+      wrap.appendChild(d);
+    });
+    return wrap;
+  }
+  function refreshScreenEpics(screen) {
+    var el2 = state.screenEls[screen.id];
+    if (!el2) return;
+    var hdr = el2.querySelector(".fb-screen-header");
+    if (!hdr) return;
+    var epic = getEpic(screen.epic);
+    hdr.style.background = epic ? epic.color : "#666";
+    var old = hdr.querySelector(".fb-epic-dots");
+    var dots = renderEpicDots(screen);
+    if (old && old.parentNode) old.parentNode.replaceChild(dots, old);
+    else hdr.insertBefore(dots, hdr.querySelector(".fb-screen-toggle"));
+  }
+  function findScreen(screenId) {
     var screens = state.project && state.project.screens || [];
-    var screen = null;
-    for (var i = 0; i < screens.length; i++) {
-      if (screens[i].id === screenId) {
-        screen = screens[i];
-        break;
-      }
-    }
+    for (var i = 0; i < screens.length; i++) if (screens[i].id === screenId) return screens[i];
+    return null;
+  }
+  function setScreenEpic(screenId, epicId) {
+    var screen = findScreen(screenId);
     if (!screen) return;
-    if (epicId) screen.epic = epicId;
-    else delete screen.epic;
-    var el = state.screenEls[screenId];
-    if (el) {
-      var epic = getEpic(screen.epic);
-      var hdr = el.querySelector(".fb-screen-header");
-      if (hdr) hdr.style.background = epic ? epic.color : "#666";
-    }
+    setEpicList(screen, epicId ? [epicId] : []);
+    refreshScreenEpics(screen);
+    if (state.commit) state.commit();
+  }
+  function toggleScreenEpic(screenId, epicId) {
+    var screen = findScreen(screenId);
+    if (!screen) return;
+    var list = screenEpics(screen).slice();
+    var at = list.indexOf(epicId);
+    if (at === -1) list.push(epicId);
+    else list.splice(at, 1);
+    setEpicList(screen, list);
+    refreshScreenEpics(screen);
     if (state.commit) state.commit();
   }
   function setScreenPreset(screenId, preset) {
@@ -659,9 +728,9 @@
     }
     if (!screen) return;
     screen.preset = preset;
-    var el = state.screenEls[screenId];
-    if (!el) return;
-    var body = el.querySelector(".fb-screen-body");
+    var el2 = state.screenEls[screenId];
+    if (!el2) return;
+    var body = el2.querySelector(".fb-screen-body");
     if (body) applyScreenBody(body, screen);
     drawArrows();
     if (state.commit) state.commit();
@@ -892,6 +961,18 @@
       closeArrowPopup();
     });
     popup.appendChild(styleBtn);
+    var kindBtn = document.createElement("button");
+    kindBtn.className = "fb-arrow-popup-btn fb-arrow-popup-kind";
+    kindBtn.setAttribute("data-testid", "arrow-kind");
+    var curKind = arrow.kind || "default";
+    kindBtn.textContent = curKind === "main" ? "Main" : curKind === "nav" ? "Nav" : "Std";
+    kindBtn.title = "Arrow weight: Main (journey) / Nav (menu, secondary) / Std";
+    kindBtn.addEventListener("click", function(ev) {
+      ev.stopPropagation();
+      cycleArrowKind(arrowIndex);
+      closeArrowPopup();
+    });
+    popup.appendChild(kindBtn);
     var deleteBtn = document.createElement("button");
     deleteBtn.className = "fb-arrow-popup-btn fb-arrow-popup-delete";
     deleteBtn.setAttribute("data-testid", "arrow-delete");
@@ -922,6 +1003,15 @@
     setTimeout(function() {
       document.addEventListener("mousedown", handlePopupOutsideClick);
     }, 0);
+  }
+  function cycleArrowKind(arrowIndex) {
+    var arrow = state.project.arrows[arrowIndex];
+    if (!arrow) return;
+    if (!arrow.kind) arrow.kind = "main";
+    else if (arrow.kind === "main") arrow.kind = "nav";
+    else delete arrow.kind;
+    saveArrowMutations();
+    drawArrows();
   }
   function swapArrowDirection(arrowIndex) {
     var arrow = state.project.arrows[arrowIndex];
@@ -977,8 +1067,8 @@
       }
     }
     if (!screenData) return;
-    var el = state.screenEls[screenId];
-    if (!el) return;
+    var el2 = state.screenEls[screenId];
+    if (!el2) return;
     var popup = document.createElement("div");
     popup.className = "fb-screen-popup";
     function mkBtn(svg, text, testid, danger) {
@@ -1011,7 +1101,7 @@
         var val = titleInput.value.trim();
         if (val && val !== screenData.title) {
           screenData.title = val;
-          var hdrSpan = el.querySelector(".fb-screen-header span");
+          var hdrSpan = el2.querySelector(".fb-screen-header span");
           if (hdrSpan) hdrSpan.textContent = val;
           saveArrowMutations();
         }
@@ -1025,7 +1115,7 @@
       var val = titleInput.value.trim();
       if (val && val !== screenData.title) {
         screenData.title = val;
-        var hdrSpan = el.querySelector(".fb-screen-header span");
+        var hdrSpan = el2.querySelector(".fb-screen-header span");
         if (hdrSpan) hdrSpan.textContent = val;
         saveArrowMutations();
       }
@@ -1089,25 +1179,25 @@
       }, current);
     });
     popup.appendChild(layoutBtn);
-    var epicBtn = mkBtn(ICON_TAG, "Change epic", "screen-epic");
+    var epicBtn = mkBtn(ICON_TAG, "Epics", "screen-epic");
     epicBtn.addEventListener("click", function(ev) {
       ev.stopPropagation();
       var cx = ev.clientX;
       var cy = ev.clientY;
-      var cur = screenData.epic;
+      var hasAny = !!screenData.epic;
       closeScreenPopup();
       var items = (state.project.epics || []).map(function(epic) {
         return {
           label: epic.label || epic.id,
           icon: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="' + epic.color + '"/></svg>',
-          active: cur === epic.id,
+          active: inEpic(screenData, epic.id),
           testid: "epic-" + epic.id,
           onClick: function() {
-            setScreenEpic(screenId, epic.id);
+            toggleScreenEpic(screenId, epic.id);
           }
         };
       });
-      items.push({ label: "None", active: !cur, testid: "epic-none", onClick: function() {
+      items.push({ label: "None", active: !hasAny, testid: "epic-none", onClick: function() {
         setScreenEpic(screenId, null);
       } });
       showContextMenu(cx, cy, items);
@@ -1162,11 +1252,11 @@
     }
   }
   function getAnchor(screenId, side) {
-    var el = state.screenEls[screenId];
-    if (!el) return { x: 0, y: 0 };
+    var el2 = state.screenEls[screenId];
+    if (!el2) return { x: 0, y: 0 };
     var pos = state.positions[screenId];
-    var w = el.offsetWidth;
-    var h = el.offsetHeight;
+    var w = el2.offsetWidth;
+    var h = el2.offsetHeight;
     var parts = side ? side.split("-") : [];
     var primary, fraction;
     if (parts.length === 1) {
@@ -1240,6 +1330,10 @@
     return { cp1, cp2 };
   }
   function resolveArrowSides(arrow, idx, spreadMap) {
+    if (state.focus) {
+      var fe = state.screenEls[arrow.from], te = state.screenEls[arrow.to];
+      if (fe && te) return getBestSides(fe, te);
+    }
     if (arrow.fromSide && arrow.toSide) {
       return { from: arrow.fromSide, to: arrow.toSide };
     }
@@ -1330,6 +1424,182 @@
       arrow.toSide = sides.to;
     });
   }
+  var KIND_STYLE = {
+    main: { color: "#374151", width: "3", marker: "fb-arrowhead-main" },
+    nav: { color: "#b8bfca", width: "1.4", marker: "fb-arrowhead-nav" },
+    default: { color: "#888", width: "2", marker: "fb-arrowhead" }
+  };
+  var KIND_RANK = { nav: 0, default: 1, main: 2 };
+  function isArrowShown(arrow) {
+    if (state.focus && (!state.focus.visible[arrow.from] || !state.focus.visible[arrow.to])) return false;
+    if (arrow.kind === "nav" && state.showNav === false) return false;
+    return true;
+  }
+  var LABEL_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  var measureCtx;
+  var widthCache = {};
+  function measureLabel(text, fontSize, bold) {
+    var key = fontSize + (bold ? "b" : "") + "|" + text;
+    var hit = widthCache[key];
+    if (hit !== void 0) return hit;
+    if (measureCtx === void 0) {
+      try {
+        measureCtx = document.createElement("canvas").getContext("2d");
+      } catch (e) {
+        measureCtx = null;
+      }
+    }
+    var w;
+    if (measureCtx) {
+      measureCtx.font = (bold ? "600 " : "") + fontSize + "px " + LABEL_FONT_FAMILY;
+      w = measureCtx.measureText(text).width;
+    } else {
+      w = text.length * fontSize * 0.56;
+    }
+    widthCache[key] = w;
+    return w;
+  }
+  function makeMarker(ns, id, size, color) {
+    var marker = document.createElementNS(ns, "marker");
+    marker.setAttribute("id", id);
+    marker.setAttribute("markerUnits", "userSpaceOnUse");
+    marker.setAttribute("markerWidth", String(size));
+    marker.setAttribute("markerHeight", String(size));
+    marker.setAttribute("refX", String(size));
+    marker.setAttribute("refY", String(size / 2));
+    marker.setAttribute("orient", "auto");
+    var polygon = document.createElementNS(ns, "polygon");
+    polygon.setAttribute("points", "0 0, " + size + " " + size / 2 + ", 0 " + size);
+    polygon.setAttribute("fill", color);
+    marker.appendChild(polygon);
+    return marker;
+  }
+  var LABEL_MAX_W = 170;
+  var LABEL_MAX_LINES = 3;
+  var LABEL_TS = [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74, 0.18, 0.82];
+  function bezierPoint(p0, p1, p2, p3, t) {
+    var u = 1 - t;
+    var a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
+    return { x: a * p0.x + b * p1.x + c * p2.x + d * p3.x, y: a * p0.y + b * p1.y + c * p2.y + d * p3.y };
+  }
+  function wrapLabel(text, fontSize, bold) {
+    var words = String(text).split(/\s+/).filter(function(w) {
+      return w !== "";
+    });
+    var lines = [];
+    var cur = "";
+    for (var i = 0; i < words.length; i++) {
+      var next = cur ? cur + " " + words[i] : words[i];
+      if (cur && measureLabel(next, fontSize, bold) > LABEL_MAX_W) {
+        lines.push(cur);
+        cur = words[i];
+        if (lines.length === LABEL_MAX_LINES) {
+          cur = "";
+          break;
+        }
+      } else {
+        cur = next;
+      }
+    }
+    if (cur) lines.push(cur);
+    if (lines.length > LABEL_MAX_LINES || i < words.length && lines.length === LABEL_MAX_LINES) {
+      lines = lines.slice(0, LABEL_MAX_LINES);
+      lines[LABEL_MAX_LINES - 1] = lines[LABEL_MAX_LINES - 1].replace(/\s*\S*$/, "") + "\u2026";
+    }
+    return lines.length ? lines : [String(text)];
+  }
+  function overlapArea(a, b) {
+    var w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+    var h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    return w > 0 && h > 0 ? w * h : 0;
+  }
+  function screenBoxes() {
+    var out = [];
+    (state.project.screens || []).forEach(function(s) {
+      if (state.focus && !state.focus.visible[s.id]) return;
+      var el2 = state.screenEls[s.id];
+      var p = state.positions[s.id];
+      if (!el2 || !p) return;
+      out.push({ x: p.x - 6, y: p.y - 6, w: el2.offsetWidth + 12, h: el2.offsetHeight + 12 });
+    });
+    return out;
+  }
+  var KIND_PRIORITY = { main: 0, default: 1, nav: 2 };
+  function placeLabels(ns, jobs) {
+    if (!jobs.length) return;
+    var screens = screenBoxes();
+    var placed = [];
+    jobs.sort(function(a, b) {
+      return KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind];
+    });
+    jobs.forEach(function(job) {
+      var kind = job.kind;
+      var bold = kind === "main";
+      var fontSize = kind === "nav" ? 10 : 11;
+      var lineH = Math.round(fontSize * 1.3);
+      var lines = wrapLabel(job.arrow.label, fontSize, bold);
+      var w = 0;
+      lines.forEach(function(l) {
+        w = Math.max(w, measureLabel(l, fontSize, bold));
+      });
+      var bw = w + 10, bh = lines.length * lineH + 6;
+      var best = null, bestScore = Infinity;
+      for (var k = 0; k < LABEL_TS.length; k++) {
+        var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, LABEL_TS[k]);
+        var box2 = { x: pt.x - bw / 2, y: pt.y - bh / 2, w: bw, h: bh };
+        var score = 0;
+        for (var si = 0; si < screens.length; si++) score += overlapArea(box2, screens[si]) * 3;
+        for (var li = 0; li < placed.length; li++) score += overlapArea(box2, placed[li]);
+        if (score < bestScore) {
+          bestScore = score;
+          best = pt;
+        }
+        if (score === 0) break;
+      }
+      if (kind !== "nav") placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
+      var labelGroup = document.createElementNS(ns, "g");
+      labelGroup.setAttribute("class", "fb-arrow-label-group" + (job.dimmed ? " fb-arrow-dimmed" : ""));
+      var bgRect = document.createElementNS(ns, "rect");
+      bgRect.setAttribute("x", String(best.x - bw / 2));
+      bgRect.setAttribute("y", String(best.y - bh / 2));
+      bgRect.setAttribute("width", String(bw));
+      bgRect.setAttribute("height", String(bh));
+      bgRect.setAttribute("class", "fb-arrow-label-bg");
+      bgRect.setAttribute("fill", kind === "main" ? "#ffffff" : "#f0f2f5");
+      if (kind === "main") {
+        bgRect.setAttribute("stroke", "#374151");
+        bgRect.setAttribute("stroke-width", "1");
+      }
+      bgRect.setAttribute("rx", "4");
+      bgRect.setAttribute("ry", "4");
+      var text = document.createElementNS(ns, "text");
+      text.setAttribute("class", "fb-arrow-label");
+      text.setAttribute("fill", kind === "main" ? "#1f2937" : "#555");
+      text.setAttribute("font-size", String(fontSize));
+      if (bold) text.setAttribute("font-weight", "600");
+      text.setAttribute("font-family", LABEL_FONT_FAMILY);
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("dominant-baseline", "central");
+      text.setAttribute("x", String(best.x));
+      var y0 = best.y - (lines.length - 1) * lineH / 2;
+      if (lines.length === 1) {
+        text.setAttribute("y", String(best.y));
+        text.textContent = lines[0];
+      } else {
+        text.setAttribute("y", String(y0));
+        lines.forEach(function(l, idx) {
+          var ts = document.createElementNS(ns, "tspan");
+          ts.setAttribute("x", String(best.x));
+          ts.setAttribute("y", String(y0 + idx * lineH));
+          ts.textContent = l;
+          text.appendChild(ts);
+        });
+      }
+      labelGroup.appendChild(bgRect);
+      labelGroup.appendChild(text);
+      job.g.appendChild(labelGroup);
+    });
+  }
   function drawArrows(skipHandles) {
     if (!state.svgEl || !state.project) return;
     var arrows = state.project.arrows || [];
@@ -1337,24 +1607,28 @@
     var spreadMap = buildSpreadMap();
     state.svgEl.innerHTML = "";
     var defs = document.createElementNS(ns, "defs");
-    var marker = document.createElementNS(ns, "marker");
-    marker.setAttribute("id", "fb-arrowhead");
-    marker.setAttribute("markerUnits", "userSpaceOnUse");
-    marker.setAttribute("markerWidth", "14");
-    marker.setAttribute("markerHeight", "14");
-    marker.setAttribute("refX", "14");
-    marker.setAttribute("refY", "7");
-    marker.setAttribute("orient", "auto");
-    var polygon = document.createElementNS(ns, "polygon");
-    polygon.setAttribute("points", "0 0, 14 7, 0 14");
-    polygon.setAttribute("fill", "#888");
-    marker.appendChild(polygon);
-    defs.appendChild(marker);
+    defs.appendChild(makeMarker(ns, "fb-arrowhead", 14, KIND_STYLE.default.color));
+    defs.appendChild(makeMarker(ns, "fb-arrowhead-main", 16, KIND_STYLE.main.color));
+    defs.appendChild(makeMarker(ns, "fb-arrowhead-nav", 10, KIND_STYLE.nav.color));
     state.svgEl.appendChild(defs);
-    arrows.forEach(function(arrow, idx) {
+    var byScreen = {};
+    state.arrowGroupsByScreen = byScreen;
+    hlGroups = [];
+    var labelJobs = [];
+    var order = arrows.map(function(_a, i) {
+      return i;
+    });
+    order.sort(function(a, b) {
+      return KIND_RANK[arrows[a].kind || "default"] - KIND_RANK[arrows[b].kind || "default"] || a - b;
+    });
+    order.forEach(function(idx) {
+      var arrow = arrows[idx];
       var fromEl = state.screenEls[arrow.from];
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
+      if (!isArrowShown(arrow)) return;
+      var kind = arrow.kind || "default";
+      var style = KIND_STYLE[kind];
       var sides = resolveArrowSides(arrow, idx, spreadMap);
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -1364,17 +1638,21 @@
       var d = "M" + start.x + "," + start.y + " C" + cp1.x + "," + cp1.y + " " + cp2.x + "," + cp2.y + " " + end.x + "," + end.y;
       var isDimmed = state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to];
       var g = document.createElementNS(ns, "g");
-      g.setAttribute("class", "fb-arrow-group" + (isDimmed ? " fb-arrow-dimmed" : ""));
+      g.setAttribute("class", "fb-arrow-group fb-arrow-" + kind + (isDimmed ? " fb-arrow-dimmed" : ""));
+      g.setAttribute("data-from", arrow.from);
+      g.setAttribute("data-to", arrow.to);
+      (byScreen[arrow.from] = byScreen[arrow.from] || []).push(g);
+      if (arrow.to !== arrow.from) (byScreen[arrow.to] = byScreen[arrow.to] || []).push(g);
       var path = document.createElementNS(ns, "path");
       path.setAttribute("d", d);
       path.setAttribute("class", "fb-arrow-path" + (arrow.dashed ? " fb-dashed" : ""));
       path.setAttribute("fill", "none");
-      path.setAttribute("stroke", "#888");
-      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke", style.color);
+      path.setAttribute("stroke-width", style.width);
       if (arrow.dashed) {
         path.setAttribute("stroke-dasharray", "6 4");
       }
-      path.setAttribute("marker-end", "url(#fb-arrowhead)");
+      path.setAttribute("marker-end", "url(#" + style.marker + ")");
       g.appendChild(path);
       var hitPath = document.createElementNS(ns, "path");
       hitPath.setAttribute("d", d);
@@ -1393,49 +1671,51 @@
       g.appendChild(hitPath);
       state.svgEl.appendChild(g);
       if (arrow.label) {
-        var midX = (start.x + end.x + cp1.x + cp2.x) / 4;
-        var midY = (start.y + end.y + cp1.y + cp2.y) / 4;
-        var labelGroup = document.createElementNS(ns, "g");
-        if (isDimmed) labelGroup.setAttribute("class", "fb-arrow-dimmed");
-        var text = document.createElementNS(ns, "text");
-        text.setAttribute("x", String(midX));
-        text.setAttribute("y", String(midY));
-        text.setAttribute("class", "fb-arrow-label");
-        text.setAttribute("fill", "#555");
-        text.setAttribute("font-size", "11");
-        text.setAttribute("font-family", '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif');
-        text.setAttribute("text-anchor", "middle");
-        text.setAttribute("dominant-baseline", "central");
-        text.textContent = arrow.label;
-        state.svgEl.appendChild(text);
-        var bbox;
-        try {
-          bbox = text.getBBox();
-        } catch (e) {
-          bbox = { x: midX - 20, y: midY - 8, width: 40, height: 16 };
-        }
-        state.svgEl.removeChild(text);
-        var bgRect = document.createElementNS(ns, "rect");
-        bgRect.setAttribute("x", String(bbox.x - 4));
-        bgRect.setAttribute("y", String(bbox.y - 2));
-        bgRect.setAttribute("width", String(bbox.width + 8));
-        bgRect.setAttribute("height", String(bbox.height + 4));
-        bgRect.setAttribute("class", "fb-arrow-label-bg");
-        bgRect.setAttribute("fill", "#f0f2f5");
-        bgRect.setAttribute("rx", "3");
-        bgRect.setAttribute("ry", "3");
-        labelGroup.appendChild(bgRect);
-        labelGroup.appendChild(text);
-        state.svgEl.appendChild(labelGroup);
+        labelJobs.push({ g, arrow, kind, start, cp1, cp2, end, dimmed: !!isDimmed });
       }
     });
+    placeLabels(ns, labelJobs);
+    applyArrowHighlight();
     if (!skipHandles) {
       updateHandles();
     }
   }
+  var drawPending = false;
+  var pendingSkip = false;
+  function scheduleDrawArrows(skipHandles) {
+    pendingSkip = !!skipHandles;
+    if (drawPending) return;
+    drawPending = true;
+    var raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : function(f) {
+      return setTimeout(f, 16);
+    };
+    raf(function() {
+      if (!drawPending) return;
+      drawPending = false;
+      drawArrows(pendingSkip);
+    });
+  }
+  function flushDrawArrows() {
+    if (!drawPending) return;
+    drawPending = false;
+    drawArrows(pendingSkip);
+  }
+  function setHighlightedScreen(screenId) {
+    state.highlightScreen = screenId;
+    applyArrowHighlight();
+  }
+  var hlGroups = [];
+  function applyArrowHighlight() {
+    if (!state.svgEl) return;
+    var id = state.highlightScreen;
+    for (var i = 0; i < hlGroups.length; i++) hlGroups[i].classList.remove("fb-arrow-hl");
+    hlGroups = id && state.arrowGroupsByScreen && state.arrowGroupsByScreen[id] || [];
+    for (var j = 0; j < hlGroups.length; j++) hlGroups[j].classList.add("fb-arrow-hl");
+    state.svgEl.classList.toggle("fb-hl-active", !!id && hlGroups.length > 0);
+  }
   function updateHandles() {
-    state.handleEls.forEach(function(el) {
-      if (el.parentNode) el.parentNode.removeChild(el);
+    state.handleEls.forEach(function(el2) {
+      if (el2.parentNode) el2.parentNode.removeChild(el2);
     });
     state.handleEls = [];
     if (!state.project) return;
@@ -1446,6 +1726,7 @@
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
       if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
+      if (!isArrowShown(arrow)) return;
       var sides = resolveArrowSides(arrow, idx, spreadMap);
       var start = getAnchor(arrow.from, sides.from);
       var end = getAnchor(arrow.to, sides.to);
@@ -1524,7 +1805,12 @@
       if (sa.t) screen.title = sa.t;
       if (sa.p) screen.preset = sa.p;
       if (sa.f) screen.format = sa.f;
-      if (sa.e) screen.epic = sa.e;
+      if (sa.e) {
+        var known = project.epics.some(function(ep) {
+          return ep.id === sa.e;
+        });
+        setEpicList(screen, known ? [sa.e] : String(sa.e).split(/\s+/));
+      }
       if (sa.n) screen.notes = sa.n;
       if (sa.sz) screen.size = sa.sz;
       if (sa.w !== void 0) {
@@ -1599,6 +1885,7 @@
         if (aattrs.l) arrow.label = aattrs.l;
         if (aattrs.fs) arrow.fromSide = aattrs.fs;
         if (aattrs.ts) arrow.toSide = aattrs.ts;
+        if (aattrs.k === "main" || aattrs.k === "nav") arrow.kind = aattrs.k;
         project.arrows.push(arrow);
         lastScreen = null;
         i++;
@@ -1705,8 +1992,8 @@
     var screen = { id, title: "Screen " + createCounter, preset, format: "desktop" };
     state.project.screens.push(screen);
     state.positions[id] = { x, y };
-    var el = renderScreen(screen);
-    state.canvasEl.appendChild(el);
+    var el2 = renderScreen(screen);
+    state.canvasEl.appendChild(el2);
     drawArrows();
     savePositions();
     return id;
@@ -1737,12 +2024,12 @@
   // src/interactions/drag.ts
   function updateSelectionStyles() {
     for (var id in state.screenEls) {
-      var el = state.screenEls[id];
-      if (!el) continue;
+      var el2 = state.screenEls[id];
+      if (!el2) continue;
       if (state.selected[id]) {
-        el.classList.add("fb-selected");
+        el2.classList.add("fb-selected");
       } else {
-        el.classList.remove("fb-selected");
+        el2.classList.remove("fb-selected");
       }
     }
   }
@@ -1765,11 +2052,11 @@
     for (var i = 0; i < ids.length; i++) {
       var id = ids[i];
       if (state.hiddenScreens[id]) continue;
-      var el = state.screenEls[id];
-      if (!el) continue;
+      var el2 = state.screenEls[id];
+      if (!el2) continue;
       var pos = state.positions[id] || { x: 0, y: 0 };
-      el.classList.add("fb-dragging");
-      items.push({ id, el, startX: pos.x, startY: pos.y });
+      el2.classList.add("fb-dragging");
+      items.push({ id, el: el2, startX: pos.x, startY: pos.y });
       if (pos.x < minX) minX = pos.x;
       if (pos.y < minY) minY = pos.y;
       if (pos.x > maxX) maxX = pos.x;
@@ -1828,7 +2115,7 @@
         it.el.style.top = newY + "px";
         state.positions[it.id] = { x: newX, y: newY };
       }
-      drawArrows(!!state.draggingHandle);
+      scheduleDrawArrows(!!state.draggingHandle);
     });
     document.addEventListener("mouseup", function(e) {
       if (!state.screenDrag) return;
@@ -1839,6 +2126,7 @@
       var singleId = items.length === 1 ? items[0].id : null;
       state.screenDrag = null;
       state.wrapperEl.classList.remove("fb-dragging-screen");
+      flushDrawArrows();
       savePositions();
       if (singleId) {
         var elUnder = document.elementFromPoint(e.clientX, e.clientY);
@@ -1900,20 +2188,106 @@
       }
     });
   }
+  function layoutArrows(arrows) {
+    var core = arrows.filter(function(a) {
+      return a.kind !== "nav";
+    });
+    return core.length ? core : arrows;
+  }
+  function orderColumns(columns, colKeys, arrows, col) {
+    var nb = {};
+    arrows.forEach(function(a) {
+      if (a.from === a.to) return;
+      (nb[a.from] = nb[a.from] || []).push(a.to);
+      (nb[a.to] = nb[a.to] || []).push(a.from);
+    });
+    var rank = {};
+    function reindex(c) {
+      var list = columns[c];
+      list.forEach(function(s, i) {
+        rank[s.id] = (i + 0.5) / list.length;
+      });
+    }
+    colKeys.forEach(reindex);
+    function sweep(keys, dir) {
+      keys.forEach(function(c) {
+        var list = columns[c];
+        var bary = {};
+        list.forEach(function(s) {
+          var ns = (nb[s.id] || []).filter(function(n) {
+            return col[n] === c + dir;
+          });
+          if (!ns.length) {
+            bary[s.id] = rank[s.id];
+            return;
+          }
+          var sum = 0;
+          ns.forEach(function(n) {
+            sum += rank[n];
+          });
+          bary[s.id] = sum / ns.length;
+        });
+        var idx = {};
+        list.forEach(function(s, i) {
+          idx[s.id] = i;
+        });
+        list.sort(function(a, b) {
+          return bary[a.id] - bary[b.id] || idx[a.id] - idx[b.id];
+        });
+        reindex(c);
+      });
+    }
+    var down = colKeys.slice(1);
+    var up = colKeys.slice(0, -1).reverse();
+    for (var it = 0; it < 4; it++) {
+      sweep(down, -1);
+      sweep(up, 1);
+    }
+  }
+  var MAX_PER_COLUMN = 6;
+  var MAX_PER_ROW = 8;
   function autoLayout(screens, arrows, heights) {
-    var col = bfsDepth(screens, arrows);
+    var core = layoutArrows(arrows);
+    var col = bfsDepth(screens, core);
     var columns = {};
     screens.forEach(function(s) {
       var c = col[s.id];
       if (!columns[c]) columns[c] = [];
       columns[c].push(s);
     });
-    var positions = {};
     var colKeys = Object.keys(columns).map(Number).sort(function(a, b) {
       return a - b;
     });
-    var offsetX = 0;
+    orderColumns(columns, colKeys, core, col);
+    var split = [];
+    colKeys.forEach(function(c) {
+      var list = columns[c];
+      var parts = Math.ceil(list.length / MAX_PER_COLUMN);
+      var per = Math.ceil(list.length / parts);
+      for (var i = 0; i < list.length; i += per) split.push(list.slice(i, i + per));
+    });
+    columns = {};
+    colKeys = split.map(function(_l, i) {
+      return i;
+    });
+    split.forEach(function(l, i) {
+      columns[i] = l;
+    });
+    function h(s) {
+      return heights && heights[s.id] ? heights[s.id] : 200;
+    }
+    var colH = {};
     var totalH = 0;
+    colKeys.forEach(function(c) {
+      var sum = 0;
+      columns[c].forEach(function(s) {
+        sum += h(s) + GAP_Y;
+      });
+      colH[c] = sum - GAP_Y;
+      if (colH[c] > totalH) totalH = colH[c];
+    });
+    var positions = {};
+    var offsetX = 0;
     colKeys.forEach(function(c) {
       var colScreens = columns[c];
       var maxW = 0;
@@ -1921,13 +2295,11 @@
         var w = screenWidth(s);
         if (w > maxW) maxW = w;
       });
-      var offsetY = 0;
+      var offsetY = Math.round((totalH - colH[c]) / 2);
       colScreens.forEach(function(s) {
         positions[s.id] = { x: offsetX, y: offsetY };
-        var h = heights && heights[s.id] ? heights[s.id] : 200;
-        offsetY += h + GAP_Y;
+        offsetY += h(s) + GAP_Y;
       });
-      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
       offsetX += maxW + GAP_X;
     });
     var totalW = offsetX - GAP_X;
@@ -1945,30 +2317,35 @@
       }
       epicGroups[eid].push(s);
     });
-    var col = bfsDepth(screens, arrows);
-    var positions = {};
-    var offsetX = 0;
-    var totalH = 0;
+    var col = bfsDepth(screens, layoutArrows(arrows));
+    var rows = [];
     epicOrder.forEach(function(eid) {
-      var group = epicGroups[eid];
+      var group = epicGroups[eid].slice();
+      var idx = {};
+      group.forEach(function(s, i2) {
+        idx[s.id] = i2;
+      });
       group.sort(function(a, b) {
-        return (col[a.id] || 0) - (col[b.id] || 0);
+        return (col[a.id] || 0) - (col[b.id] || 0) || idx[a.id] - idx[b.id];
       });
-      var maxW = 0;
-      group.forEach(function(s) {
-        var w = screenWidth(s);
-        if (w > maxW) maxW = w;
-      });
-      var offsetY = 0;
-      group.forEach(function(s) {
-        positions[s.id] = { x: offsetX, y: offsetY };
-        var h = heights && heights[s.id] ? heights[s.id] : 200;
-        offsetY += h + GAP_Y;
-      });
-      if (offsetY - GAP_Y > totalH) totalH = offsetY - GAP_Y;
-      offsetX += maxW + GAP_X;
+      for (var i = 0; i < group.length; i += MAX_PER_ROW) rows.push(group.slice(i, i + MAX_PER_ROW));
     });
-    centerPositions(positions, screens, offsetX - GAP_X, totalH);
+    var positions = {};
+    var offsetY = 0;
+    var totalW = 0;
+    rows.forEach(function(row) {
+      var offsetX = 0;
+      var rowH = 0;
+      row.forEach(function(s) {
+        positions[s.id] = { x: offsetX, y: offsetY };
+        offsetX += screenWidth(s) + GAP_X;
+        var hh = heights && heights[s.id] ? heights[s.id] : 200;
+        if (hh > rowH) rowH = hh;
+      });
+      if (offsetX - GAP_X > totalW) totalW = offsetX - GAP_X;
+      offsetY += rowH + GAP_Y * 2;
+    });
+    centerPositions(positions, screens, totalW, offsetY - GAP_Y * 2);
     return positions;
   }
   function layoutGrid(screens, arrows, heights) {
@@ -2000,6 +2377,772 @@
     { name: "Epics", fn: layoutByEpics },
     { name: "Grid", fn: layoutGrid }
   ];
+
+  // src/interactions/transform.ts
+  function setZoom(z) {
+    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
+    if (state.wrapperEl) {
+      var wrapperRect = state.wrapperEl.getBoundingClientRect();
+      var mx = wrapperRect.width / 2;
+      var my = wrapperRect.height / 2;
+      var cx = (mx - state.panX) / state.zoom;
+      var cy = (my - state.panY) / state.zoom;
+      state.panX = mx - cx * newZoom;
+      state.panY = my - cy * newZoom;
+    }
+    state.zoom = newZoom;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
+  }
+  function applyTransform() {
+    if (state.sizerEl) {
+      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
+    }
+    if (state.canvasEl && state._dotZoom !== state.zoom) {
+      state._dotZoom = state.zoom;
+      var sp = DOT_SPACING / state.zoom;
+      var r = DOT_RADIUS / state.zoom;
+      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
+      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
+    }
+  }
+  function fitToContent() {
+    if (!state.wrapperEl || !state.project) return;
+    var screens = state.project.screens || [];
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var hasVisible = false;
+    screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      if (state.focus && !state.focus.visible[s.id]) return;
+      var el2 = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el2 || !pos) return;
+      hasVisible = true;
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + el2.offsetWidth);
+      maxY = Math.max(maxY, pos.y + el2.offsetHeight);
+    });
+    if (!hasVisible) return;
+    var wrapperRect = state.wrapperEl.getBoundingClientRect();
+    var viewW = wrapperRect.width;
+    var viewH = wrapperRect.height;
+    var contentW = maxX - minX;
+    var contentH = maxY - minY;
+    var padding = 60;
+    var zoomX = (viewW - padding * 2) / contentW;
+    var zoomY = (viewH - padding * 2) / contentH;
+    var zoom = Math.min(zoomX, zoomY, 1);
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
+    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
+    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
+    state.zoom = zoom;
+    state.panX = panX;
+    state.panY = panY;
+    applyTransform();
+    var label = document.getElementById("fb-zoom-label");
+    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
+    saveZoom();
+  }
+
+  // src/export.ts
+  var html2canvasLoaded = null;
+  function loadHtml2Canvas() {
+    if (html2canvasLoaded) return html2canvasLoaded;
+    html2canvasLoaded = new Promise(function(resolve, reject) {
+      if (window.html2canvas) {
+        resolve(window.html2canvas);
+        return;
+      }
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+      s.onload = function() {
+        resolve(window.html2canvas);
+      };
+      s.onerror = function() {
+        html2canvasLoaded = null;
+        reject(new Error("Failed to load html2canvas"));
+      };
+      document.head.appendChild(s);
+    });
+    return html2canvasLoaded;
+  }
+  function collectExportBounds() {
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var arrows = state.project.arrows || [];
+    var spreadMap = buildSpreadMap();
+    state.project.screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      var el2 = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el2 || !pos) return;
+      minX = Math.min(minX, pos.x);
+      minY = Math.min(minY, pos.y);
+      maxX = Math.max(maxX, pos.x + el2.offsetWidth);
+      maxY = Math.max(maxY, pos.y + el2.offsetHeight);
+    });
+    arrows.forEach(function(arrow, idx) {
+      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
+      var fromEl = state.screenEls[arrow.from];
+      var toEl = state.screenEls[arrow.to];
+      if (!fromEl || !toEl) return;
+      var sides = resolveArrowSides(arrow, idx, spreadMap);
+      var start = getAnchor(arrow.from, sides.from);
+      var end = getAnchor(arrow.to, sides.to);
+      var cps = computeControlPoints(start, end, sides.from, sides.to);
+      var cp1 = cps.cp1;
+      var cp2 = cps.cp2;
+      [start, end, cp1, cp2].forEach(function(p) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      });
+    });
+    return { minX, minY, maxX, maxY };
+  }
+  function doExport() {
+    if (!state.canvasEl || !state.project) return;
+    var bounds = collectExportBounds();
+    if (bounds.minX === Infinity) return;
+    var padding = 40;
+    var vx = Math.max(0, bounds.minX - padding);
+    var vy = Math.max(0, bounds.minY - padding);
+    var vw = bounds.maxX - bounds.minX + padding * 2;
+    var vh = bounds.maxY - bounds.minY + padding * 2;
+    var tmp = document.createElement("div");
+    tmp.className = "fb-container";
+    tmp.style.cssText = "position:fixed;left:-99999px;top:0;width:" + vw + "px;height:" + vh + "px;overflow:visible;background:transparent;";
+    state.project.screens.forEach(function(s) {
+      if (state.hiddenScreens[s.id]) return;
+      var el2 = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el2 || !pos) return;
+      var clone = el2.cloneNode(true);
+      clone.classList.remove("fb-selected", "fb-dragging");
+      clone.style.left = pos.x - vx + "px";
+      clone.style.top = pos.y - vy + "px";
+      tmp.appendChild(clone);
+    });
+    var svgClone = state.svgEl.cloneNode(true);
+    var dimmedEls = svgClone.querySelectorAll(".fb-arrow-dimmed");
+    for (var di = 0; di < dimmedEls.length; di++) {
+      dimmedEls[di].parentNode.removeChild(dimmedEls[di]);
+    }
+    svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svgClone.setAttribute("viewBox", vx + " " + vy + " " + vw + " " + vh);
+    svgClone.setAttribute("width", String(vw));
+    svgClone.setAttribute("height", String(vh));
+    var svgStr = new XMLSerializer().serializeToString(svgClone);
+    var blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var img = new Image();
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var ac = document.createElement("canvas");
+      ac.width = vw * 2;
+      ac.height = vh * 2;
+      ac.style.cssText = "position:absolute;top:0;left:0;width:" + vw + "px;height:" + vh + "px;pointer-events:none;";
+      ac.getContext("2d").drawImage(img, 0, 0, vw * 2, vh * 2);
+      tmp.appendChild(ac);
+      document.body.appendChild(tmp);
+      loadHtml2Canvas().then(function(html2canvas) {
+        return html2canvas(tmp, {
+          width: vw,
+          height: vh,
+          scale: 2,
+          backgroundColor: "#f0f2f5",
+          useCORS: true
+        });
+      }).then(function(resultCanvas) {
+        document.body.removeChild(tmp);
+        var link = document.createElement("a");
+        link.download = (state.project.name || "flowboard") + ".png";
+        link.href = resultCanvas.toDataURL("image/png");
+        link.click();
+      }).catch(function(err) {
+        if (tmp.parentNode) document.body.removeChild(tmp);
+        console.error("Export failed:", err);
+      });
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      console.error("Arrow rasterization failed");
+    };
+    img.src = url;
+  }
+
+  // src/render/toolbar.ts
+  function updateLayoutButton() {
+    var btn = document.getElementById("fb-layout-btn");
+    if (btn) {
+      var name = btn.querySelector(".fb-layout-name");
+      if (name) name.textContent = LAYOUT_STRATEGIES[state.layoutIndex].name;
+    }
+  }
+  function syncToolbar() {
+    if (!state.container) return;
+    var title = state.container.querySelector(".fb-project-title");
+    if (title) title.textContent = state.project.name || "FlowBoard";
+    var oldView = state.container.querySelector(".fb-view");
+    if (oldView && oldView.parentNode) oldView.parentNode.replaceChild(renderViewPicker(), oldView);
+  }
+  var EPIC_PALETTE = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
+  function uniqueEpicId() {
+    var epics = state.project && state.project.epics || [];
+    var n = 1;
+    var id;
+    do {
+      id = "epic-" + n++;
+    } while (epics.some(function(e) {
+      return e.id === id;
+    }));
+    return id;
+  }
+  function addEpic() {
+    if (!state.project.epics) state.project.epics = [];
+    var epic = {
+      id: uniqueEpicId(),
+      label: "Epic " + (state.project.epics.length + 1),
+      color: EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length]
+    };
+    state.project.epics.push(epic);
+    syncToolbar();
+    if (state.commit) state.commit();
+    return epic;
+  }
+  function setEpicLabel(id, label) {
+    var epic = getEpic(id);
+    if (!epic) return;
+    epic.label = label;
+    syncToolbar();
+    if (state.commit) state.commit();
+  }
+  function setEpicColor(id, color) {
+    var epic = getEpic(id);
+    if (!epic) return;
+    epic.color = color;
+    (state.project.screens || []).forEach(function(s) {
+      if (inEpic(s, id)) refreshScreenEpics(s);
+    });
+    syncToolbar();
+    if (state.commit) state.commit();
+  }
+  function deleteEpic(id) {
+    if (!state.project || !state.project.epics) return false;
+    var epic = getEpic(id);
+    if (!epic) return false;
+    if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return false;
+    state.project.epics = state.project.epics.filter(function(e) {
+      return e.id !== id;
+    });
+    delete state.hiddenEpics[id];
+    (state.project.screens || []).forEach(function(s) {
+      if (inEpic(s, id)) {
+        setEpicList(s, screenEpics(s).filter(function(e) {
+          return e !== id;
+        }));
+        refreshScreenEpics(s);
+      }
+    });
+    if (state.focus && state.focus.id === id) exitFocus();
+    syncToolbar();
+    drawArrows();
+    if (state.commit) state.commit();
+    return true;
+  }
+  var epicsModalEl = null;
+  var epicsDismiss = null;
+  function closeEpicsModal() {
+    if (epicsModalEl && epicsModalEl.parentNode) epicsModalEl.parentNode.removeChild(epicsModalEl);
+    epicsModalEl = null;
+    if (epicsDismiss) {
+      document.removeEventListener("keydown", epicsDismiss, true);
+      epicsDismiss = null;
+    }
+  }
+  function epicRow(epic) {
+    var row = document.createElement("div");
+    row.className = "fb-epic-row";
+    row.setAttribute("data-testid", "epic-row-" + epic.id);
+    var color = document.createElement("input");
+    color.type = "color";
+    color.className = "fb-epic-color";
+    color.value = epic.color || "#666666";
+    color.title = "Color";
+    color.addEventListener("input", function() {
+      setEpicColor(epic.id, color.value);
+    });
+    row.appendChild(color);
+    var name = document.createElement("input");
+    name.type = "text";
+    name.className = "fb-epic-name";
+    name.value = epic.label || "";
+    name.addEventListener("input", function() {
+      epic.label = name.value;
+    });
+    name.addEventListener("change", function() {
+      setEpicLabel(epic.id, name.value.trim() || epic.id);
+    });
+    row.appendChild(name);
+    var del = document.createElement("button");
+    del.className = "fb-epic-del";
+    del.title = "Delete epic";
+    del.setAttribute("data-testid", "epic-del-" + epic.id);
+    del.innerHTML = ICON_TRASH;
+    del.addEventListener("click", function() {
+      if (deleteEpic(epic.id) && row.parentNode) row.parentNode.removeChild(row);
+    });
+    row.appendChild(del);
+    return row;
+  }
+  function showEpicsModal() {
+    closeEpicsModal();
+    var backdrop = document.createElement("div");
+    backdrop.className = "fb-modal-backdrop";
+    backdrop.setAttribute("data-testid", "epics-modal");
+    var modal = document.createElement("div");
+    modal.className = "fb-epics-modal";
+    var header = document.createElement("div");
+    header.className = "fb-epics-modal-header";
+    var h = document.createElement("span");
+    h.textContent = "Epics";
+    header.appendChild(h);
+    var close = document.createElement("button");
+    close.className = "fb-epics-modal-close";
+    close.textContent = "\xD7";
+    close.title = "Close";
+    close.addEventListener("click", closeEpicsModal);
+    header.appendChild(close);
+    modal.appendChild(header);
+    var list = document.createElement("div");
+    list.className = "fb-epics-list";
+    (state.project.epics || []).forEach(function(epic) {
+      list.appendChild(epicRow(epic));
+    });
+    modal.appendChild(list);
+    var add = document.createElement("button");
+    add.className = "fb-epics-add";
+    add.setAttribute("data-testid", "epic-add");
+    add.innerHTML = ICON_PLUS + "<span>Add epic</span>";
+    add.addEventListener("click", function() {
+      var row = epicRow(addEpic());
+      list.appendChild(row);
+      var input = row.querySelector(".fb-epic-name");
+      if (input) {
+        input.focus();
+        input.select();
+      }
+    });
+    modal.appendChild(add);
+    backdrop.appendChild(modal);
+    backdrop.addEventListener("mousedown", function(e) {
+      if (e.target === backdrop) closeEpicsModal();
+    });
+    document.body.appendChild(backdrop);
+    epicsModalEl = backdrop;
+    epicsDismiss = function(e) {
+      if (e.key === "Escape") closeEpicsModal();
+    };
+    document.addEventListener("keydown", epicsDismiss, true);
+  }
+  function el(tag, cls, html) {
+    var e = document.createElement(tag);
+    e.className = cls;
+    if (html) e.innerHTML = html;
+    return e;
+  }
+  function makeSwitch(text, checked, title, testid, onChange) {
+    var label = el("label", "fb-switch");
+    label.title = title;
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = checked;
+    if (testid) cb.setAttribute("data-testid", testid);
+    cb.addEventListener("change", function() {
+      onChange(cb.checked);
+    });
+    label.appendChild(cb);
+    label.appendChild(el("span", "fb-switch-track"));
+    label.appendChild(document.createTextNode(text));
+    return label;
+  }
+  function iconBtn(cls, icon2, title, onClick) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = cls;
+    b.title = title;
+    b.innerHTML = icon2;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function renderToolbar() {
+    var header = el("div", "fb-header");
+    var left = el("div", "fb-toolbar-group");
+    var title = el("span", "fb-project-title");
+    title.textContent = state.project.name || "FlowBoard";
+    left.appendChild(title);
+    left.appendChild(renderViewPicker());
+    header.appendChild(left);
+    var right = el("div", "fb-toolbar-group");
+    var switches = el("div", "fb-switches");
+    switches.appendChild(makeSwitch("Notes", state.showNotes, "Show screen notes", "toggle-notes", function(on) {
+      state.showNotes = on;
+      toggleNotesVisibility();
+    }));
+    switches.appendChild(makeSwitch("Nav", state.showNav !== false, "Show navigation arrows (menus, back links)", "toggle-nav", function(on) {
+      state.showNav = on;
+      drawArrows();
+    }));
+    right.appendChild(switches);
+    var zoom = el("div", "fb-seg");
+    zoom.appendChild(iconBtn("fb-toolbar-btn", ICON_MINUS, "Zoom out", function() {
+      setZoom(state.zoom - ZOOM_STEP);
+    }));
+    var zoomLabel = el("span", "fb-zoom-label");
+    zoomLabel.id = "fb-zoom-label";
+    zoomLabel.textContent = Math.round(state.zoom * 100) + "%";
+    zoom.appendChild(zoomLabel);
+    zoom.appendChild(iconBtn("fb-toolbar-btn", ICON_PLUS, "Zoom in", function() {
+      setZoom(state.zoom + ZOOM_STEP);
+    }));
+    zoom.appendChild(iconBtn("fb-toolbar-btn", ICON_FIT, "Fit to screen", function() {
+      fitToContent();
+    }));
+    right.appendChild(zoom);
+    var layoutBtn = iconBtn("fb-action-btn", ICON_GRID + '<span class="fb-layout-name">' + LAYOUT_STRATEGIES[state.layoutIndex].name + "</span>", "Auto-layout: switch strategy", cycleLayout);
+    layoutBtn.id = "fb-layout-btn";
+    right.appendChild(layoutBtn);
+    right.appendChild(iconBtn("fb-action-btn", ICON_DOWNLOAD + "<span>PNG</span>", "Export as PNG", doExport));
+    var resetBtn = iconBtn("fb-action-btn fb-ghost", ICON_RESET + "<span>Reset</span>", "Reset to the default layout", doReset);
+    resetBtn.setAttribute("data-testid", "toolbar-reset");
+    right.appendChild(resetBtn);
+    header.appendChild(right);
+    return header;
+  }
+  function toggleNotesVisibility() {
+    var footers = state.container.querySelectorAll(".fb-screen-footer");
+    for (var i = 0; i < footers.length; i++) {
+      if (state.showNotes) {
+        footers[i].classList.remove("fb-hidden");
+      } else {
+        footers[i].classList.add("fb-hidden");
+      }
+    }
+  }
+
+  // src/render/view-picker.ts
+  var FILTER_MIN_ITEMS = 8;
+  function currentValue() {
+    return state.focus ? state.focus.id : "";
+  }
+  function listItems() {
+    var screens = state.project && state.project.screens || [];
+    var items = [{ value: "", label: "All screens", color: "", count: screens.length, kind: "all" }];
+    (state.project && state.project.epics || []).forEach(function(e) {
+      var n = 0;
+      screens.forEach(function(s) {
+        if (inEpic(s, e.id)) n++;
+      });
+      items.push({ value: e.id, label: e.label || e.id, color: e.color || "#666", count: n, kind: "epic" });
+    });
+    return items;
+  }
+  var pickerEl2 = null;
+  var outsideHandler = null;
+  function isOpen() {
+    return !!pickerEl2 && pickerEl2.classList.contains("fb-open");
+  }
+  function closeViewMenu() {
+    if (!pickerEl2) return;
+    pickerEl2.classList.remove("fb-open");
+    var btn = pickerEl2.querySelector(".fb-view-btn");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+    if (outsideHandler) {
+      document.removeEventListener("mousedown", outsideHandler, true);
+      outsideHandler = null;
+    }
+  }
+  function visibleOptions() {
+    var all = pickerEl2.querySelectorAll(".fb-view-item");
+    var out = [];
+    for (var i = 0; i < all.length; i++) if (!all[i].hidden) out.push(all[i]);
+    return out;
+  }
+  function setActive(el2) {
+    var prev = pickerEl2.querySelector(".fb-view-item.fb-active");
+    if (prev) prev.classList.remove("fb-active");
+    if (el2) {
+      el2.classList.add("fb-active");
+      el2.scrollIntoView && el2.scrollIntoView({ block: "nearest" });
+    }
+  }
+  function openViewMenu() {
+    if (!pickerEl2 || isOpen()) return;
+    pickerEl2.classList.add("fb-open");
+    pickerEl2.querySelector(".fb-view-btn").setAttribute("aria-expanded", "true");
+    var search = pickerEl2.querySelector(".fb-view-search");
+    if (search) {
+      search.value = "";
+      applyFilter("");
+      search.focus();
+    }
+    setActive(pickerEl2.querySelector('.fb-view-item[data-view="' + currentValue() + '"]'));
+    outsideHandler = function(e) {
+      if (pickerEl2 && !pickerEl2.contains(e.target)) closeViewMenu();
+    };
+    document.addEventListener("mousedown", outsideHandler, true);
+  }
+  function applyFilter(q2) {
+    var needle = q2.trim().toLowerCase();
+    var items = pickerEl2.querySelectorAll(".fb-view-item");
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      it.hidden = !!needle && (it.getAttribute("data-label") || "").indexOf(needle) === -1;
+    }
+    var sections = pickerEl2.querySelectorAll(".fb-view-section");
+    for (var j = 0; j < sections.length; j++) {
+      var sec = sections[j];
+      var kind = sec.getAttribute("data-kind");
+      var any = pickerEl2.querySelector('.fb-view-item[data-kind="' + kind + '"]:not([hidden])');
+      sec.hidden = !any;
+    }
+    var first = visibleOptions()[0] || null;
+    setActive(first);
+  }
+  function choose(value) {
+    closeViewMenu();
+    if (value !== currentValue()) setFocus(value);
+  }
+  function onKey(e) {
+    if (!isOpen()) {
+      if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openViewMenu();
+      }
+      return;
+    }
+    var opts = visibleOptions();
+    var cur = pickerEl2.querySelector(".fb-view-item.fb-active");
+    var idx = opts.indexOf(cur);
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive(opts[Math.min(opts.length - 1, idx + 1)] || null);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive(opts[Math.max(0, idx - 1)] || null);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (cur) choose(cur.getAttribute("data-view"));
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeViewMenu();
+      pickerEl2.querySelector(".fb-view-btn").focus();
+    }
+    e.stopPropagation();
+  }
+  function dot(color) {
+    return color ? '<span class="fb-view-dot" style="background:' + color + '"></span>' : '<span class="fb-view-dot fb-view-dot-all">' + ICON_LAYERS + "</span>";
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function syncViewPicker() {
+    if (!pickerEl2) return;
+    var val = currentValue();
+    var item = null;
+    listItems().forEach(function(it) {
+      if (it.value === val) item = it;
+    });
+    var face = pickerEl2.querySelector(".fb-view-face");
+    var kindLabel = "Epic";
+    face.innerHTML = dot(item ? item.color : "") + '<span class="fb-view-kind">' + kindLabel + '</span><span class="fb-view-label">' + esc(item ? item.label : "All screens") + "</span>";
+    pickerEl2.classList.toggle("fb-view-focused", !!state.focus);
+    var items = pickerEl2.querySelectorAll(".fb-view-item");
+    for (var i = 0; i < items.length; i++) {
+      var sel = items[i].getAttribute("data-view") === val;
+      items[i].classList.toggle("fb-selected-item", sel);
+      items[i].setAttribute("aria-selected", sel ? "true" : "false");
+    }
+  }
+  function renderViewPicker() {
+    closeViewMenu();
+    var wrap = document.createElement("div");
+    wrap.className = "fb-view";
+    wrap.setAttribute("data-testid", "view-picker");
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fb-view-btn";
+    btn.setAttribute("data-testid", "view-btn");
+    btn.setAttribute("aria-haspopup", "listbox");
+    btn.setAttribute("aria-expanded", "false");
+    btn.innerHTML = '<span class="fb-view-face"></span><span class="fb-view-chevron">' + ICON_CHEVRON + "</span>";
+    btn.addEventListener("click", function() {
+      isOpen() ? closeViewMenu() : openViewMenu();
+    });
+    btn.addEventListener("keydown", onKey);
+    wrap.appendChild(btn);
+    var clear = document.createElement("button");
+    clear.type = "button";
+    clear.className = "fb-view-clear";
+    clear.title = "Back to all screens";
+    clear.setAttribute("data-testid", "view-clear");
+    clear.innerHTML = ICON_X;
+    clear.addEventListener("click", function() {
+      choose("");
+    });
+    wrap.appendChild(clear);
+    var menu = document.createElement("div");
+    menu.className = "fb-view-menu";
+    menu.setAttribute("role", "listbox");
+    var items = listItems();
+    if (items.length > FILTER_MIN_ITEMS) {
+      var search = document.createElement("input");
+      search.type = "text";
+      search.className = "fb-view-search";
+      search.placeholder = "Filter epics\u2026";
+      search.addEventListener("input", function() {
+        applyFilter(search.value);
+      });
+      search.addEventListener("keydown", onKey);
+      search.addEventListener("mousedown", function(e) {
+        e.stopPropagation();
+      });
+      menu.appendChild(search);
+    }
+    var html = "";
+    var lastKind = "";
+    var titles = { epic: "Epics" };
+    items.forEach(function(it) {
+      if (it.kind !== "all" && it.kind !== lastKind) {
+        html += '<div class="fb-view-section" data-kind="' + it.kind + '">' + titles[it.kind] + "</div>";
+        lastKind = it.kind;
+      }
+      html += '<div class="fb-view-item" role="option" data-view="' + esc(it.value) + '" data-kind="' + it.kind + '" data-label="' + esc(it.label.toLowerCase()) + '">' + dot(it.color) + '<span class="fb-view-item-label">' + esc(it.label) + '</span><span class="fb-view-count">' + it.count + "</span></div>";
+    });
+    var list = document.createElement("div");
+    list.className = "fb-view-list";
+    list.innerHTML = html;
+    list.addEventListener("click", function(e) {
+      var it = e.target.closest(".fb-view-item");
+      if (it) choose(it.getAttribute("data-view"));
+    });
+    list.addEventListener("mousemove", function(e) {
+      var it = e.target.closest(".fb-view-item");
+      if (it && !it.classList.contains("fb-active")) setActive(it);
+    });
+    menu.appendChild(list);
+    var foot = document.createElement("button");
+    foot.type = "button";
+    foot.className = "fb-view-foot";
+    foot.setAttribute("data-testid", "epics-btn");
+    foot.innerHTML = ICON_SLIDERS + "<span>Manage epics</span>";
+    foot.addEventListener("click", function() {
+      closeViewMenu();
+      showEpicsModal();
+    });
+    menu.appendChild(foot);
+    wrap.appendChild(menu);
+    pickerEl2 = wrap;
+    syncViewPicker();
+    return wrap;
+  }
+
+  // src/focus.ts
+  function persistedPositions() {
+    return state.focus ? state.focus.savedPositions : state.positions;
+  }
+  function applyPositionsToDom() {
+    (state.project.screens || []).forEach(function(s) {
+      var el2 = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (el2 && pos) {
+        el2.style.left = pos.x + "px";
+        el2.style.top = pos.y + "px";
+      }
+    });
+  }
+  function clearFocusDecorations() {
+    (state.project.screens || []).forEach(function(s) {
+      var el2 = state.screenEls[s.id];
+      if (!el2) return;
+      el2.classList.remove("fb-focus-out");
+      var badge = el2.querySelector(".fb-step-badge");
+      if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
+    });
+  }
+  function exitFocus(restore) {
+    if (!state.focus) return;
+    if (restore !== false) state.positions = state.focus.savedPositions;
+    state.focus = null;
+    if (state.screenEls) {
+      clearFocusDecorations();
+      applyPositionsToDom();
+    }
+    syncViewPicker();
+  }
+  function setFocus(epicId) {
+    var wasFocused = !!state.focus;
+    exitFocus();
+    if (!epicId) {
+      drawArrows();
+      if (wasFocused) fitToContent();
+      return;
+    }
+    var screens = state.project.screens || [];
+    var members = screens.filter(function(s) {
+      return inEpic(s, epicId);
+    });
+    if (!members.length) {
+      drawArrows();
+      return;
+    }
+    var epic = getEpic(epicId);
+    var color = epic && epic.color || "#374151";
+    var visible = {};
+    members.forEach(function(s) {
+      visible[s.id] = true;
+    });
+    var heights = {};
+    members.forEach(function(s) {
+      var el2 = state.screenEls[s.id];
+      if (el2) heights[s.id] = el2.offsetHeight;
+    });
+    var inner = (state.project.arrows || []).filter(function(a) {
+      return visible[a.from] && visible[a.to];
+    });
+    var layout = autoLayout(members, inner, heights);
+    state.focus = { type: "epic", id: epicId, savedPositions: state.positions, visible };
+    var positions = {};
+    screens.forEach(function(s) {
+      positions[s.id] = layout[s.id] || state.focus.savedPositions[s.id];
+    });
+    state.positions = positions;
+    screens.forEach(function(s) {
+      var el2 = state.screenEls[s.id];
+      if (el2) el2.classList.toggle("fb-focus-out", !visible[s.id]);
+    });
+    var ordered = members.slice().sort(function(a, b) {
+      var pa = layout[a.id], pb = layout[b.id];
+      return pa.x - pb.x || pa.y - pb.y;
+    });
+    ordered.forEach(function(s, i) {
+      var el2 = state.screenEls[s.id];
+      if (!el2) return;
+      var badge = document.createElement("span");
+      badge.className = "fb-step-badge";
+      badge.textContent = String(i + 1);
+      badge.style.background = color;
+      var header = el2.querySelector(".fb-screen-header");
+      if (header) header.insertBefore(badge, header.firstChild);
+    });
+    applyPositionsToDom();
+    syncViewPicker();
+    drawArrows();
+    fitToContent();
+  }
 
   // src/flowml/serialize.ts
   function escVal(s) {
@@ -2043,7 +3186,8 @@
       if (s.title) parts.push("t=" + q(s.title));
       if (s.preset && s.preset !== "custom") parts.push("p=" + s.preset);
       if (s.format) parts.push("f=" + s.format);
-      if (s.epic) parts.push("e=" + q(s.epic));
+      var eps = screenEpics(s);
+      if (eps.length) parts.push("e=" + q(eps.join(" ")));
       if (s.notes) parts.push("n=" + q(s.notes));
       if (s.size) parts.push("sz=" + s.size);
       if (s.width) parts.push("w=" + Math.round(s.width));
@@ -2070,6 +3214,7 @@
         if (a.label) attrs.push("l=" + q(a.label));
         if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
         if (a.toSide) attrs.push("ts=" + q(a.toSide));
+        if (a.kind) attrs.push("k=" + a.kind);
         if (attrs.length) line += ", " + attrs.join(", ");
         out.push(line);
       });
@@ -2078,12 +3223,12 @@
   }
 
   // src/flowml/highlight.ts
-  function esc(s) {
+  function esc2(s) {
     if (s.indexOf("&") === -1 && s.indexOf("<") === -1 && s.indexOf(">") === -1) return s;
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
   function tok(cls, s) {
-    return '<span class="fb-tok-' + cls + '">' + esc(s) + "</span>";
+    return '<span class="fb-tok-' + cls + '">' + esc2(s) + "</span>";
   }
   var RE_STR = /"(?:\\.|[^"])*"/y;
   var RE_KEYEQ = /([A-Za-z][A-Za-z0-9]*)(\s*=\s*)/y;
@@ -2155,7 +3300,7 @@
         i = RE_BARE.lastIndex;
         continue;
       }
-      out += esc(ch);
+      out += esc2(ch);
       i++;
     }
     return out;
@@ -2174,12 +3319,12 @@
         continue;
       }
       if (line.trim() === "") {
-        out.push(esc(line));
+        out.push(esc2(line));
         continue;
       }
       var lead = RE_LEAD.exec(line)[0];
       var body = line.slice(lead.length);
-      var head = esc(lead);
+      var head = esc2(lead);
       var m;
       if (body.charAt(0) === "#") {
         out.push(head + tok("comment", body));
@@ -2212,7 +3357,7 @@
         out.push(head + tok("ref", m[1]) + tok("arrow", m[2]) + tok("ref", m[3]) + hlAttrs(m[4]));
         continue;
       }
-      out.push(head + esc(body));
+      out.push(head + esc2(body));
     }
     return out.join("\n");
   }
@@ -2461,544 +3606,9 @@
     }
   }
 
-  // src/export.ts
-  var html2canvasLoaded = null;
-  function loadHtml2Canvas() {
-    if (html2canvasLoaded) return html2canvasLoaded;
-    html2canvasLoaded = new Promise(function(resolve, reject) {
-      if (window.html2canvas) {
-        resolve(window.html2canvas);
-        return;
-      }
-      var s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
-      s.onload = function() {
-        resolve(window.html2canvas);
-      };
-      s.onerror = function() {
-        html2canvasLoaded = null;
-        reject(new Error("Failed to load html2canvas"));
-      };
-      document.head.appendChild(s);
-    });
-    return html2canvasLoaded;
-  }
-  function collectExportBounds() {
-    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-    var arrows = state.project.arrows || [];
-    var spreadMap = buildSpreadMap();
-    state.project.screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + el.offsetWidth);
-      maxY = Math.max(maxY, pos.y + el.offsetHeight);
-    });
-    arrows.forEach(function(arrow, idx) {
-      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
-      var fromEl = state.screenEls[arrow.from];
-      var toEl = state.screenEls[arrow.to];
-      if (!fromEl || !toEl) return;
-      var sides = resolveArrowSides(arrow, idx, spreadMap);
-      var start = getAnchor(arrow.from, sides.from);
-      var end = getAnchor(arrow.to, sides.to);
-      var cps = computeControlPoints(start, end, sides.from, sides.to);
-      var cp1 = cps.cp1;
-      var cp2 = cps.cp2;
-      [start, end, cp1, cp2].forEach(function(p) {
-        minX = Math.min(minX, p.x);
-        minY = Math.min(minY, p.y);
-        maxX = Math.max(maxX, p.x);
-        maxY = Math.max(maxY, p.y);
-      });
-    });
-    return { minX, minY, maxX, maxY };
-  }
-  function doExport() {
-    if (!state.canvasEl || !state.project) return;
-    var bounds = collectExportBounds();
-    if (bounds.minX === Infinity) return;
-    var padding = 40;
-    var vx = Math.max(0, bounds.minX - padding);
-    var vy = Math.max(0, bounds.minY - padding);
-    var vw = bounds.maxX - bounds.minX + padding * 2;
-    var vh = bounds.maxY - bounds.minY + padding * 2;
-    var tmp = document.createElement("div");
-    tmp.className = "fb-container";
-    tmp.style.cssText = "position:fixed;left:-99999px;top:0;width:" + vw + "px;height:" + vh + "px;overflow:visible;background:transparent;";
-    state.project.screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      var clone = el.cloneNode(true);
-      clone.classList.remove("fb-selected", "fb-dragging");
-      clone.style.left = pos.x - vx + "px";
-      clone.style.top = pos.y - vy + "px";
-      tmp.appendChild(clone);
-    });
-    var svgClone = state.svgEl.cloneNode(true);
-    var dimmedEls = svgClone.querySelectorAll(".fb-arrow-dimmed");
-    for (var di = 0; di < dimmedEls.length; di++) {
-      dimmedEls[di].parentNode.removeChild(dimmedEls[di]);
-    }
-    svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    svgClone.setAttribute("viewBox", vx + " " + vy + " " + vw + " " + vh);
-    svgClone.setAttribute("width", String(vw));
-    svgClone.setAttribute("height", String(vh));
-    var svgStr = new XMLSerializer().serializeToString(svgClone);
-    var blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var img = new Image();
-    img.onload = function() {
-      URL.revokeObjectURL(url);
-      var ac = document.createElement("canvas");
-      ac.width = vw * 2;
-      ac.height = vh * 2;
-      ac.style.cssText = "position:absolute;top:0;left:0;width:" + vw + "px;height:" + vh + "px;pointer-events:none;";
-      ac.getContext("2d").drawImage(img, 0, 0, vw * 2, vh * 2);
-      tmp.appendChild(ac);
-      document.body.appendChild(tmp);
-      loadHtml2Canvas().then(function(html2canvas) {
-        return html2canvas(tmp, {
-          width: vw,
-          height: vh,
-          scale: 2,
-          backgroundColor: "#f0f2f5",
-          useCORS: true
-        });
-      }).then(function(resultCanvas) {
-        document.body.removeChild(tmp);
-        var link = document.createElement("a");
-        link.download = (state.project.name || "flowboard") + ".png";
-        link.href = resultCanvas.toDataURL("image/png");
-        link.click();
-      }).catch(function(err) {
-        if (tmp.parentNode) document.body.removeChild(tmp);
-        console.error("Export failed:", err);
-      });
-    };
-    img.onerror = function() {
-      URL.revokeObjectURL(url);
-      console.error("Arrow rasterization failed");
-    };
-    img.src = url;
-  }
-
-  // src/interactions/transform.ts
-  function setZoom(z) {
-    var newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(z * 100) / 100));
-    if (state.wrapperEl) {
-      var wrapperRect = state.wrapperEl.getBoundingClientRect();
-      var mx = wrapperRect.width / 2;
-      var my = wrapperRect.height / 2;
-      var cx = (mx - state.panX) / state.zoom;
-      var cy = (my - state.panY) / state.zoom;
-      state.panX = mx - cx * newZoom;
-      state.panY = my - cy * newZoom;
-    }
-    state.zoom = newZoom;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-  function applyTransform() {
-    if (state.sizerEl) {
-      state.sizerEl.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.zoom + ")";
-    }
-    if (state.canvasEl && state._dotZoom !== state.zoom) {
-      state._dotZoom = state.zoom;
-      var sp = DOT_SPACING / state.zoom;
-      var r = DOT_RADIUS / state.zoom;
-      state.canvasEl.style.backgroundSize = sp + "px " + sp + "px";
-      state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
-    }
-  }
-  function fitToContent() {
-    if (!state.wrapperEl || !state.project) return;
-    var screens = state.project.screens || [];
-    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
-    var hasVisible = false;
-    screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
-      var el = state.screenEls[s.id];
-      var pos = state.positions[s.id];
-      if (!el || !pos) return;
-      hasVisible = true;
-      minX = Math.min(minX, pos.x);
-      minY = Math.min(minY, pos.y);
-      maxX = Math.max(maxX, pos.x + el.offsetWidth);
-      maxY = Math.max(maxY, pos.y + el.offsetHeight);
-    });
-    if (!hasVisible) return;
-    var wrapperRect = state.wrapperEl.getBoundingClientRect();
-    var viewW = wrapperRect.width;
-    var viewH = wrapperRect.height;
-    var contentW = maxX - minX;
-    var contentH = maxY - minY;
-    var padding = 60;
-    var zoomX = (viewW - padding * 2) / contentW;
-    var zoomY = (viewH - padding * 2) / contentH;
-    var zoom = Math.min(zoomX, zoomY, 1);
-    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100));
-    var panX = (viewW - contentW * zoom) / 2 - minX * zoom;
-    var panY = (viewH - contentH * zoom) / 2 - minY * zoom;
-    state.zoom = zoom;
-    state.panX = panX;
-    state.panY = panY;
-    applyTransform();
-    var label = document.getElementById("fb-zoom-label");
-    if (label) label.textContent = Math.round(state.zoom * 100) + "%";
-    saveZoom();
-  }
-
-  // src/render/toolbar.ts
-  function updateLayoutButton() {
-    var btn = document.getElementById("fb-layout-btn");
-    if (btn) {
-      var name = LAYOUT_STRATEGIES[state.layoutIndex].name;
-      btn.textContent = "Auto-Layout (" + name + ")";
-    }
-  }
-  function renderLegend() {
-    var legend = document.createElement("div");
-    legend.className = "fb-legend";
-    (state.project.epics || []).forEach(function(epic) {
-      var label = document.createElement("label");
-      label.className = "fb-legend-item" + (state.hiddenEpics[epic.id] ? " fb-dimmed" : "");
-      var cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = !state.hiddenEpics[epic.id];
-      cb.className = "fb-legend-checkbox";
-      cb.style.accentColor = epic.color;
-      cb.dataset.epicId = epic.id;
-      cb.addEventListener("change", function() {
-        toggleEpic(epic.id);
-      });
-      label.appendChild(cb);
-      var dot = document.createElement("span");
-      dot.className = "fb-legend-dot";
-      dot.style.background = epic.color;
-      label.appendChild(dot);
-      label.appendChild(document.createTextNode(epic.label));
-      legend.appendChild(label);
-    });
-    return legend;
-  }
-  function syncToolbar() {
-    if (!state.container) return;
-    var title = state.container.querySelector(".fb-project-title");
-    if (title) title.textContent = state.project.name || "FlowBoard";
-    var old = state.container.querySelector(".fb-legend");
-    if (old && old.parentNode) old.parentNode.replaceChild(renderLegend(), old);
-  }
-  var EPIC_PALETTE = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#14b8a6"];
-  function uniqueEpicId() {
-    var epics = state.project && state.project.epics || [];
-    var n = 1;
-    var id;
-    do {
-      id = "epic-" + n++;
-    } while (epics.some(function(e) {
-      return e.id === id;
-    }));
-    return id;
-  }
-  function addEpic() {
-    if (!state.project.epics) state.project.epics = [];
-    var epic = {
-      id: uniqueEpicId(),
-      label: "Epic " + (state.project.epics.length + 1),
-      color: EPIC_PALETTE[state.project.epics.length % EPIC_PALETTE.length]
-    };
-    state.project.epics.push(epic);
-    syncToolbar();
-    if (state.commit) state.commit();
-    return epic;
-  }
-  function setEpicLabel(id, label) {
-    var epic = getEpic(id);
-    if (!epic) return;
-    epic.label = label;
-    syncToolbar();
-    if (state.commit) state.commit();
-  }
-  function setEpicColor(id, color) {
-    var epic = getEpic(id);
-    if (!epic) return;
-    epic.color = color;
-    (state.project.screens || []).forEach(function(s) {
-      if (s.epic === id) {
-        var el = state.screenEls[s.id];
-        if (el) {
-          var hdr = el.querySelector(".fb-screen-header");
-          if (hdr) hdr.style.background = color;
-        }
-      }
-    });
-    syncToolbar();
-    if (state.commit) state.commit();
-  }
-  function deleteEpic(id) {
-    if (!state.project || !state.project.epics) return false;
-    var epic = getEpic(id);
-    if (!epic) return false;
-    if (!confirm('Delete epic "' + (epic.label || id) + '"? Its screens stay but lose this group.')) return false;
-    state.project.epics = state.project.epics.filter(function(e) {
-      return e.id !== id;
-    });
-    delete state.hiddenEpics[id];
-    (state.project.screens || []).forEach(function(s) {
-      if (s.epic === id) {
-        delete s.epic;
-        var el = state.screenEls[s.id];
-        if (el) {
-          var hdr = el.querySelector(".fb-screen-header");
-          if (hdr) hdr.style.background = "#666";
-        }
-      }
-    });
-    syncToolbar();
-    drawArrows();
-    if (state.commit) state.commit();
-    return true;
-  }
-  var epicsModalEl = null;
-  var epicsDismiss = null;
-  function closeEpicsModal() {
-    if (epicsModalEl && epicsModalEl.parentNode) epicsModalEl.parentNode.removeChild(epicsModalEl);
-    epicsModalEl = null;
-    if (epicsDismiss) {
-      document.removeEventListener("keydown", epicsDismiss, true);
-      epicsDismiss = null;
-    }
-  }
-  function epicRow(epic) {
-    var row = document.createElement("div");
-    row.className = "fb-epic-row";
-    row.setAttribute("data-testid", "epic-row-" + epic.id);
-    var color = document.createElement("input");
-    color.type = "color";
-    color.className = "fb-epic-color";
-    color.value = epic.color || "#666666";
-    color.title = "Color";
-    color.addEventListener("input", function() {
-      setEpicColor(epic.id, color.value);
-    });
-    row.appendChild(color);
-    var name = document.createElement("input");
-    name.type = "text";
-    name.className = "fb-epic-name";
-    name.value = epic.label || "";
-    name.addEventListener("input", function() {
-      epic.label = name.value;
-    });
-    name.addEventListener("change", function() {
-      setEpicLabel(epic.id, name.value.trim() || epic.id);
-    });
-    row.appendChild(name);
-    var del = document.createElement("button");
-    del.className = "fb-epic-del";
-    del.title = "Delete epic";
-    del.setAttribute("data-testid", "epic-del-" + epic.id);
-    del.innerHTML = ICON_TRASH;
-    del.addEventListener("click", function() {
-      if (deleteEpic(epic.id) && row.parentNode) row.parentNode.removeChild(row);
-    });
-    row.appendChild(del);
-    return row;
-  }
-  function showEpicsModal() {
-    closeEpicsModal();
-    var backdrop = document.createElement("div");
-    backdrop.className = "fb-modal-backdrop";
-    backdrop.setAttribute("data-testid", "epics-modal");
-    var modal = document.createElement("div");
-    modal.className = "fb-epics-modal";
-    var header = document.createElement("div");
-    header.className = "fb-epics-modal-header";
-    var h = document.createElement("span");
-    h.textContent = "Epics";
-    header.appendChild(h);
-    var close = document.createElement("button");
-    close.className = "fb-epics-modal-close";
-    close.textContent = "\xD7";
-    close.title = "Close";
-    close.addEventListener("click", closeEpicsModal);
-    header.appendChild(close);
-    modal.appendChild(header);
-    var list = document.createElement("div");
-    list.className = "fb-epics-list";
-    (state.project.epics || []).forEach(function(epic) {
-      list.appendChild(epicRow(epic));
-    });
-    modal.appendChild(list);
-    var add = document.createElement("button");
-    add.className = "fb-epics-add";
-    add.setAttribute("data-testid", "epic-add");
-    add.innerHTML = ICON_PLUS + "<span>Add epic</span>";
-    add.addEventListener("click", function() {
-      var row = epicRow(addEpic());
-      list.appendChild(row);
-      var input = row.querySelector(".fb-epic-name");
-      if (input) {
-        input.focus();
-        input.select();
-      }
-    });
-    modal.appendChild(add);
-    backdrop.appendChild(modal);
-    backdrop.addEventListener("mousedown", function(e) {
-      if (e.target === backdrop) closeEpicsModal();
-    });
-    document.body.appendChild(backdrop);
-    epicsModalEl = backdrop;
-    epicsDismiss = function(e) {
-      if (e.key === "Escape") closeEpicsModal();
-    };
-    document.addEventListener("keydown", epicsDismiss, true);
-  }
-  function renderToolbar() {
-    var header = document.createElement("div");
-    header.className = "fb-header";
-    var left = document.createElement("div");
-    left.className = "fb-toolbar-group";
-    var title = document.createElement("span");
-    title.className = "fb-project-title";
-    title.textContent = state.project.name || "FlowBoard";
-    left.appendChild(title);
-    var sep1 = document.createElement("div");
-    sep1.className = "fb-header-separator";
-    left.appendChild(sep1);
-    left.appendChild(renderLegend());
-    var epicsBtn = document.createElement("button");
-    epicsBtn.className = "fb-epics-btn";
-    epicsBtn.title = "Manage epics";
-    epicsBtn.setAttribute("data-testid", "epics-btn");
-    epicsBtn.innerHTML = ICON_PLUS;
-    epicsBtn.addEventListener("click", showEpicsModal);
-    left.appendChild(epicsBtn);
-    header.appendChild(left);
-    var right = document.createElement("div");
-    right.className = "fb-toolbar-group";
-    var toggleLabel = document.createElement("label");
-    toggleLabel.className = "fb-toggle-label";
-    var checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.checked = state.showNotes;
-    checkbox.addEventListener("change", function() {
-      state.showNotes = checkbox.checked;
-      toggleNotesVisibility();
-    });
-    toggleLabel.appendChild(checkbox);
-    toggleLabel.appendChild(document.createTextNode("Notes"));
-    right.appendChild(toggleLabel);
-    var sep2 = document.createElement("div");
-    sep2.className = "fb-header-separator";
-    right.appendChild(sep2);
-    var zoomOut = document.createElement("button");
-    zoomOut.className = "fb-toolbar-btn";
-    zoomOut.textContent = "\u2212";
-    zoomOut.title = "Zoom out";
-    zoomOut.addEventListener("click", function() {
-      setZoom(state.zoom - ZOOM_STEP);
-    });
-    right.appendChild(zoomOut);
-    var zoomLabel = document.createElement("span");
-    zoomLabel.className = "fb-zoom-label";
-    zoomLabel.id = "fb-zoom-label";
-    zoomLabel.textContent = Math.round(state.zoom * 100) + "%";
-    right.appendChild(zoomLabel);
-    var zoomIn = document.createElement("button");
-    zoomIn.className = "fb-toolbar-btn";
-    zoomIn.textContent = "+";
-    zoomIn.title = "Zoom in";
-    zoomIn.addEventListener("click", function() {
-      setZoom(state.zoom + ZOOM_STEP);
-    });
-    right.appendChild(zoomIn);
-    var sep3 = document.createElement("div");
-    sep3.className = "fb-header-separator";
-    right.appendChild(sep3);
-    var layoutBtn = document.createElement("button");
-    layoutBtn.className = "fb-action-btn";
-    layoutBtn.id = "fb-layout-btn";
-    layoutBtn.title = "Change layout";
-    layoutBtn.textContent = "Auto-Layout (" + LAYOUT_STRATEGIES[state.layoutIndex].name + ")";
-    layoutBtn.addEventListener("click", cycleLayout);
-    right.appendChild(layoutBtn);
-    var exportBtn = document.createElement("button");
-    exportBtn.className = "fb-action-btn";
-    exportBtn.textContent = "Export PNG";
-    exportBtn.title = "Export as PNG";
-    exportBtn.addEventListener("click", doExport);
-    right.appendChild(exportBtn);
-    var sep4 = document.createElement("div");
-    sep4.className = "fb-header-separator";
-    right.appendChild(sep4);
-    var resetBtn = document.createElement("button");
-    resetBtn.className = "fb-action-btn";
-    resetBtn.setAttribute("data-testid", "toolbar-reset");
-    resetBtn.textContent = "Reset";
-    resetBtn.title = "Reset to the default layout";
-    resetBtn.addEventListener("click", doReset);
-    right.appendChild(resetBtn);
-    header.appendChild(right);
-    return header;
-  }
-  function toggleNotesVisibility() {
-    var footers = state.container.querySelectorAll(".fb-screen-footer");
-    for (var i = 0; i < footers.length; i++) {
-      if (state.showNotes) {
-        footers[i].classList.remove("fb-hidden");
-      } else {
-        footers[i].classList.add("fb-hidden");
-      }
-    }
-  }
-  function toggleEpic(epicId) {
-    var hasVisible = false;
-    state.project.screens.forEach(function(s) {
-      if (s.epic === epicId && !state.hiddenScreens[s.id]) hasVisible = true;
-    });
-    var isHiding = hasVisible;
-    if (isHiding) {
-      state.hiddenEpics[epicId] = true;
-    } else {
-      delete state.hiddenEpics[epicId];
-    }
-    var checkboxes = state.container.querySelectorAll(".fb-legend-checkbox");
-    for (var i = 0; i < checkboxes.length; i++) {
-      var cb = checkboxes[i];
-      var item = cb.closest(".fb-legend-item");
-      if (cb.dataset.epicId === epicId) {
-        cb.checked = !isHiding;
-        if (isHiding) {
-          item.classList.add("fb-dimmed");
-        } else {
-          item.classList.remove("fb-dimmed");
-        }
-      }
-    }
-    state.project.screens.forEach(function(s) {
-      if (s.epic !== epicId) return;
-      if (isHiding) {
-        state.hiddenScreens[s.id] = true;
-      } else {
-        delete state.hiddenScreens[s.id];
-      }
-      applyScreenVisibility(s.id);
-    });
-    saveHiddenScreens();
-    drawArrows();
-  }
-
   // src/interactions/sync.ts
   function rebuildBoard(project, positions) {
+    exitFocus(false);
     state.project = project;
     state.hiddenScreens = {};
     (project.screens || []).forEach(function(s) {
@@ -3037,7 +3647,7 @@
     (state.project.screens || []).forEach(function(s) {
       s.hidden = !!state.hiddenScreens[s.id];
     });
-    var text = serialize(state.project, state.positions);
+    var text = serialize(state.project, persistedPositions());
     setPanelText(text);
     saveDoc(text);
   }
@@ -3213,9 +3823,9 @@
       for (var i = 0; i < screens.length; i++) {
         var id = screens[i].id;
         if (state.hiddenScreens[id]) continue;
-        var el = state.screenEls[id];
-        if (!el) continue;
-        if (rectsIntersect(box2, el.getBoundingClientRect())) next[id] = true;
+        var el2 = state.screenEls[id];
+        if (!el2) continue;
+        if (rectsIntersect(box2, el2.getBoundingClientRect())) next[id] = true;
       }
       state.selected = next;
       updateSelectionStyles();
@@ -3259,24 +3869,35 @@
 
   // src/board.ts
   function cycleLayout() {
-    state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
+    exitFocus();
+    for (var n = 0; n < LAYOUT_STRATEGIES.length; n++) {
+      state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
+      var strat = LAYOUT_STRATEGIES[state.layoutIndex];
+      if (!strat.available || strat.available()) break;
+    }
     var heights = {};
     var screens = state.project.screens || [];
     var arrows = state.project.arrows || [];
     screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
-      if (el) heights[s.id] = el.offsetHeight;
+      var el2 = state.screenEls[s.id];
+      if (el2) heights[s.id] = el2.offsetHeight;
     });
     var layoutFn = LAYOUT_STRATEGIES[state.layoutIndex].fn;
     state.positions = layoutFn(screens, arrows, heights);
     screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
+      var el2 = state.screenEls[s.id];
       var pos = state.positions[s.id];
-      if (el && pos) {
-        el.style.left = pos.x + "px";
-        el.style.top = pos.y + "px";
+      if (el2 && pos) {
+        el2.style.left = pos.x + "px";
+        el2.style.top = pos.y + "px";
       }
     });
+    arrows.forEach(function(a) {
+      delete a.fromSide;
+      delete a.toSide;
+    });
+    drawArrows();
+    freezeArrowSides();
     updateLayoutButton();
     savePositions();
     drawArrows();
@@ -3284,6 +3905,7 @@
   }
   function doReset() {
     if (!confirm("Reset to the default layout?")) return;
+    exitFocus();
     var key = storageKey();
     try {
       localStorage.removeItem(key + "-pos");
@@ -3301,18 +3923,18 @@
     var arrows = state.project.arrows || [];
     var heights = {};
     screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
-      if (el) heights[s.id] = el.offsetHeight;
+      var el2 = state.screenEls[s.id];
+      if (el2) heights[s.id] = el2.offsetHeight;
     });
     state.positions = autoLayout(screens, arrows, heights);
     state.defaultPositions = JSON.parse(JSON.stringify(state.positions));
     screens.forEach(function(s) {
-      var el = state.screenEls[s.id];
+      var el2 = state.screenEls[s.id];
       var pos = state.positions[s.id];
-      if (el && pos) {
-        el.style.left = pos.x + "px";
-        el.style.top = pos.y + "px";
-        el.classList.remove("fb-screen-dimmed", "fb-selected");
+      if (el2 && pos) {
+        el2.style.left = pos.x + "px";
+        el2.style.top = pos.y + "px";
+        el2.classList.remove("fb-screen-dimmed", "fb-selected");
       }
     });
     var checkboxes = state.container.querySelectorAll(".fb-legend-checkbox");
@@ -3351,6 +3973,9 @@
       }
     }
     state.showNotes = true;
+    state.showNav = true;
+    state.focus = null;
+    state.highlightScreen = null;
     state.hiddenScreens = {};
     state.hiddenEpics = {};
     state.arrowPopup = null;
@@ -3454,8 +4079,8 @@
       if (zl) zl.textContent = Math.round(state.zoom * 100) + "%";
     }
     screens.forEach(function(s) {
-      var el = renderScreen(s);
-      canvas.appendChild(el);
+      var el2 = renderScreen(s);
+      canvas.appendChild(el2);
     });
     applyTransform();
     initPan();
@@ -3469,18 +4094,18 @@
     requestAnimationFrame(function() {
       var heights = {};
       screens.forEach(function(s) {
-        var el = state.screenEls[s.id];
-        if (el) heights[s.id] = el.offsetHeight;
+        var el2 = state.screenEls[s.id];
+        if (el2) heights[s.id] = el2.offsetHeight;
       });
       state.defaultPositions = autoLayout(screens, arrows, heights);
       if (!hasSavedPositions) {
         state.positions = JSON.parse(JSON.stringify(state.defaultPositions));
         screens.forEach(function(s) {
-          var el = state.screenEls[s.id];
+          var el2 = state.screenEls[s.id];
           var pos = state.positions[s.id];
-          if (el && pos) {
-            el.style.left = pos.x + "px";
-            el.style.top = pos.y + "px";
+          if (el2 && pos) {
+            el2.style.left = pos.x + "px";
+            el2.style.top = pos.y + "px";
           }
         });
       }

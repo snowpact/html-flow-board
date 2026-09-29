@@ -1,4 +1,5 @@
 import { Arrow, Epic, FlowProject, Position, Screen } from '../core/types';
+import { screenEpics } from '../core/state';
 
 // Escape a value's backslash, quote and newline so it survives inside quotes.
 function escVal(s: string): string {
@@ -63,7 +64,8 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
     if (s.title) parts.push('t=' + q(s.title));
     if (s.preset && s.preset !== 'custom') parts.push('p=' + s.preset);
     if (s.format) parts.push('f=' + s.format);
-    if (s.epic) parts.push('e=' + q(s.epic));
+    var eps = screenEpics(s);
+    if (eps.length) parts.push('e=' + q(eps.join(' ')));
     if (s.notes) parts.push('n=' + q(s.notes));
     if (s.size) parts.push('sz=' + s.size);
     if (s.width) parts.push('w=' + Math.round(s.width));
@@ -94,6 +96,7 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
       if (a.label) attrs.push('l=' + q(a.label));
       if (a.fromSide) attrs.push('fs=' + q(a.fromSide));
       if (a.toSide) attrs.push('ts=' + q(a.toSide));
+      if (a.kind) attrs.push('k=' + a.kind);
       if (attrs.length) line += ', ' + attrs.join(', ');
       out.push(line);
     });

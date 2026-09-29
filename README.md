@@ -10,7 +10,8 @@ arrows, with a **diagram-as-code** side panel. Zero runtime dependencies, import
 ## What it is
 
 FlowBoard renders a pannable/zoomable canvas of **screens** (cards) grouped into **epics**
-and linked by **arrows**. Alongside the canvas sits a **Flow-ML** editor — a tiny, readable
+(a screen can belong to several) and linked by **arrows** (bold journey steps, light navigation
+links). Alongside the canvas sits a **Flow-ML** editor — a tiny, readable
 text format that is the *single source of truth* for the board:
 
 - Type in the panel → the diagram updates.
@@ -23,12 +24,14 @@ short text document you can version, diff, copy, and paste.
 !name = My App
 
 @auth, t=Authentication, c=#6366f1
+@admin, t=Admin, c=#e76f51
 
 :login, t=Login, p=form, f=phone, e=auth, x=120, y=80
-:home,  t=Dashboard, p=dashboard, f=desktop, e=auth, x=560, y=80
+:home,  t=Dashboard, p=dashboard, f=desktop, e="auth admin", x=560, y=80   # in 2 epics
 
-login -> home, l=Login OK
-login --> home          # dashed = secondary path
+login -> home, l=Login OK, k=main   # bold: a step of the journey
+home -> login, l=Logout, k=nav      # light: menu / back link (label on hover)
+login --> home                      # dashed = secondary path
 ```
 
 ---
@@ -42,7 +45,7 @@ login --> home          # dashed = secondary path
 <script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.js"></script>
 ```
 
-Pin a release for stability: replace `@main` with a tag, e.g. `@v0.3.0`. Use `flowboard.min.js`
+Pin a release for stability: replace `@main` with a tag, e.g. `@v0.5.0`. Use `flowboard.min.js`
 in production.
 
 ### Self-hosted
@@ -98,9 +101,9 @@ short, comma-separated attributes.
 |---|---|
 | `!name = My App` | Project name (directive) |
 | `@auth, t=Authentication, c=#6366f1` | **Epic** — a group, with a color |
-| `:login, t=Login, p=form, f=phone, e=auth` | **Screen** (note the `:` prefix) |
+| `:login, t=Login, p=form, f=phone, e=auth` | **Screen** (note the `:` prefix) — `e="auth admin"` for several epics |
 | ` ``` ` … ` ``` ` (fenced block under a screen) | Raw HTML body (rendered when preset is `custom`) |
-| `login -> home, l=ok` | **Arrow** (solid) |
+| `login -> home, l=ok` | **Arrow** (solid) — add `k=main` / `k=nav` for its weight |
 | `login --> home` | **Arrow** (dashed) |
 | `# anything` | Comment (ignored) |
 
@@ -116,7 +119,7 @@ A screen line starts with `:` then its **id**, followed by `key=value` attribute
 | `t` | Title | `t=Login` or `t="My screen"` |
 | `p` | [Preset](#presets) (body skeleton); omit ⇒ `custom` | `p=form` |
 | `f` | [Format](#formats) (proportions) | `f=phone` |
-| `e` | Epic id | `e=auth` |
+| `e` | Epic id — or several, space-separated (the first one colors the header) | `e=auth`, `e="auth admin"` |
 | `n` | Note (shown in the footer) | `n="US-1.1"` |
 | `x` `y` | Position on the canvas | `x=120, y=80` |
 | `h` | Hidden flag (no value) | `… , h` |
@@ -135,6 +138,7 @@ A screen line starts with `:` then its **id**, followed by `key=value` attribute
 | `l` | Label on the arrow |
 | `fs` | From side — source anchor (see [Anchors](#arrow-anchor-points)) |
 | `ts` | To side — target anchor |
+| `k` | Weight: `main` (a journey step — bold, drawn on top) or `nav` (menu / back link — thin, label shown on hover, can be hidden with the **Nav** switch). Absent ⇒ standard |
 
 ### Custom HTML content
 
@@ -199,11 +203,20 @@ So a `custom` HTML body bigger than the format simply makes the card larger.
 - **Select mode** — rubber-band multi-select, click / Cmd-click to toggle, move a group rigidly.
 - **Drag screens** — free repositioning; positions live in the Flow-ML text.
 - **Anchor dots** — hover a screen to reveal anchors, click-drag to create a new arrow.
-- **Arrow popup** (click a handle) — swap direction, toggle dashed, edit label, delete.
-- **Screen popup** (right-click) — change layout/format/**epic**, edit title, hide/show, **delete**.
-- **Legend** (toolbar) — toggle epic visibility with accent-colored checkboxes; the **＋** button
-  next to it adds / renames / deletes epics.
-- **Auto-layout** — cycle Flow (BFS columns) / Epics (grouped) / Grid.
+- **Arrow popup** (click an arrow) — edit label, swap direction, toggle dashed, cycle the weight
+  (Std → Main → Nav), delete.
+- **Hover a screen** — its arrows are highlighted, every other arrow fades (nav labels appear).
+- **Screen popup** (right-click) — change layout/format, toggle its **epics** (several allowed),
+  edit title, hide/show, **delete**.
+- **Epic picker** (toolbar) — *All screens* or focus one epic: only its screens stay, laid out
+  along their arrows and numbered in reading order; your real layout is kept aside and restored
+  (and is what gets saved). Type to filter, ↑ ↓ Enter Esc. *Manage epics* (add / rename /
+  recolor / delete) sits at the bottom of the menu.
+- **Switches** — show / hide screen **Notes** and **Nav** arrows.
+- **Auto-layout** — cycle Flow (journey columns, nav arrows ignored, crossings reduced, crowded
+  columns split) / Epics (one row per epic) / Grid. Generous default gaps leave room for labels.
+- **Arrow labels** — wrapped (≤ 3 lines) and placed on the curve, sliding along it to avoid
+  screens and other labels.
 - **Dotted grid** — constant on-screen size at any zoom; excluded from PNG export.
 - **Code panel** — syntax highlighting, line-number gutter, current-line indicator, a
   copy-to-clipboard button, and a `?` cheat-sheet.
@@ -236,8 +249,8 @@ So a `custom` HTML body bigger than the format simply makes the card larger.
 | Field | Type | Description |
 |---|---|---|
 | `id` | `string` | Unique id |
-| `label` | `string` | Name shown in the legend |
-| `color` | `string` | CSS color (screen header + legend) |
+| `label` | `string` | Name shown in the epic picker |
+| `color` | `string` | CSS color (screen header, header dots, picker) |
 
 ### Screen
 
@@ -245,12 +258,13 @@ So a `custom` HTML body bigger than the format simply makes the card larger.
 |---|---|---|
 | `id` | `string` | Unique id |
 | `title` | `string` | Header title |
-| `epic` | `string` | Epic id (drives the header color) |
+| `epic` | `string` | Primary epic id (drives the header color) |
+| `epics` | `string[]` | Every epic the screen belongs to (primary first), when more than one — the others show as dots in the header |
 | `preset` | `PresetId` | Body skeleton; absent ⇒ `custom` |
 | `format` | `"desktop" \| "phone" \| "square"` | Min proportions — the card grows past them to fit content |
 | `notes` | `string` | Footer annotation (togglable) |
 | `content` | `string` | Raw HTML body (used by the `custom` preset) |
-| `hidden` | `boolean` | Hidden via the legend/eye toggle |
+| `hidden` | `boolean` | Hidden via the eye toggle |
 | `size` | `"sm" \| "md" \| "lg" \| "xl"` | **Legacy** width (240/320/400/520px); prefer `format` |
 
 ### Arrow
@@ -260,6 +274,7 @@ So a `custom` HTML body bigger than the format simply makes the card larger.
 | `from` / `to` | `string` | Source / destination screen id |
 | `label` | `string` | Text on the arrow |
 | `dashed` | `boolean` | Dashed style |
+| `kind` | `"main" \| "nav"` | Weight: journey step (bold) or navigation link (light); absent ⇒ standard |
 | `fromSide` / `toSide` | `string` | Anchor sides (see below) |
 
 ### `config.state`
@@ -335,6 +350,10 @@ allocation-light and O(n). Indicative means on a synthetic board (`npm run bench
 
 Text → diagram rebuilds are debounced (300 ms) and screens are inserted via a `DocumentFragment`
 (one reflow). A transient/empty edit never wipes the board.
+
+On the canvas: arrow labels are measured on a detached canvas (cached) instead of `getBBox()`
+(no forced layout per label), drag redraws are coalesced to one per animation frame, and hover
+emphasis only touches the hovered screen's arrows (the fade is a single CSS class).
 
 ---
 
