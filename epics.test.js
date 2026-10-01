@@ -354,17 +354,32 @@ describe('true grid, spacing, export scope', () => {
     try { window.localStorage.clear(); } catch (e) {}
     state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
     init({ container: document.getElementById('app'), project: { name: 'SpaceTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [{ from: 'A', to: 'B' }] },
-      state: { positions: { A: { x: 0, y: 0 }, B: { x: 500, y: 0 } } } });
-    // jsdom: no layout → no viewport origin → scaled from the top-left corner.
+      state: { positions: { A: { x: 100, y: 100 }, B: { x: 600, y: 100 } } } });
+    // jsdom: no layout → no viewport origin → scaled from the top-left corner (A stays put).
     const zoom = state.zoom, panX = state.panX, panY = state.panY;
     document.querySelector('[data-testid="spacing-plus"]').click();
-    expect(state.positions.B.x).toBe(600);
+    expect(state.positions.A.x).toBe(100);
+    expect(state.positions.B.x).toBe(700);
     expect(state.spacing).toBeCloseTo(1.2);
-    expect(loadDoc()).toContain('x=600');
+    expect(loadDoc()).toContain('x=700');
     // The view must not jump: zoom and pan are untouched.
     expect([state.zoom, state.panX, state.panY]).toEqual([zoom, panX, panY]);
     document.querySelector('[data-testid="spacing-minus"]').click();
-    expect(state.positions.B.x).toBe(500);
+    expect(state.positions.B.x).toBe(600);
+  });
+
+  it('spreading past the canvas edge shifts the screens back in and pans by the same amount', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'EdgeTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [] },
+      state: { positions: { A: { x: 0, y: 0 }, B: { x: 500, y: 0 } }, zoom: 1, panX: 0, panY: 0 } });
+    state.wrapperEl.getBoundingClientRect = () => ({ width: 1000, height: 800, left: 0, top: 0, right: 1000, bottom: 800 });
+    document.querySelector('[data-testid="spacing-plus"]').click();
+    // Scaled around (500, 400): A would land at x=-100 → shifted to the 40px margin, pan compensates.
+    expect(state.positions.A.x).toBe(40);
+    expect(state.positions.B.x).toBe(640);
+    expect(state.panX).toBe(-140);
   });
 
   it('export bounds only cover the focused epic', () => {
