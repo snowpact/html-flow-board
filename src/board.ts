@@ -1,7 +1,7 @@
 import { drawArrows, freezeArrowSides } from './arrows';
 import { CANVAS_H, CANVAS_W } from './core/constants';
 import { recomputeHiddenEpics, state } from './core/state';
-import { FlowConfig, Screen } from './core/types';
+import { FlowConfig, Position, Screen } from './core/types';
 import { loadArrowMutations, loadDoc, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
 import { parse } from './flowml/parse';
 import { initArrowDrag } from './interactions/arrow-drag';
@@ -76,7 +76,27 @@ export function adjustSpacing(k: number): void {
     var layout = autoLayout(members, inner, heights);
     members.forEach(function (s: Screen) { state.positions[s.id] = layout[s.id]; });
   } else {
-    state.positions = spreadPositions(state.positions, k);
+    // Scale around the point under the viewport center: the view does not jump.
+    var origin: Position | undefined;
+    if (state.wrapperEl) {
+      var r = state.wrapperEl.getBoundingClientRect();
+      if (r.width && r.height) {
+        origin = { x: (r.width / 2 - state.panX) / state.zoom, y: (r.height / 2 - state.panY) / state.zoom };
+      }
+    }
+    state.positions = spreadPositions(state.positions, k, origin);
+    // The canvas starts at (0,0): if the spread pushed screens past the top or
+    // left edge, shift everything back in and pan by the same amount so what is
+    // on screen does not move.
+    var minX = Infinity, minY = Infinity;
+    screens.forEach(function (s: Screen) { var p = state.positions[s.id]; if (p) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); } });
+    var shiftX = minX < 40 ? 40 - minX : 0, shiftY = minY < 40 ? 40 - minY : 0;
+    if (shiftX || shiftY) {
+      screens.forEach(function (s: Screen) { var p = state.positions[s.id]; if (p) { p.x += shiftX; p.y += shiftY; } });
+      state.panX -= shiftX * state.zoom;
+      state.panY -= shiftY * state.zoom;
+      applyTransform();
+    }
   }
   screens.forEach(function (s: Screen) {
     var el = state.screenEls[s.id];
@@ -88,7 +108,9 @@ export function adjustSpacing(k: number): void {
   freezeArrowSides();
   if (!state.focus) savePositions();
   drawArrows();
-  fitToContent();
+  // Keep zoom and pan: the change is visible in place. (A focus view is re-laid
+  // out from scratch, so it is refitted.)
+  if (state.focus) fitToContent();
 }
 
 export function doReset(): void {

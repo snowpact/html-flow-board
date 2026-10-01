@@ -265,18 +265,24 @@ export function layoutGrid(screens: Screen[], arrows: Arrow[], heights?: Record<
 }
 
 // -- Spacing: scale the gaps of the CURRENT positions (auto or hand-made) --
-// Positions are scaled from the top-left of the bounding box, so every gap grows
-// (or shrinks) by `k` while screens keep their size.
-export function spreadPositions(positions: Record<string, Position>, k: number): Record<string, Position> {
+// Positions are scaled around `origin` (default: the top-left of the bounding
+// box), so every gap grows (or shrinks) by `k` while screens keep their size.
+// Passing the point under the viewport center keeps what the user is looking
+// at in place.
+export function spreadPositions(positions: Record<string, Position>, k: number, origin?: Position): Record<string, Position> {
   var ids = Object.keys(positions);
   if (!ids.length) return positions;
-  var minX = Infinity, minY = Infinity;
-  ids.forEach(function (id) { minX = Math.min(minX, positions[id].x); minY = Math.min(minY, positions[id].y); });
+  var ox: number, oy: number;
+  if (origin) { ox = origin.x; oy = origin.y; }
+  else {
+    ox = Infinity; oy = Infinity;
+    ids.forEach(function (id) { ox = Math.min(ox, positions[id].x); oy = Math.min(oy, positions[id].y); });
+  }
   var out: Record<string, Position> = {};
   ids.forEach(function (id) {
     out[id] = {
-      x: Math.round(minX + (positions[id].x - minX) * k),
-      y: Math.round(minY + (positions[id].y - minY) * k),
+      x: Math.round(ox + (positions[id].x - ox) * k),
+      y: Math.round(oy + (positions[id].y - oy) * k),
     };
   });
   return out;

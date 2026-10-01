@@ -355,10 +355,14 @@ describe('true grid, spacing, export scope', () => {
     state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
     init({ container: document.getElementById('app'), project: { name: 'SpaceTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [{ from: 'A', to: 'B' }] },
       state: { positions: { A: { x: 0, y: 0 }, B: { x: 500, y: 0 } } } });
+    // jsdom: no layout → no viewport origin → scaled from the top-left corner.
+    const zoom = state.zoom, panX = state.panX, panY = state.panY;
     document.querySelector('[data-testid="spacing-plus"]').click();
     expect(state.positions.B.x).toBe(600);
     expect(state.spacing).toBeCloseTo(1.2);
     expect(loadDoc()).toContain('x=600');
+    // The view must not jump: zoom and pan are untouched.
+    expect([state.zoom, state.panX, state.panY]).toEqual([zoom, panX, panY]);
     document.querySelector('[data-testid="spacing-minus"]').click();
     expect(state.positions.B.x).toBe(500);
   });
@@ -398,5 +402,13 @@ describe('stale saved view', () => {
     expect(isContentInView()).toBe(true);
     state.panX = -5000; state.panY = -5000; // looking at an empty area
     expect(isContentInView()).toBe(false);
+  });
+});
+
+describe('spreadPositions around an origin', () => {
+  it('keeps the origin point fixed', () => {
+    const pos = spreadPositions({ a: { x: 0, y: 0 }, b: { x: 1000, y: 0 } }, 2, { x: 500, y: 0 });
+    expect(pos.a.x).toBe(-500);
+    expect(pos.b.x).toBe(1500);
   });
 });

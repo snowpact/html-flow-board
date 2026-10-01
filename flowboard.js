@@ -2644,19 +2644,26 @@
     for (var i = 0; i < ordered.length; i += perRow) rows.push(ordered.slice(i, i + perRow));
     return placeGrid(rows, arrows, heights);
   }
-  function spreadPositions(positions, k) {
+  function spreadPositions(positions, k, origin) {
     var ids = Object.keys(positions);
     if (!ids.length) return positions;
-    var minX = Infinity, minY = Infinity;
-    ids.forEach(function(id) {
-      minX = Math.min(minX, positions[id].x);
-      minY = Math.min(minY, positions[id].y);
-    });
+    var ox, oy;
+    if (origin) {
+      ox = origin.x;
+      oy = origin.y;
+    } else {
+      ox = Infinity;
+      oy = Infinity;
+      ids.forEach(function(id) {
+        ox = Math.min(ox, positions[id].x);
+        oy = Math.min(oy, positions[id].y);
+      });
+    }
     var out = {};
     ids.forEach(function(id) {
       out[id] = {
-        x: Math.round(minX + (positions[id].x - minX) * k),
-        y: Math.round(minY + (positions[id].y - minY) * k)
+        x: Math.round(ox + (positions[id].x - ox) * k),
+        y: Math.round(oy + (positions[id].y - oy) * k)
       };
     });
     return out;
@@ -4272,7 +4279,35 @@
         state.positions[s.id] = layout[s.id];
       });
     } else {
-      state.positions = spreadPositions(state.positions, k);
+      var origin;
+      if (state.wrapperEl) {
+        var r = state.wrapperEl.getBoundingClientRect();
+        if (r.width && r.height) {
+          origin = { x: (r.width / 2 - state.panX) / state.zoom, y: (r.height / 2 - state.panY) / state.zoom };
+        }
+      }
+      state.positions = spreadPositions(state.positions, k, origin);
+      var minX = Infinity, minY = Infinity;
+      screens.forEach(function(s) {
+        var p = state.positions[s.id];
+        if (p) {
+          minX = Math.min(minX, p.x);
+          minY = Math.min(minY, p.y);
+        }
+      });
+      var shiftX = minX < 40 ? 40 - minX : 0, shiftY = minY < 40 ? 40 - minY : 0;
+      if (shiftX || shiftY) {
+        screens.forEach(function(s) {
+          var p = state.positions[s.id];
+          if (p) {
+            p.x += shiftX;
+            p.y += shiftY;
+          }
+        });
+        state.panX -= shiftX * state.zoom;
+        state.panY -= shiftY * state.zoom;
+        applyTransform();
+      }
     }
     screens.forEach(function(s) {
       var el2 = state.screenEls[s.id];
@@ -4290,7 +4325,7 @@
     freezeArrowSides();
     if (!state.focus) savePositions();
     drawArrows();
-    fitToContent();
+    if (state.focus) fitToContent();
   }
   function doReset() {
     if (!confirm("Reset to the default layout?")) return;
