@@ -1531,3 +1531,5 @@
 .fb-arrow-popup-detail { width: 100%; font-size: 12px; }
 .fb-arrow-detail { pointer-events: none; }
 .fb-arrow-note { pointer-events: none; }
+
+.fb-seg-icon { display: inline-flex; align-items: center; color: #9ca3af; padding: 0 4px 0 6px; }

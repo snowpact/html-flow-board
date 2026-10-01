@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from './src/flowml/parse';
 import { serialize } from './src/flowml/serialize';
-import { autoLayout, layoutArrows, layoutByEpics, LAYOUT_STRATEGIES } from './src/layout';
-import { GAP_X } from './src/core/constants';
+import { autoLayout, layoutArrows, layoutByEpics, layoutGrid, spreadPositions, LAYOUT_STRATEGIES } from './src/layout';
+import { adjustSpacing } from './src/board';
+import { collectExportBounds, isScreenShown } from './src/export';
+import { GAP_X, GAP_Y } from './src/core/constants';
 import { init } from './src/board';
 import { state, screenEpics, inEpic } from './src/core/state';
 import { setFocus, exitFocus, persistedPositions } from './src/focus';
@@ -313,7 +315,70 @@ describe('arrow color + adaptive gaps', () => {
   it('Epics layout widens the vertical gap between rows for a card on a cross-row arrow', () => {
     const screens = [{ id: 'a', epic: 'e1', size: 'md' }, { id: 'b', epic: 'e2', size: 'md' }];
     const plain = layoutByEpics(screens, [{ from: 'a', to: 'b' }], { a: 100, b: 100 });
-    const card = layoutByEpics(screens, [{ from: 'a', to: 'b', label: 'x', detail: 'A · B · C · D', note: 'un\nlong texte de note qui prend plusieurs lignes' }], { a: 100, b: 100 });
+    const card = layoutByEpics(screens, [{ from: 'a', to: 'b', label: 'Une action avec un long libellé qui se replie', detail: 'POST /v1/update · UPDATE_CLOTURE · UPDATE_HISTO · UPDATE_DOCUMENT · UPDATE_ARRIVEESITE', note: 'heure de départ, compte rendu, signatures technicien et client, photos annotées, consommables, retour matériel' }], { a: 100, b: 100 });
+    // Same column, adjacent rows: the full card height is reserved.
     expect(card.b.y - card.a.y).toBeGreaterThan(plain.b.y - plain.a.y);
+  });
+});
+
+describe('true grid, spacing, export scope', () => {
+  it('Flow lays columns on a true grid: rows aligned across columns, top-anchored', () => {
+    const screens = [{ id: 'r', size: 'md' }, { id: 'a', size: 'md' }, { id: 'b', size: 'md' }, { id: 'c', size: 'md' }];
+    const arrows = [{ from: 'r', to: 'a' }, { from: 'r', to: 'b' }, { from: 'r', to: 'c' }];
+    const pos = autoLayout(screens, arrows, { r: 100, a: 100, b: 100, c: 100 });
+    expect(pos.r.y).toBe(pos.a.y);            // first row aligned (no centering stagger)
+    expect(pos.a.x).toBe(pos.b.x);
+    expect(pos.b.y - pos.a.y).toBe(100 + GAP_Y);
+  });
+
+  it('Grid groups screens by epic and wraps after ceil(sqrt(n))', () => {
+    state.project = { epics: [{ id: 'e1' }, { id: 'e2' }], screens: [], arrows: [] };
+    const screens = [{ id: 'a', epic: 'e2', size: 'md' }, { id: 'b', epic: 'e1', size: 'md' }, { id: 'c', epic: 'e1', size: 'md' }, { id: 'd', epic: 'e2', size: 'md' }];
+    const pos = layoutGrid(screens, [], {});
+    expect(pos.b.y).toBe(pos.c.y);            // e1 pair on the first row
+    expect(pos.b.x).toBeLessThan(pos.c.x);
+    expect(pos.a.y).toBeGreaterThan(pos.b.y); // e2 on the second row
+    state.project = null;
+  });
+
+  it('spreadPositions scales every gap from the top-left corner', () => {
+    const pos = spreadPositions({ a: { x: 100, y: 100 }, b: { x: 600, y: 100 }, c: { x: 100, y: 800 } }, 1.2);
+    expect(pos.a).toEqual({ x: 100, y: 100 });
+    expect(pos.b).toEqual({ x: 700, y: 100 });
+    expect(pos.c).toEqual({ x: 100, y: 940 });
+  });
+
+  it('the spacing buttons spread the current positions and persist', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'SpaceTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [{ from: 'A', to: 'B' }] },
+      state: { positions: { A: { x: 0, y: 0 }, B: { x: 500, y: 0 } } } });
+    document.querySelector('[data-testid="spacing-plus"]').click();
+    expect(state.positions.B.x).toBe(600);
+    expect(state.spacing).toBeCloseTo(1.2);
+    expect(loadDoc()).toContain('x=600');
+    document.querySelector('[data-testid="spacing-minus"]').click();
+    expect(state.positions.B.x).toBe(500);
+  });
+
+  it('export bounds only cover the focused epic', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'ExportTest', epics: [{ id: 'e1', label: 'E1', color: '#f00' }, { id: 'e2', label: 'E2', color: '#0f0' }],
+      screens: [{ id: 'A', epic: 'e1' }, { id: 'B', epic: 'e1' }, { id: 'Z', epic: 'e2' }], arrows: [{ from: 'A', to: 'B' }, { from: 'B', to: 'Z' }] },
+      state: { positions: { A: { x: 0, y: 0 }, B: { x: 500, y: 0 }, Z: { x: 5000, y: 5000 } } } });
+    drawArrows();
+    const all = collectExportBounds();
+    expect(all.maxX).toBeGreaterThanOrEqual(5000);
+    setFocus('e1');
+    drawArrows();
+    expect(isScreenShown('Z')).toBe(false);
+    const focused = collectExportBounds();
+    // Only A and B (re-laid out by the focus) count: the bounds match their boxes.
+    const xs = ['A', 'B'].map((id) => state.positions[id].x + state.screenEls[id].offsetWidth);
+    expect(focused.maxX).toBeLessThanOrEqual(Math.max.apply(null, xs) + 1);
+    exitFocus();
   });
 });

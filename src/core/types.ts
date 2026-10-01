@@ -117,6 +117,7 @@ export interface FlowState {
   panDrag: any;
   showNav?: boolean;       // draw 'nav' arrows (toolbar toggle)
   focus?: FocusState | null; // active epic focus view, or null
+  spacing?: number;          // gap factor for the auto-layouts (toolbar − / +), default 1
   // Escape hatch for the various ad-hoc fields touched across modules.
   [k: string]: any;
 }

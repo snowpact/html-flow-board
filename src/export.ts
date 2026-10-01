@@ -1,4 +1,4 @@
-import { buildSpreadMap, computeControlPoints, getAnchor, resolveArrowSides } from './arrows';
+import { buildSpreadMap, computeControlPoints, getAnchor, isArrowShown, resolveArrowSides } from './arrows';
 import { state } from './core/state';
 import { Arrow, Position, Screen } from './core/types';
 
@@ -17,13 +17,22 @@ export function loadHtml2Canvas(): Promise<any> {
   return html2canvasLoaded;
 }
 
+// Is this screen part of what the board currently shows? (eye toggle + epic focus)
+export function isScreenShown(id: string): boolean {
+  if (state.hiddenScreens[id]) return false;
+  if (state.focus && !state.focus.visible[id]) return false;
+  return true;
+}
+
+// The export covers exactly what is on screen: the shown screens, the drawn
+// arrows and their label cards. An epic focus therefore exports that epic alone.
 export function collectExportBounds(): { minX: number; minY: number; maxX: number; maxY: number } {
   var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
   var arrows: Arrow[] = state.project.arrows || [];
   var spreadMap = buildSpreadMap();
 
   state.project.screens.forEach(function (s: Screen) {
-    if (state.hiddenScreens[s.id]) return;
+    if (!isScreenShown(s.id)) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (!el || !pos) return;
@@ -35,7 +44,7 @@ export function collectExportBounds(): { minX: number; minY: number; maxX: numbe
 
   // Include arrow control points so arrows aren't clipped
   arrows.forEach(function (arrow: Arrow, idx: number) {
-    if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
+    if (!isScreenShown(arrow.from) || !isScreenShown(arrow.to) || !isArrowShown(arrow)) return;
 
     var fromEl = state.screenEls[arrow.from];
     var toEl = state.screenEls[arrow.to];
@@ -57,6 +66,18 @@ export function collectExportBounds(): { minX: number; minY: number; maxX: numbe
       maxY = Math.max(maxY, p.y);
     });
   });
+
+  // Label boxes (cards) as drawn, so a wide card at the edge is never cropped.
+  if (state.svgEl) {
+    var boxes = state.svgEl.querySelectorAll('.fb-arrow-label-bg');
+    for (var i = 0; i < boxes.length; i++) {
+      var bx = parseFloat(boxes[i].getAttribute('x')), by = parseFloat(boxes[i].getAttribute('y'));
+      var bw = parseFloat(boxes[i].getAttribute('width')), bh = parseFloat(boxes[i].getAttribute('height'));
+      if (isNaN(bx) || isNaN(by)) continue;
+      minX = Math.min(minX, bx); minY = Math.min(minY, by);
+      maxX = Math.max(maxX, bx + bw); maxY = Math.max(maxY, by + bh);
+    }
+  }
 
   return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
 }
@@ -80,12 +101,12 @@ export function doExport(): void {
 
   // Clone visible screens, offset to crop origin
   state.project.screens.forEach(function (s: Screen) {
-    if (state.hiddenScreens[s.id]) return;
+    if (!isScreenShown(s.id)) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (!el || !pos) return;
     var clone = el.cloneNode(true) as HTMLElement;
-    clone.classList.remove('fb-selected', 'fb-dragging');
+    clone.classList.remove('fb-selected', 'fb-dragging', 'fb-focus-out');
     clone.style.left = (pos.x - vx) + 'px';
     clone.style.top = (pos.y - vy) + 'px';
     tmp.appendChild(clone);
@@ -93,6 +114,9 @@ export function doExport(): void {
 
   // Rasterize SVG arrows (cropped via viewBox)
   var svgClone = state.svgEl.cloneNode(true) as SVGSVGElement;
+  svgClone.classList.remove('fb-hl-active'); // no hover emphasis in the export
+  var hl = svgClone.querySelectorAll('.fb-arrow-hl');
+  for (var hi = 0; hi < hl.length; hi++) hl[hi].classList.remove('fb-arrow-hl');
   // Remove dimmed arrows from export
   var dimmedEls = svgClone.querySelectorAll('.fb-arrow-dimmed');
   for (var di = 0; di < dimmedEls.length; di++) {
@@ -133,7 +157,8 @@ export function doExport(): void {
     }).then(function (resultCanvas: HTMLCanvasElement) {
       document.body.removeChild(tmp);
       var link = document.createElement('a');
-      link.download = (state.project.name || 'flowboard') + '.png';
+      var suffix = state.focus ? ' - ' + state.focus.id : '';
+      link.download = (state.project.name || 'flowboard') + suffix + '.png';
       link.href = resultCanvas.toDataURL('image/png');
       link.click();
     }).catch(function (err: any) {

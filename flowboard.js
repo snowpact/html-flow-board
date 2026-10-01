@@ -419,6 +419,7 @@
   var ICON_SLIDERS = icon('<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>', 14);
   var ICON_X = icon('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>', 14);
   var ICON_LAYERS = icon('<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>');
+  var ICON_SPACING = icon('<polyline points="9 7 4 12 9 17"/><polyline points="15 7 20 12 15 17"/>', 15);
 
   // src/render/presets.ts
   var bar = '<i class="fb-skel-bar"></i>';
@@ -2480,28 +2481,99 @@
   }
   var MAX_PER_COLUMN = 6;
   var MAX_PER_ROW = 8;
+  var EPIC_ROW_GAP = GAP_Y * 2 + 40;
   var LABEL_MARGIN = 36;
   function arrowRoom(a) {
     var m = labelMetrics(a);
     if (!m) return { w: 0, h: 0 };
     return { w: m.w + LABEL_MARGIN * 2, h: m.h + LABEL_MARGIN * 2 };
   }
-  function gapBetween(fromIds, toIds, arrows, axis, base) {
-    var gap = base;
-    arrows.forEach(function(a) {
-      var crosses = fromIds[a.from] && toIds[a.to] || fromIds[a.to] && toIds[a.from];
-      if (!crosses) return;
-      var room = arrowRoom(a)[axis];
-      if (room > gap) gap = room;
-    });
-    return gap;
+  function spacingFactor() {
+    var f = state.spacing;
+    return typeof f === "number" && f > 0 ? f : 1;
   }
-  function idSet(list) {
-    var out = {};
-    list.forEach(function(s) {
-      out[s.id] = true;
+  function heightOf(s, heights) {
+    return heights && heights[s.id] ? heights[s.id] : 200;
+  }
+  function placeGrid(cells, arrows, heights, baseGapX, baseGapY) {
+    var gx = (baseGapX === void 0 ? GAP_X : baseGapX) * spacingFactor();
+    var gy = (baseGapY === void 0 ? GAP_Y : baseGapY) * spacingFactor();
+    var nRows = cells.length;
+    var nCols = 0;
+    cells.forEach(function(r2) {
+      if (r2.length > nCols) nCols = r2.length;
     });
-    return out;
+    var colW = [], rowH = [];
+    var colOf = {}, rowOf = {};
+    for (var c = 0; c < nCols; c++) colW[c] = 0;
+    for (var r = 0; r < nRows; r++) {
+      rowH[r] = 0;
+      for (var c2 = 0; c2 < cells[r].length; c2++) {
+        var s = cells[r][c2];
+        if (!s) continue;
+        colOf[s.id] = c2;
+        rowOf[s.id] = r;
+        colW[c2] = Math.max(colW[c2], screenWidth(s));
+        rowH[r] = Math.max(rowH[r], heightOf(s, heights));
+      }
+    }
+    var gapX = [], gapY = [];
+    for (var i = 0; i < nCols; i++) gapX[i] = gx;
+    for (var j = 0; j < nRows; j++) gapY[j] = gy;
+    arrows.forEach(function(a) {
+      if (colOf[a.from] === void 0 || colOf[a.to] === void 0) return;
+      var room = arrowRoom(a);
+      if (!room.w) return;
+      var c1 = colOf[a.from], c22 = colOf[a.to];
+      if (Math.abs(c1 - c22) === 1) {
+        var ci = Math.min(c1, c22);
+        gapX[ci] = Math.max(gapX[ci], room.w);
+      }
+      var r1 = rowOf[a.from], r2 = rowOf[a.to];
+      if (c1 === c22 && Math.abs(r1 - r2) === 1) {
+        var ri = Math.min(r1, r2);
+        gapY[ri] = Math.max(gapY[ri], room.h);
+      } else if (Math.abs(r1 - r2) === 1) {
+        var ri2 = Math.min(r1, r2);
+        gapY[ri2] = Math.max(gapY[ri2], Math.min(room.h, gy * 2));
+      }
+    });
+    var colX = [], rowY = [];
+    var x = 0;
+    for (var c3 = 0; c3 < nCols; c3++) {
+      colX[c3] = x;
+      x += colW[c3] + gapX[c3];
+    }
+    var y = 0;
+    for (var r3 = 0; r3 < nRows; r3++) {
+      rowY[r3] = y;
+      y += rowH[r3] + gapY[r3];
+    }
+    var positions = {};
+    var all = [];
+    cells.forEach(function(row, r4) {
+      row.forEach(function(s2, c4) {
+        if (!s2) return;
+        positions[s2.id] = { x: colX[c4], y: rowY[r4] };
+        all.push(s2);
+      });
+    });
+    var totalW = nCols ? colX[nCols - 1] + colW[nCols - 1] : 0;
+    var totalH = nRows ? rowY[nRows - 1] + rowH[nRows - 1] : 0;
+    centerPositions(positions, all, totalW, totalH);
+    return positions;
+  }
+  function columnsToCells(columns) {
+    var nRows = 0;
+    columns.forEach(function(c2) {
+      if (c2.length > nRows) nRows = c2.length;
+    });
+    var cells = [];
+    for (var r = 0; r < nRows; r++) {
+      cells[r] = [];
+      for (var c = 0; c < columns.length; c++) cells[r][c] = columns[c][r] || null;
+    }
+    return cells;
   }
   function autoLayout(screens, arrows, heights) {
     var core = layoutArrows(arrows);
@@ -2523,48 +2595,7 @@
       var per = Math.ceil(list.length / parts);
       for (var i = 0; i < list.length; i += per) split.push(list.slice(i, i + per));
     });
-    columns = {};
-    colKeys = split.map(function(_l, i) {
-      return i;
-    });
-    split.forEach(function(l, i) {
-      columns[i] = l;
-    });
-    function h(s) {
-      return heights && heights[s.id] ? heights[s.id] : 200;
-    }
-    var colH = {};
-    var totalH = 0;
-    colKeys.forEach(function(c) {
-      var sum = 0;
-      columns[c].forEach(function(s) {
-        sum += h(s) + GAP_Y;
-      });
-      colH[c] = sum - GAP_Y;
-      if (colH[c] > totalH) totalH = colH[c];
-    });
-    var positions = {};
-    var offsetX = 0;
-    var lastGap = 0;
-    colKeys.forEach(function(c, ci) {
-      var colScreens = columns[c];
-      var maxW = 0;
-      colScreens.forEach(function(s) {
-        var w = screenWidth(s);
-        if (w > maxW) maxW = w;
-      });
-      var offsetY = Math.round((totalH - colH[c]) / 2);
-      colScreens.forEach(function(s) {
-        positions[s.id] = { x: offsetX, y: offsetY };
-        offsetY += h(s) + GAP_Y;
-      });
-      var next = colKeys[ci + 1];
-      lastGap = next === void 0 ? 0 : gapBetween(idSet(colScreens), idSet(columns[next]), arrows, "w", GAP_X);
-      offsetX += maxW + lastGap;
-    });
-    var totalW = offsetX;
-    centerPositions(positions, screens, totalW, totalH);
-    return positions;
+    return placeGrid(columnsToCells(split), arrows, heights);
   }
   function layoutByEpics(screens, arrows, heights) {
     var epicGroups = {};
@@ -2590,57 +2621,45 @@
       });
       for (var i = 0; i < group.length; i += MAX_PER_ROW) rows.push(group.slice(i, i + MAX_PER_ROW));
     });
-    var positions = {};
-    var offsetY = 0;
-    var totalW = 0;
-    rows.forEach(function(row, ri) {
-      var offsetX = 0;
-      var rowH = 0;
-      row.forEach(function(s, si) {
-        positions[s.id] = { x: offsetX, y: offsetY };
-        var one = {};
-        one[s.id] = true;
-        var nxt = row[si + 1];
-        var g = nxt ? gapBetween(one, (function() {
-          var o = {};
-          o[nxt.id] = true;
-          return o;
-        })(), arrows, "w", GAP_X) : 0;
-        offsetX += screenWidth(s) + g;
-        var hh = heights && heights[s.id] ? heights[s.id] : 200;
-        if (hh > rowH) rowH = hh;
-      });
-      if (offsetX > totalW) totalW = offsetX;
-      var nextRow = rows[ri + 1];
-      var vg = nextRow ? gapBetween(idSet(row), idSet(nextRow), arrows, "h", GAP_Y * 2) : 0;
-      offsetY += rowH + vg;
-    });
-    centerPositions(positions, screens, totalW, offsetY);
-    return positions;
+    return placeGrid(rows, arrows, heights, GAP_X, EPIC_ROW_GAP);
   }
   function layoutGrid(screens, arrows, heights) {
-    var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
-    var positions = {};
-    var offsetX = 0, offsetY = 0;
-    var rowMaxH = 0;
-    var totalW = 0, totalH = 0;
-    screens.forEach(function(s, i) {
-      var colIdx = i % cols;
-      if (colIdx === 0 && i > 0) {
-        offsetY += rowMaxH + GAP_Y;
-        offsetX = 0;
-        rowMaxH = 0;
-      }
-      positions[s.id] = { x: offsetX, y: offsetY };
-      var w = screenWidth(s);
-      var h = heights && heights[s.id] ? heights[s.id] : 200;
-      if (h > rowMaxH) rowMaxH = h;
-      offsetX += w + GAP_X;
-      if (offsetX > totalW) totalW = offsetX;
+    var n = screens.length;
+    var perRow = Math.max(1, Math.min(MAX_PER_ROW, Math.ceil(Math.sqrt(n))));
+    var ordered = screens.slice();
+    var idx = {};
+    screens.forEach(function(s, i2) {
+      idx[s.id] = i2;
     });
-    totalH = offsetY + rowMaxH;
-    centerPositions(positions, screens, totalW - GAP_X, totalH);
-    return positions;
+    var epicRank = {};
+    (state.project && state.project.epics || []).forEach(function(e, i2) {
+      epicRank[e.id] = i2;
+    });
+    ordered.sort(function(a, b) {
+      var ea = a.epic ? epicRank[a.epic] !== void 0 ? epicRank[a.epic] : 9999 : 1e4;
+      var eb = b.epic ? epicRank[b.epic] !== void 0 ? epicRank[b.epic] : 9999 : 1e4;
+      return ea - eb || idx[a.id] - idx[b.id];
+    });
+    var rows = [];
+    for (var i = 0; i < ordered.length; i += perRow) rows.push(ordered.slice(i, i + perRow));
+    return placeGrid(rows, arrows, heights);
+  }
+  function spreadPositions(positions, k) {
+    var ids = Object.keys(positions);
+    if (!ids.length) return positions;
+    var minX = Infinity, minY = Infinity;
+    ids.forEach(function(id) {
+      minX = Math.min(minX, positions[id].x);
+      minY = Math.min(minY, positions[id].y);
+    });
+    var out = {};
+    ids.forEach(function(id) {
+      out[id] = {
+        x: Math.round(minX + (positions[id].x - minX) * k),
+        y: Math.round(minY + (positions[id].y - minY) * k)
+      };
+    });
+    return out;
   }
   var LAYOUT_STRATEGIES = [
     { name: "Flow", fn: autoLayout },
@@ -2739,12 +2758,17 @@
     });
     return html2canvasLoaded;
   }
+  function isScreenShown(id) {
+    if (state.hiddenScreens[id]) return false;
+    if (state.focus && !state.focus.visible[id]) return false;
+    return true;
+  }
   function collectExportBounds() {
     var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
     var arrows = state.project.arrows || [];
     var spreadMap = buildSpreadMap();
     state.project.screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
+      if (!isScreenShown(s.id)) return;
       var el2 = state.screenEls[s.id];
       var pos = state.positions[s.id];
       if (!el2 || !pos) return;
@@ -2754,7 +2778,7 @@
       maxY = Math.max(maxY, pos.y + el2.offsetHeight);
     });
     arrows.forEach(function(arrow, idx) {
-      if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
+      if (!isScreenShown(arrow.from) || !isScreenShown(arrow.to) || !isArrowShown(arrow)) return;
       var fromEl = state.screenEls[arrow.from];
       var toEl = state.screenEls[arrow.to];
       if (!fromEl || !toEl) return;
@@ -2771,6 +2795,18 @@
         maxY = Math.max(maxY, p.y);
       });
     });
+    if (state.svgEl) {
+      var boxes = state.svgEl.querySelectorAll(".fb-arrow-label-bg");
+      for (var i = 0; i < boxes.length; i++) {
+        var bx = parseFloat(boxes[i].getAttribute("x")), by = parseFloat(boxes[i].getAttribute("y"));
+        var bw = parseFloat(boxes[i].getAttribute("width")), bh = parseFloat(boxes[i].getAttribute("height"));
+        if (isNaN(bx) || isNaN(by)) continue;
+        minX = Math.min(minX, bx);
+        minY = Math.min(minY, by);
+        maxX = Math.max(maxX, bx + bw);
+        maxY = Math.max(maxY, by + bh);
+      }
+    }
     return { minX, minY, maxX, maxY };
   }
   function doExport() {
@@ -2786,17 +2822,20 @@
     tmp.className = "fb-container";
     tmp.style.cssText = "position:fixed;left:-99999px;top:0;width:" + vw + "px;height:" + vh + "px;overflow:visible;background:transparent;";
     state.project.screens.forEach(function(s) {
-      if (state.hiddenScreens[s.id]) return;
+      if (!isScreenShown(s.id)) return;
       var el2 = state.screenEls[s.id];
       var pos = state.positions[s.id];
       if (!el2 || !pos) return;
       var clone = el2.cloneNode(true);
-      clone.classList.remove("fb-selected", "fb-dragging");
+      clone.classList.remove("fb-selected", "fb-dragging", "fb-focus-out");
       clone.style.left = pos.x - vx + "px";
       clone.style.top = pos.y - vy + "px";
       tmp.appendChild(clone);
     });
     var svgClone = state.svgEl.cloneNode(true);
+    svgClone.classList.remove("fb-hl-active");
+    var hl = svgClone.querySelectorAll(".fb-arrow-hl");
+    for (var hi = 0; hi < hl.length; hi++) hl[hi].classList.remove("fb-arrow-hl");
     var dimmedEls = svgClone.querySelectorAll(".fb-arrow-dimmed");
     for (var di = 0; di < dimmedEls.length; di++) {
       dimmedEls[di].parentNode.removeChild(dimmedEls[di]);
@@ -2829,7 +2868,8 @@
       }).then(function(resultCanvas) {
         document.body.removeChild(tmp);
         var link = document.createElement("a");
-        link.download = (state.project.name || "flowboard") + ".png";
+        var suffix = state.focus ? " - " + state.focus.id : "";
+        link.download = (state.project.name || "flowboard") + suffix + ".png";
         link.href = resultCanvas.toDataURL("image/png");
         link.click();
       }).catch(function(err) {
@@ -3085,6 +3125,21 @@
     var layoutBtn = iconBtn("fb-action-btn", ICON_GRID + '<span class="fb-layout-name">' + LAYOUT_STRATEGIES[state.layoutIndex].name + "</span>", "Auto-layout: switch strategy", cycleLayout);
     layoutBtn.id = "fb-layout-btn";
     right.appendChild(layoutBtn);
+    var spacing = el("div", "fb-seg");
+    spacing.title = "Spacing between screens";
+    var spIcon = el("span", "fb-seg-icon", ICON_SPACING);
+    spacing.appendChild(spIcon);
+    var spMinus = iconBtn("fb-toolbar-btn", ICON_MINUS, "Tighter", function() {
+      adjustSpacing(1 / 1.2);
+    });
+    spMinus.setAttribute("data-testid", "spacing-minus");
+    spacing.appendChild(spMinus);
+    var spPlus = iconBtn("fb-toolbar-btn", ICON_PLUS, "Looser", function() {
+      adjustSpacing(1.2);
+    });
+    spPlus.setAttribute("data-testid", "spacing-plus");
+    spacing.appendChild(spPlus);
+    right.appendChild(spacing);
     right.appendChild(iconBtn("fb-action-btn", ICON_DOWNLOAD + "<span>PNG</span>", "Export as PNG", doExport));
     var resetBtn = iconBtn("fb-action-btn fb-ghost", ICON_RESET + "<span>Reset</span>", "Reset to the default layout", doReset);
     resetBtn.setAttribute("data-testid", "toolbar-reset");
@@ -4176,6 +4231,48 @@
     drawArrows();
     fitToContent();
   }
+  function adjustSpacing(k) {
+    if (!state.project) return;
+    state.spacing = Math.max(0.4, Math.min(3, (state.spacing || 1) * k));
+    var screens = state.project.screens || [];
+    var arrows = state.project.arrows || [];
+    if (state.focus) {
+      var members = screens.filter(function(s) {
+        return state.focus.visible[s.id];
+      });
+      var heights = {};
+      members.forEach(function(s) {
+        var el2 = state.screenEls[s.id];
+        if (el2) heights[s.id] = el2.offsetHeight;
+      });
+      var inner = arrows.filter(function(a) {
+        return state.focus.visible[a.from] && state.focus.visible[a.to];
+      });
+      var layout = autoLayout(members, inner, heights);
+      members.forEach(function(s) {
+        state.positions[s.id] = layout[s.id];
+      });
+    } else {
+      state.positions = spreadPositions(state.positions, k);
+    }
+    screens.forEach(function(s) {
+      var el2 = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (el2 && pos) {
+        el2.style.left = pos.x + "px";
+        el2.style.top = pos.y + "px";
+      }
+    });
+    arrows.forEach(function(a) {
+      delete a.fromSide;
+      delete a.toSide;
+    });
+    drawArrows();
+    freezeArrowSides();
+    if (!state.focus) savePositions();
+    drawArrows();
+    fitToContent();
+  }
   function doReset() {
     if (!confirm("Reset to the default layout?")) return;
     exitFocus();
@@ -4247,6 +4344,7 @@
     }
     state.showNotes = true;
     state.showNav = true;
+    state.spacing = 1;
     state.focus = null;
     state.highlightScreen = null;
     state.hiddenScreens = {};

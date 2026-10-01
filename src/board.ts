@@ -13,7 +13,7 @@ import { initModeKeys, setMode } from './interactions/mode';
 import { initPan } from './interactions/pan';
 import { initSelection } from './interactions/selection';
 import { applyTransform, fitToContent } from './interactions/transform';
-import { LAYOUT_STRATEGIES, autoLayout } from './layout';
+import { LAYOUT_STRATEGIES, autoLayout, spreadPositions } from './layout';
 import { renderModeSwitch } from './render/mode-switch';
 import { renderScreen } from './render/screen';
 import { renderToolbar, updateLayoutButton } from './render/toolbar';
@@ -56,6 +56,37 @@ export function cycleLayout(): void {
 
   updateLayoutButton();
   savePositions();
+  drawArrows();
+  fitToContent();
+}
+
+// Toolbar − / + : scale every gap of the current arrangement by `k` (1.2 or 1/1.2)
+// and remember the factor for the next auto-layout.
+export function adjustSpacing(k: number): void {
+  if (!state.project) return;
+  state.spacing = Math.max(0.4, Math.min(3, (state.spacing || 1) * k));
+  var screens = state.project.screens || [];
+  var arrows = state.project.arrows || [];
+  if (state.focus) {
+    // In a focus view, re-run the focus layout with the new factor.
+    var members = screens.filter(function (s: Screen) { return state.focus.visible[s.id]; });
+    var heights: Record<string, number> = {};
+    members.forEach(function (s: Screen) { var el = state.screenEls[s.id]; if (el) heights[s.id] = el.offsetHeight; });
+    var inner = arrows.filter(function (a) { return state.focus.visible[a.from] && state.focus.visible[a.to]; });
+    var layout = autoLayout(members, inner, heights);
+    members.forEach(function (s: Screen) { state.positions[s.id] = layout[s.id]; });
+  } else {
+    state.positions = spreadPositions(state.positions, k);
+  }
+  screens.forEach(function (s: Screen) {
+    var el = state.screenEls[s.id];
+    var pos = state.positions[s.id];
+    if (el && pos) { el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px'; }
+  });
+  arrows.forEach(function (a) { delete a.fromSide; delete a.toSide; });
+  drawArrows();
+  freezeArrowSides();
+  if (!state.focus) savePositions();
   drawArrows();
   fitToContent();
 }
@@ -146,6 +177,7 @@ export function init(config: FlowConfig): void {
 
   state.showNotes = true;
   state.showNav = true;
+  state.spacing = 1;
   state.focus = null;
   state.highlightScreen = null;
   state.hiddenScreens = {};

@@ -1,12 +1,12 @@
 import { drawArrows } from '../arrows';
-import { cycleLayout, doReset } from '../board';
+import { adjustSpacing, cycleLayout, doReset } from '../board';
 import { ZOOM_STEP } from '../core/constants';
 import { getEpic, inEpic, screenEpics, setEpicList, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { doExport } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
-import { ICON_DOWNLOAD, ICON_FIT, ICON_GRID, ICON_MINUS, ICON_PLUS, ICON_RESET, ICON_TRASH } from './icons';
+import { ICON_DOWNLOAD, ICON_FIT, ICON_GRID, ICON_MINUS, ICON_PLUS, ICON_RESET, ICON_SPACING, ICON_TRASH } from './icons';
 import { applyScreenVisibility } from './screen';
 import { renderViewPicker } from './view-picker';
 import { refreshScreenEpics } from './screen';
@@ -267,6 +267,19 @@ export function renderToolbar(): HTMLElement {
   var layoutBtn = iconBtn('fb-action-btn', ICON_GRID + '<span class="fb-layout-name">' + LAYOUT_STRATEGIES[state.layoutIndex].name + '</span>', 'Auto-layout: switch strategy', cycleLayout);
   layoutBtn.id = 'fb-layout-btn';
   right.appendChild(layoutBtn);
+
+  // Spacing between screens: − / +
+  var spacing = el('div', 'fb-seg');
+  spacing.title = 'Spacing between screens';
+  var spIcon = el('span', 'fb-seg-icon', ICON_SPACING);
+  spacing.appendChild(spIcon);
+  var spMinus = iconBtn('fb-toolbar-btn', ICON_MINUS, 'Tighter', function () { adjustSpacing(1 / 1.2); });
+  spMinus.setAttribute('data-testid', 'spacing-minus');
+  spacing.appendChild(spMinus);
+  var spPlus = iconBtn('fb-toolbar-btn', ICON_PLUS, 'Looser', function () { adjustSpacing(1.2); });
+  spPlus.setAttribute('data-testid', 'spacing-plus');
+  spacing.appendChild(spPlus);
+  right.appendChild(spacing);
 
   right.appendChild(iconBtn('fb-action-btn', ICON_DOWNLOAD + '<span>PNG</span>', 'Export as PNG', doExport));
 
