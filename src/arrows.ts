@@ -576,6 +576,8 @@ export function drawArrows(skipHandles?: boolean): void {
 
   var labelJobs: LabelJob[] = [];
 
+  state.svgEl.classList.toggle('fb-focus-on', !!state.focus);
+
   var order = arrows.map(function (_a: Arrow, i: number) { return i; });
   order.sort(function (a: number, b: number) {
     return KIND_RANK[arrows[a].kind || 'default'] - KIND_RANK[arrows[b].kind || 'default'] || a - b;

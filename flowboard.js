@@ -1847,6 +1847,7 @@
     state.arrowGroupsByScreen = byScreen;
     hlGroups = [];
     var labelJobs = [];
+    state.svgEl.classList.toggle("fb-focus-on", !!state.focus);
     var order = arrows.map(function(_a, i) {
       return i;
     });

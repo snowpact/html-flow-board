@@ -174,6 +174,16 @@ describe('board: epic picker, focus, multi-epic, arrow kinds', () => {
     expect(loadDoc()).toContain(':A, t=A, e=e1, x=10, y=10');
   });
 
+  it('marks the arrows layer while focused so nav labels stay visible', () => {
+    drawArrows();
+    expect(state.svgEl.classList.contains('fb-focus-on')).toBe(false);
+    setFocus('e1');
+    expect(state.svgEl.classList.contains('fb-focus-on')).toBe(true);
+    exitFocus();
+    drawArrows();
+    expect(state.svgEl.classList.contains('fb-focus-on')).toBe(false);
+  });
+
   it('only draws arrows between visible screens while focused', () => {
     setFocus('e2');
     expect(document.querySelectorAll('.fb-arrow-group').length).toBe(0); // C alone
