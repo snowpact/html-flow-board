@@ -1768,19 +1768,30 @@
       var apiLines = m.codeLines, codeSize = m.codeSize, noteLines = m.noteLines, noteSize = m.noteSize;
       var tint = arrowTint(job.arrow.color);
       var best = null, bestScore = Infinity;
-      for (var k = 0; k < LABEL_TS.length; k++) {
-        var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, LABEL_TS[k]);
-        var box2 = { x: pt.x - bw / 2, y: pt.y - bh / 2, w: bw, h: bh };
-        var score = 0;
-        for (var si = 0; si < screens.length; si++) score += overlapArea(box2, screens[si]) * 3;
-        for (var li = 0; li < placed.length; li++) score += overlapArea(box2, placed[li]);
-        if (score < bestScore) {
-          bestScore = score;
-          best = pt;
+      var off = Math.max(bh, 40) / 2 + 10;
+      outer:
+        for (var k = 0; k < LABEL_TS.length; k++) {
+          var t = LABEL_TS[k];
+          var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, t);
+          var ahead = bezierPoint(job.start, job.cp1, job.cp2, job.end, Math.min(1, t + 0.02));
+          var tx = ahead.x - pt.x, ty = ahead.y - pt.y;
+          var len = Math.sqrt(tx * tx + ty * ty) || 1;
+          var nx = -ty / len, ny = tx / len;
+          var cands = [pt, { x: pt.x + nx * off, y: pt.y + ny * off }, { x: pt.x - nx * off, y: pt.y - ny * off }];
+          for (var ci = 0; ci < cands.length; ci++) {
+            var c = cands[ci];
+            var box2 = { x: c.x - bw / 2, y: c.y - bh / 2, w: bw, h: bh };
+            var score = ci === 0 ? 0 : 1;
+            for (var si = 0; si < screens.length; si++) score += overlapArea(box2, screens[si]) * 3;
+            for (var li = 0; li < placed.length; li++) score += overlapArea(box2, placed[li]);
+            if (score < bestScore) {
+              bestScore = score;
+              best = c;
+            }
+            if (score === 0) break outer;
+          }
         }
-        if (score === 0) break;
-      }
-      if (kind !== "nav") placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
+      if (kind !== "nav" || state.focus) placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
       var labelGroup = document.createElementNS(ns, "g");
       labelGroup.setAttribute("class", "fb-arrow-label-group" + (isCard ? " fb-arrow-card" : "") + (job.dimmed ? " fb-arrow-dimmed" : ""));
       if (isCard) {

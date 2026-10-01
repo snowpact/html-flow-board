@@ -491,17 +491,31 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
 
     // Try spots along the curve; keep the first free one, else the least covered.
     var best: Position = null, bestScore = Infinity;
+    // Candidates: points along the curve, each also nudged to either side of it
+    // (perpendicular), so a box can slide off a crowded spot instead of covering it.
+    var off = Math.max(bh, 40) / 2 + 10;
+    outer:
     for (var k = 0; k < LABEL_TS.length; k++) {
-      var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, LABEL_TS[k]);
-      var box = { x: pt.x - bw / 2, y: pt.y - bh / 2, w: bw, h: bh };
-      var score = 0;
-      for (var si = 0; si < screens.length; si++) score += overlapArea(box, screens[si]) * 3;
-      for (var li = 0; li < placed.length; li++) score += overlapArea(box, placed[li]);
-      if (score < bestScore) { bestScore = score; best = pt; }
-      if (score === 0) break;
+      var t = LABEL_TS[k];
+      var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, t);
+      var ahead = bezierPoint(job.start, job.cp1, job.cp2, job.end, Math.min(1, t + 0.02));
+      var tx = ahead.x - pt.x, ty = ahead.y - pt.y;
+      var len = Math.sqrt(tx * tx + ty * ty) || 1;
+      var nx = -ty / len, ny = tx / len; // unit normal
+      var cands = [pt, { x: pt.x + nx * off, y: pt.y + ny * off }, { x: pt.x - nx * off, y: pt.y - ny * off }];
+      for (var ci = 0; ci < cands.length; ci++) {
+        var c = cands[ci];
+        var box = { x: c.x - bw / 2, y: c.y - bh / 2, w: bw, h: bh };
+        var score = ci === 0 ? 0 : 1; // prefer sitting on the curve when free
+        for (var si = 0; si < screens.length; si++) score += overlapArea(box, screens[si]) * 3;
+        for (var li = 0; li < placed.length; li++) score += overlapArea(box, placed[li]);
+        if (score < bestScore) { bestScore = score; best = c; }
+        if (score === 0) break outer;
+      }
     }
-    // Nav labels only show on hover: they never reserve room from the others.
-    if (kind !== 'nav') placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
+    // Nav labels only show on hover: they don't reserve room from the others —
+    // except in an epic focus, where they are always visible.
+    if (kind !== 'nav' || state.focus) placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
 
     var labelGroup = document.createElementNS(ns, 'g');
     labelGroup.setAttribute('class', 'fb-arrow-label-group' + (isCard ? ' fb-arrow-card' : '') + (job.dimmed ? ' fb-arrow-dimmed' : ''));
