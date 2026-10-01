@@ -110,8 +110,13 @@ Fields: `from`, `to` (screen ids), `label`, `dashed` (bool), `kind` (`'main'` | 
 
 **Always set `kind`** — it is what keeps a big board readable:
 - `kind: 'main'` for the steps of a journey (the tunnel the user goes through);
-- `kind: 'nav'` for menu entries, tabs, back links — drawn thin, label on hover, hideable, and
-  ignored by the auto-layout (so a menu doesn't drag every screen into one column).
+- `kind: 'nav'` for menu entries, tabs, back links — drawn thin and ignored by the auto-layout
+  (so a menu doesn't drag every screen into one column).
+
+Optional `detail` / `note` / `color` turn the label into a **card**: `detail` is a code line
+(e.g. the API call behind the action, split into chips on ` · `), `note` a muted line below,
+`color` a tint (`indigo` `amber` `green` `red` `grey` `teal` `pink` or a CSS color). Use one
+color per source system so a reader sees at a glance what each action calls.
 
 Write the label as **what the action lets the user do** (`Valider le départ : clôture envoyée`),
 not the button name. Labels wrap on up to 3 lines (~170px each).
@@ -154,7 +159,7 @@ login --> home                        # arrow (dashed)
 ```
 
 - Screen attrs: `t` title · `p` preset · `f` format · `e` epic(s), space-separated · `n` note · `x y` position · `h` hidden.
-- Epic attrs: `t` title · `c` color. Arrow attrs: `l` label · `k` kind (`main`/`nav`) · `fs` from side · `ts` to side.
+- Epic attrs: `t` title · `c` color. Arrow attrs: `l` label · `k` kind (`main`/`nav`) · `d` detail · `n` note · `c` color · `fs` from side · `ts` to side.
 - Fenced ` ``` ` block right after a `:screen` line = its custom HTML body.
 - Values with spaces/commas/quotes are wrapped in `"…"`. `#` starts a comment.
 

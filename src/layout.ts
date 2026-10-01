@@ -1,4 +1,4 @@
-import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y } from './core/constants';
+import { CANVAS_H, CANVAS_W, FORMATS, GAP_X, GAP_Y } from './core/constants';
 import { screenWidth, state } from './core/state';
 import { Arrow, Position, Screen } from './core/types';
 import { labelMetrics } from './arrows';
@@ -116,8 +116,12 @@ export function spacingFactor(): number {
   return (typeof f === 'number' && f > 0) ? f : 1;
 }
 
+// Measured height when known, else the format's minimum, else 200.
 function heightOf(s: Screen, heights?: Record<string, number>): number {
-  return (heights && heights[s.id]) ? heights[s.id] : 200;
+  if (heights && heights[s.id]) return heights[s.id];
+  if (s.height) return s.height;
+  if (s.format && FORMATS[s.format]) return FORMATS[s.format].height;
+  return 200;
 }
 
 // -- Core: place a matrix of cells on a true grid --
@@ -157,8 +161,9 @@ export function placeGrid(cells: (Screen | null)[][], arrows: Arrow[], heights?:
     var c1 = colOf[a.from], c2 = colOf[a.to];
     if (Math.abs(c1 - c2) === 1) { var ci = Math.min(c1, c2); gapX[ci] = Math.max(gapX[ci], room.w); }
     var r1 = rowOf[a.from], r2 = rowOf[a.to];
+    // Vertical room only for an arrow between two stacked screens; a diagonal
+    // one already got its room from the column gap.
     if (c1 === c2 && Math.abs(r1 - r2) === 1) { var ri = Math.min(r1, r2); gapY[ri] = Math.max(gapY[ri], room.h); }
-    else if (Math.abs(r1 - r2) === 1) { var ri2 = Math.min(r1, r2); gapY[ri2] = Math.max(gapY[ri2], Math.min(room.h, gy * 2)); }
   });
 
   var colX: number[] = [], rowY: number[] = [];
@@ -289,7 +294,7 @@ export function spreadPositions(positions: Record<string, Position>, k: number, 
 }
 
 // -- Layout strategies --
-export var LAYOUT_STRATEGIES: { name: string; fn: (screens: Screen[], arrows: Arrow[], heights: Record<string, number>) => Record<string, Position>; available?: () => boolean }[] = [
+export var LAYOUT_STRATEGIES: { name: string; fn: (screens: Screen[], arrows: Arrow[], heights: Record<string, number>) => Record<string, Position> }[] = [
   { name: 'Flow', fn: autoLayout },
   { name: 'Epics', fn: layoutByEpics },
   { name: 'Grid', fn: layoutGrid }

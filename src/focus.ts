@@ -72,7 +72,10 @@ export function setFocus(epicId: string): void {
 
   state.focus = { type: 'epic', id: epicId, savedPositions: state.positions, visible: visible };
   var positions: Record<string, Position> = {};
-  screens.forEach(function (s) { positions[s.id] = layout[s.id] || state.focus.savedPositions[s.id]; });
+  screens.forEach(function (s) {
+    var p = layout[s.id] || state.focus.savedPositions[s.id];
+    if (p) positions[s.id] = { x: p.x, y: p.y }; // copies: never share objects with the saved map
+  });
   state.positions = positions;
 
   screens.forEach(function (s) {

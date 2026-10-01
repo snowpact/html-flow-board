@@ -10,7 +10,7 @@ import { ICON_DOWNLOAD, ICON_FIT, ICON_GRID, ICON_MINUS, ICON_PLUS, ICON_RESET, 
 import { applyScreenVisibility } from './screen';
 import { renderViewPicker } from './view-picker';
 import { refreshScreenEpics } from './screen';
-import { exitFocus } from '../focus';
+import { setFocus } from '../focus';
 import { fitToContent } from '../interactions/transform';
 import { Epic, Screen } from '../core/types';
 
@@ -95,7 +95,7 @@ export function deleteEpic(id: string): boolean {
       refreshScreenEpics(s);
     }
   });
-  if (state.focus && state.focus.id === id) exitFocus();
+  if (state.focus && state.focus.id === id) setFocus('');
   syncToolbar();
   drawArrows();
   if (state.commit) state.commit();
@@ -123,7 +123,13 @@ function epicRow(epic: Epic): HTMLElement {
   color.className = 'fb-epic-color';
   color.value = epic.color || '#666666';
   color.title = 'Color';
-  color.addEventListener('input', function () { setEpicColor(epic.id, color.value); });
+  // Live recolor while dragging the picker; persist (and rebuild the epic
+  // picker) once on change.
+  color.addEventListener('input', function () {
+    epic.color = color.value;
+    (state.project.screens || []).forEach(function (s: Screen) { if (inEpic(s, epic.id)) refreshScreenEpics(s); });
+  });
+  color.addEventListener('change', function () { setEpicColor(epic.id, color.value); });
   row.appendChild(color);
 
   var name = document.createElement('input');
@@ -312,21 +318,6 @@ export function toggleEpic(epicId: string): void {
     state.hiddenEpics[epicId] = true;
   } else {
     delete state.hiddenEpics[epicId];
-  }
-
-  // Update legend item dimming
-  var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
-  for (var i = 0; i < checkboxes.length; i++) {
-    var cb = checkboxes[i] as HTMLInputElement;
-    var item = cb.closest('.fb-legend-item') as HTMLElement;
-    if (cb.dataset.epicId === epicId) {
-      cb.checked = !isHiding;
-      if (isHiding) {
-        item.classList.add('fb-dimmed');
-      } else {
-        item.classList.remove('fb-dimmed');
-      }
-    }
   }
 
   // Toggle each screen of this epic individually

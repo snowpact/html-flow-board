@@ -30,7 +30,7 @@ short text document you can version, diff, copy, and paste.
 :home,  t=Dashboard, p=dashboard, f=desktop, e="auth admin", x=560, y=80   # in 2 epics
 
 login -> home, l=Login OK, k=main   # bold: a step of the journey
-home -> login, l=Logout, k=nav      # light: menu / back link (label on hover)
+home -> login, l=Logout, k=nav      # light: menu / back link (ignored by the auto-layout)
 login --> home                      # dashed = secondary path
 ```
 
@@ -138,7 +138,10 @@ A screen line starts with `:` then its **id**, followed by `key=value` attribute
 | `l` | Label on the arrow |
 | `fs` | From side — source anchor (see [Anchors](#arrow-anchor-points)) |
 | `ts` | To side — target anchor |
-| `k` | Weight: `main` (a journey step — bold, drawn on top) or `nav` (menu / back link — thin, label shown on hover, can be hidden with the **Nav** switch). Absent ⇒ standard |
+| `k` | Weight: `main` (a journey step — bold, drawn on top) or `nav` (menu / back link — thin, ignored by the auto-layout). Absent ⇒ standard |
+| `d` | Detail: a code line drawn as chips under the label (split on ` · `), e.g. `d="POST /v1/update · UPDATE_CLOTURE"` — turns the label into a card |
+| `n` | Note: a muted line under the detail |
+| `c` | Tint of the label / card: `indigo` `amber` `green` `red` `grey` `teal` `pink` or any CSS color |
 
 ### Custom HTML content
 
@@ -205,14 +208,14 @@ So a `custom` HTML body bigger than the format simply makes the card larger.
 - **Anchor dots** — hover a screen to reveal anchors, click-drag to create a new arrow.
 - **Arrow popup** (click an arrow) — edit label, swap direction, toggle dashed, cycle the weight
   (Std → Main → Nav), delete.
-- **Hover a screen** — its arrows are highlighted, every other arrow fades (nav labels appear).
+- **Hover a screen** — its arrows are highlighted, every other arrow fades.
 - **Screen popup** (right-click) — change layout/format, toggle its **epics** (several allowed),
   edit title, hide/show, **delete**.
 - **Epic picker** (toolbar) — *All screens* or focus one epic: only its screens stay, laid out
   along their arrows and numbered in reading order; your real layout is kept aside and restored
   (and is what gets saved). Type to filter, ↑ ↓ Enter Esc. *Manage epics* (add / rename /
   recolor / delete) sits at the bottom of the menu.
-- **Switches** — show / hide screen **Notes** and **Nav** arrows.
+- **Notes switch** — show / hide screen notes. **Spacing − / +** — loosen or tighten every gap of the current arrangement around what you are looking at.
 - **Auto-layout** — cycle Flow (journey columns, nav arrows ignored, crossings reduced, crowded
   columns split) / Epics (one row per epic) / Grid. Generous default gaps leave room for labels.
 - **Arrow labels** — wrapped (≤ 3 lines) and placed on the curve, sliding along it to avoid
@@ -275,6 +278,9 @@ So a `custom` HTML body bigger than the format simply makes the card larger.
 | `label` | `string` | Text on the arrow |
 | `dashed` | `boolean` | Dashed style |
 | `kind` | `"main" \| "nav"` | Weight: journey step (bold) or navigation link (light); absent ⇒ standard |
+| `detail` | `string` | Code line drawn as chips under the label (card) |
+| `note` | `string` | Muted line under the detail |
+| `color` | `string` | Tint of the label / card (palette name or CSS color) |
 | `fromSide` / `toSide` | `string` | Anchor sides (see below) |
 
 ### `config.state`

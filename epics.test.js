@@ -13,6 +13,7 @@ import { commit } from './src/interactions/sync';
 import { loadDoc } from './src/core/storage';
 import { cycleArrowKind } from './src/render/popups';
 import { toggleScreenEpic, setScreenEpic } from './src/render/screen';
+import { createScreen } from './src/interactions/create';
 import { deleteEpic } from './src/render/toolbar';
 import { drawArrows, wrapLabel, bezierPoint } from './src/arrows';
 
@@ -446,5 +447,81 @@ describe('export pixel budget', () => {
   it('is a positive number', async () => {
     const { exportPixelBudget } = await import('./src/export');
     expect(exportPixelBudget()).toBeGreaterThan(1000000);
+  });
+});
+
+describe('review fixes', () => {
+  function board(project, positions) {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project, state: { positions, zoom: 1, panX: 0, panY: 0 } });
+    state.wrapperEl.getBoundingClientRect = () => ({ width: 1000, height: 800, left: 0, top: 0, right: 1000, bottom: 800 });
+  }
+
+  it('spacing in a focus keeps the real positions and the hand-set anchor sides', () => {
+    board({ name: 'FocusSpace', epics: [{ id: 'e1', label: 'E1', color: '#f00' }], screens: [{ id: 'A', epic: 'e1' }, { id: 'B', epic: 'e1' }, { id: 'Z' }],
+      arrows: [{ from: 'A', to: 'B', fromSide: 'bottom', toSide: 'top' }] }, { A: { x: 100, y: 100 }, B: { x: 100, y: 900 }, Z: { x: 3000, y: 100 } });
+    setFocus('e1');
+    adjustSpacing(1.2);
+    expect(state.project.arrows[0].fromSide).toBe('bottom'); // untouched
+    expect(persistedPositions().A).toEqual({ x: 100, y: 100 });
+    exitFocus();
+    expect(state.positions.B).toEqual({ x: 100, y: 900 });
+  });
+
+  it('spacing stops at the clamp bounds and stays symmetric', () => {
+    // Screens far from the canvas edge, so the edge shift never kicks in.
+    board({ name: 'Clamp', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [] }, { A: { x: 2000, y: 2000 }, B: { x: 2500, y: 2000 } });
+    for (let i = 0; i < 3; i++) adjustSpacing(1.2);
+    for (let i = 0; i < 3; i++) adjustSpacing(1 / 1.2);
+    expect(state.spacing).toBeCloseTo(1, 5);
+    expect(Math.abs(state.positions.B.x - 2500)).toBeLessThanOrEqual(2); // symmetric (rounding aside)
+    for (let i = 0; i < 10; i++) adjustSpacing(1.2);
+    expect(state.spacing).toBe(3);
+    const bx = state.positions.B.x;
+    adjustSpacing(1.2); // at the bound: no-op
+    expect(state.positions.B.x).toBe(bx);
+  });
+
+  it('a screen created during a focus keeps a real position after exit', () => {
+    board({ name: 'CreateFocus', epics: [{ id: 'e1', label: 'E1', color: '#f00' }], screens: [{ id: 'A', epic: 'e1' }, { id: 'Z' }], arrows: [] },
+      { A: { x: 100, y: 100 }, Z: { x: 3000, y: 100 } });
+    setFocus('e1');
+    const id = createScreen('form', 400, 300);
+    exitFocus();
+    expect(state.positions[id]).toBeDefined();
+    expect(() => drawArrows()).not.toThrow();
+  });
+
+  it('no arrow handles while focused', () => {
+    board({ name: 'Handles', epics: [{ id: 'e1', label: 'E1', color: '#f00' }], screens: [{ id: 'A', epic: 'e1' }, { id: 'B', epic: 'e1' }], arrows: [{ from: 'A', to: 'B' }] },
+      { A: { x: 100, y: 100 }, B: { x: 700, y: 100 } });
+    drawArrows();
+    expect(state.handleEls.length).toBe(2);
+    setFocus('e1');
+    expect(state.handleEls.length).toBe(0);
+    exitFocus(); drawArrows();
+    expect(state.handleEls.length).toBe(2);
+  });
+
+  it('layouts use the format height when nothing is measured', () => {
+    const pos = autoLayout([{ id: 'a', format: 'phone' }, { id: 'b', format: 'phone' }], [{ from: 'a', to: 'b' }, { from: 'a', to: 'b', kind: 'nav' }]);
+    // two phones side by side: x differs; and a stacked pair would be ≥ 480 apart
+    const stacked = autoLayout([{ id: 'r', format: 'phone' }, { id: 'c1', format: 'phone' }, { id: 'c2', format: 'phone' }], [{ from: 'r', to: 'c1' }, { from: 'r', to: 'c2' }]);
+    expect(stacked.c2.y - stacked.c1.y).toBeGreaterThanOrEqual(480 + GAP_Y);
+    expect(pos.b.x).toBeGreaterThan(pos.a.x);
+  });
+
+  it('parses e="my epic" whole even when the epic is declared after the screen', () => {
+    const r = parse(':s1, e="my epic"\n@"my epic", t=Mine\n');
+    expect(r.project.screens[0].epic).toBe('my epic');
+    expect(r.project.screens[0].epics).toBeUndefined();
+  });
+
+  it('arrowTint: a CSS color name keeps a white fill', async () => {
+    const { arrowTint } = await import('./src/arrows');
+    expect(arrowTint('navy')).toEqual({ fill: '#ffffff', stroke: 'navy' });
+    expect(arrowTint('#123456').fill).toBe('#1234561f');
   });
 });

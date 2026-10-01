@@ -69,7 +69,7 @@ export function collectExportBounds(): { minX: number; minY: number; maxX: numbe
 
   // Label boxes (cards) as drawn, so a wide card at the edge is never cropped.
   if (state.svgEl) {
-    var boxes = state.svgEl.querySelectorAll('.fb-arrow-label-bg');
+    var boxes = state.svgEl.querySelectorAll('.fb-arrow-group:not(.fb-arrow-dimmed) .fb-arrow-label-bg');
     for (var i = 0; i < boxes.length; i++) {
       var bx = parseFloat(boxes[i].getAttribute('x')), by = parseFloat(boxes[i].getAttribute('y'));
       var bw = parseFloat(boxes[i].getAttribute('width')), bh = parseFloat(boxes[i].getAttribute('height'));
@@ -91,8 +91,8 @@ export function doExport(): void {
   var padding = 40;
   var vx = Math.max(0, bounds.minX - padding);
   var vy = Math.max(0, bounds.minY - padding);
-  var vw = bounds.maxX - bounds.minX + padding * 2;
-  var vh = bounds.maxY - bounds.minY + padding * 2;
+  var vw = bounds.maxX + padding - vx;
+  var vh = bounds.maxY + padding - vy;
 
   // Build a small, clean temporary container (no transform, exact size)
   var tmp = document.createElement('div');
@@ -137,7 +137,7 @@ export function doExport(): void {
   var dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
   var scale = Math.max(2, Math.min(3, dpr));
   var budget = exportPixelBudget();
-  if (vw * vh * scale * scale > budget) scale = Math.max(1, Math.sqrt(budget / (vw * vh)));
+  if (vw * vh * scale * scale > budget) scale = Math.max(0.25, Math.sqrt(budget / (vw * vh)));
   // Browsers also cap each canvas side (≈16 k px): a huge board exports smaller
   // rather than blurry or blank.
   var MAX_SIDE = 16000;

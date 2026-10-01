@@ -105,7 +105,17 @@ export function resolveArrowSides(arrow: Arrow, idx: number, spreadMap: Record<n
   // the wrong way, so pick the best sides from the focus positions.
   if (state.focus) {
     var fe = state.screenEls[arrow.from], te = state.screenEls[arrow.to];
-    if (fe && te) return getBestSides(fe, te);
+    if (fe && te) {
+      var base = getBestSides(fe, te);
+      // Keep the auto-spread (parallel arrows) by re-applying its sub-position.
+      var sp = spreadMap && spreadMap[idx];
+      if (sp) {
+        var sf = sp.from.indexOf('-') === -1 ? '' : sp.from.slice(sp.from.indexOf('-'));
+        var st = sp.to.indexOf('-') === -1 ? '' : sp.to.slice(sp.to.indexOf('-'));
+        return { from: base.from + sf, to: base.to + st };
+      }
+      return base;
+    }
   }
   if (arrow.fromSide && arrow.toSide) {
     return { from: arrow.fromSide, to: arrow.toSide };
@@ -234,17 +244,22 @@ var LABEL_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 
 var measureCtx: CanvasRenderingContext2D | null | undefined;
 var widthCache: Record<string, number> = {};
 
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (measureCtx === undefined) {
+    try { measureCtx = document.createElement('canvas').getContext('2d'); } catch (e) { measureCtx = null; }
+  }
+  return measureCtx;
+}
+
 export function measureLabel(text: string, fontSize: number, bold: boolean): number {
   var key = fontSize + (bold ? 'b' : '') + '|' + text;
   var hit = widthCache[key];
   if (hit !== undefined) return hit;
-  if (measureCtx === undefined) {
-    try { measureCtx = document.createElement('canvas').getContext('2d'); } catch (e) { measureCtx = null; }
-  }
+  var ctx = getMeasureCtx();
   var w: number;
-  if (measureCtx) {
-    measureCtx.font = (bold ? '600 ' : '') + fontSize + 'px ' + LABEL_FONT_FAMILY;
-    w = measureCtx.measureText(text).width;
+  if (ctx) {
+    ctx.font = (bold ? '600 ' : '') + fontSize + 'px ' + LABEL_FONT_FAMILY;
+    w = ctx.measureText(text).width;
   } else {
     w = text.length * fontSize * 0.56; // no canvas (e.g. jsdom): close estimate
   }
@@ -336,10 +351,8 @@ export function measureCode(text: string, fontSize: number): number {
   var key = fontSize + '|' + text;
   if (codeWidthCache[key] !== undefined) return codeWidthCache[key];
   var w: number;
-  if (measureCtx === undefined) {
-    try { measureCtx = document.createElement('canvas').getContext('2d'); } catch (e) { measureCtx = null; }
-  }
-  if (measureCtx) { measureCtx.font = fontSize + 'px ' + CODE_FONT; w = measureCtx.measureText(text).width; }
+  var ctx = getMeasureCtx();
+  if (ctx) { ctx.font = fontSize + 'px ' + CODE_FONT; w = ctx.measureText(text).width; }
   else w = text.length * fontSize * 0.6;
   codeWidthCache[key] = w;
   return w;
@@ -362,9 +375,9 @@ function wrapCode(text: string, fontSize: number): string[] {
 }
 
 // Card: white box, title, grey code chip lines, muted note. Centered on `at`.
-function drawDetailCard(ns: string, g: Element, job: LabelJob, at: Position, bw: number, bh: number,
-  lines: string[], lineH: number, fontSize: number, bold: boolean,
-  apiLines: string[], codeSize: number, noteLines: string[], noteSize: number, tint?: { fill: string; stroke: string } | null): void {
+function drawDetailCard(ns: string, g: Element, job: LabelJob, at: Position, m: LabelMetrics, tint?: { fill: string; stroke: string } | null): void {
+  var bw = m.w, bh = m.h, lines = m.lines, lineH = m.lineH, fontSize = m.fontSize, bold = m.bold;
+  var apiLines = m.codeLines, codeSize = m.codeSize, noteLines = m.noteLines, noteSize = m.noteSize;
   var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
   var accent = tint ? tint.stroke : (job.kind === 'main' ? '#374151' : '#9ca3af');
   var fill = tint ? tint.fill : '#ffffff';
@@ -438,8 +451,10 @@ var TINTS: Record<string, { fill: string; stroke: string }> = {
 export function arrowTint(color: string | undefined): { fill: string; stroke: string } | null {
   if (!color) return null;
   if (TINTS[color]) return TINTS[color];
-  var hex = /^#([0-9a-f]{6})$/i.test(color) ? color + '1f' : color;
-  return { fill: hex, stroke: color };
+  // Any other CSS color: used for the border; the fill is a light tint when it is
+  // a 6-digit hex (alpha appended), else plain white so the text stays readable.
+  var fill = /^#[0-9a-f]{6}$/i.test(color) ? color + '1f' : '#ffffff';
+  return { fill: fill, stroke: color };
 }
 
 // Measured size of an arrow's label box (plain label or detail card), without
@@ -517,7 +532,7 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
     labelGroup.setAttribute('class', 'fb-arrow-label-group' + (isCard ? ' fb-arrow-card' : '') + (job.dimmed ? ' fb-arrow-dimmed' : ''));
 
     if (isCard) {
-      drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize, tint);
+      drawDetailCard(ns, labelGroup, job, best, m, tint);
       job.g.appendChild(labelGroup);
       return;
     }
@@ -719,6 +734,9 @@ export function updateHandles(): void {
   // Remove old handle divs
   state.handleEls.forEach(function (el: HTMLElement) { if (el.parentNode) el.parentNode.removeChild(el); });
   state.handleEls = [];
+  // A focus view is a temporary layout: anchor sides dragged there would be
+  // wrong on the real board, so arrows are not editable while focused.
+  if (state.focus) return;
 
   if (!state.project) return;
 

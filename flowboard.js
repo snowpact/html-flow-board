@@ -1402,7 +1402,16 @@
   function resolveArrowSides(arrow, idx, spreadMap) {
     if (state.focus) {
       var fe = state.screenEls[arrow.from], te = state.screenEls[arrow.to];
-      if (fe && te) return getBestSides(fe, te);
+      if (fe && te) {
+        var base = getBestSides(fe, te);
+        var sp = spreadMap && spreadMap[idx];
+        if (sp) {
+          var sf = sp.from.indexOf("-") === -1 ? "" : sp.from.slice(sp.from.indexOf("-"));
+          var st = sp.to.indexOf("-") === -1 ? "" : sp.to.slice(sp.to.indexOf("-"));
+          return { from: base.from + sf, to: base.to + st };
+        }
+        return base;
+      }
     }
     if (arrow.fromSide && arrow.toSide) {
       return { from: arrow.fromSide, to: arrow.toSide };
@@ -1507,10 +1516,7 @@
   var LABEL_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   var measureCtx;
   var widthCache = {};
-  function measureLabel(text, fontSize, bold) {
-    var key = fontSize + (bold ? "b" : "") + "|" + text;
-    var hit = widthCache[key];
-    if (hit !== void 0) return hit;
+  function getMeasureCtx() {
     if (measureCtx === void 0) {
       try {
         measureCtx = document.createElement("canvas").getContext("2d");
@@ -1518,10 +1524,17 @@
         measureCtx = null;
       }
     }
+    return measureCtx;
+  }
+  function measureLabel(text, fontSize, bold) {
+    var key = fontSize + (bold ? "b" : "") + "|" + text;
+    var hit = widthCache[key];
+    if (hit !== void 0) return hit;
+    var ctx = getMeasureCtx();
     var w;
-    if (measureCtx) {
-      measureCtx.font = (bold ? "600 " : "") + fontSize + "px " + LABEL_FONT_FAMILY;
-      w = measureCtx.measureText(text).width;
+    if (ctx) {
+      ctx.font = (bold ? "600 " : "") + fontSize + "px " + LABEL_FONT_FAMILY;
+      w = ctx.measureText(text).width;
     } else {
       w = text.length * fontSize * 0.56;
     }
@@ -1600,16 +1613,10 @@
     var key = fontSize + "|" + text;
     if (codeWidthCache[key] !== void 0) return codeWidthCache[key];
     var w;
-    if (measureCtx === void 0) {
-      try {
-        measureCtx = document.createElement("canvas").getContext("2d");
-      } catch (e) {
-        measureCtx = null;
-      }
-    }
-    if (measureCtx) {
-      measureCtx.font = fontSize + "px " + CODE_FONT;
-      w = measureCtx.measureText(text).width;
+    var ctx = getMeasureCtx();
+    if (ctx) {
+      ctx.font = fontSize + "px " + CODE_FONT;
+      w = ctx.measureText(text).width;
     } else w = text.length * fontSize * 0.6;
     codeWidthCache[key] = w;
     return w;
@@ -1634,7 +1641,9 @@
     });
     return out.slice(0, 4);
   }
-  function drawDetailCard(ns, g, job, at, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize, tint) {
+  function drawDetailCard(ns, g, job, at, m, tint) {
+    var bw = m.w, bh = m.h, lines = m.lines, lineH = m.lineH, fontSize = m.fontSize, bold = m.bold;
+    var apiLines = m.codeLines, codeSize = m.codeSize, noteLines = m.noteLines, noteSize = m.noteSize;
     var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
     var accent = tint ? tint.stroke : job.kind === "main" ? "#374151" : "#9ca3af";
     var fill = tint ? tint.fill : "#ffffff";
@@ -1719,8 +1728,8 @@
   function arrowTint(color) {
     if (!color) return null;
     if (TINTS[color]) return TINTS[color];
-    var hex = /^#([0-9a-f]{6})$/i.test(color) ? color + "1f" : color;
-    return { fill: hex, stroke: color };
+    var fill = /^#[0-9a-f]{6}$/i.test(color) ? color + "1f" : "#ffffff";
+    return { fill, stroke: color };
   }
   function labelMetrics(arrow) {
     if (!arrow.label && !arrow.detail) return null;
@@ -1794,7 +1803,7 @@
       var labelGroup = document.createElementNS(ns, "g");
       labelGroup.setAttribute("class", "fb-arrow-label-group" + (isCard ? " fb-arrow-card" : "") + (job.dimmed ? " fb-arrow-dimmed" : ""));
       if (isCard) {
-        drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize, tint);
+        drawDetailCard(ns, labelGroup, job, best, m, tint);
         job.g.appendChild(labelGroup);
         return;
       }
@@ -1960,6 +1969,7 @@
       if (el2.parentNode) el2.parentNode.removeChild(el2);
     });
     state.handleEls = [];
+    if (state.focus) return;
     if (!state.project) return;
     var arrows = state.project.arrows || [];
     var spreadMap = buildSpreadMap();
@@ -2048,9 +2058,7 @@
       if (sa.p) screen.preset = sa.p;
       if (sa.f) screen.format = sa.f;
       if (sa.e) {
-        var known = project.epics.some(function(ep) {
-          return ep.id === sa.e;
-        });
+        var known = allEpicIds[sa.e] === true;
         setEpicList(screen, known ? [sa.e] : String(sa.e).split(/\s+/));
       }
       if (sa.n) screen.notes = sa.n;
@@ -2071,6 +2079,13 @@
       return screen;
     }
     var lines = text.replace(/\r\n?/g, "\n").split("\n");
+    var allEpicIds = {};
+    lines.forEach(function(ln) {
+      var t = ln.trim();
+      if (t.charAt(0) !== "@") return;
+      var parts = splitAttrs(t.slice(1));
+      if (parts.length) allEpicIds[unquote(parts[0])] = true;
+    });
     var lastScreen = null;
     var i = 0;
     while (i < lines.length) {
@@ -2237,6 +2252,7 @@
     var screen = { id, title: "Screen " + createCounter, preset, format: "desktop" };
     state.project.screens.push(screen);
     state.positions[id] = { x, y };
+    if (state.focus) state.focus.savedPositions[id] = { x, y };
     var el2 = renderScreen(screen);
     state.canvasEl.appendChild(el2);
     drawArrows();
@@ -2503,7 +2519,10 @@
     return typeof f === "number" && f > 0 ? f : 1;
   }
   function heightOf(s, heights) {
-    return heights && heights[s.id] ? heights[s.id] : 200;
+    if (heights && heights[s.id]) return heights[s.id];
+    if (s.height) return s.height;
+    if (s.format && FORMATS[s.format]) return FORMATS[s.format].height;
+    return 200;
   }
   function placeGrid(cells, arrows, heights, baseGapX, baseGapY) {
     var gx = (baseGapX === void 0 ? GAP_X : baseGapX) * spacingFactor();
@@ -2543,9 +2562,6 @@
       if (c1 === c22 && Math.abs(r1 - r2) === 1) {
         var ri = Math.min(r1, r2);
         gapY[ri] = Math.max(gapY[ri], room.h);
-      } else if (Math.abs(r1 - r2) === 1) {
-        var ri2 = Math.min(r1, r2);
-        gapY[ri2] = Math.max(gapY[ri2], Math.min(room.h, gy * 2));
       }
     });
     var colX = [], rowY = [];
@@ -2832,7 +2848,7 @@
       });
     });
     if (state.svgEl) {
-      var boxes = state.svgEl.querySelectorAll(".fb-arrow-label-bg");
+      var boxes = state.svgEl.querySelectorAll(".fb-arrow-group:not(.fb-arrow-dimmed) .fb-arrow-label-bg");
       for (var i = 0; i < boxes.length; i++) {
         var bx = parseFloat(boxes[i].getAttribute("x")), by = parseFloat(boxes[i].getAttribute("y"));
         var bw = parseFloat(boxes[i].getAttribute("width")), bh = parseFloat(boxes[i].getAttribute("height"));
@@ -2852,8 +2868,8 @@
     var padding = 40;
     var vx = Math.max(0, bounds.minX - padding);
     var vy = Math.max(0, bounds.minY - padding);
-    var vw = bounds.maxX - bounds.minX + padding * 2;
-    var vh = bounds.maxY - bounds.minY + padding * 2;
+    var vw = bounds.maxX + padding - vx;
+    var vh = bounds.maxY + padding - vy;
     var tmp = document.createElement("div");
     tmp.className = "fb-container";
     tmp.style.cssText = "position:fixed;left:-99999px;top:0;width:" + vw + "px;height:" + vh + "px;overflow:visible;background:transparent;";
@@ -2886,7 +2902,7 @@
     var dpr = typeof window !== "undefined" && window.devicePixelRatio || 1;
     var scale = Math.max(2, Math.min(3, dpr));
     var budget = exportPixelBudget();
-    if (vw * vh * scale * scale > budget) scale = Math.max(1, Math.sqrt(budget / (vw * vh)));
+    if (vw * vh * scale * scale > budget) scale = Math.max(0.25, Math.sqrt(budget / (vw * vh)));
     var MAX_SIDE = 16e3;
     if (vw * scale > MAX_SIDE) scale = MAX_SIDE / vw;
     if (vh * scale > MAX_SIDE) scale = MAX_SIDE / vh;
@@ -3008,7 +3024,7 @@
         refreshScreenEpics(s);
       }
     });
-    if (state.focus && state.focus.id === id) exitFocus();
+    if (state.focus && state.focus.id === id) setFocus("");
     syncToolbar();
     drawArrows();
     if (state.commit) state.commit();
@@ -3034,6 +3050,12 @@
     color.value = epic.color || "#666666";
     color.title = "Color";
     color.addEventListener("input", function() {
+      epic.color = color.value;
+      (state.project.screens || []).forEach(function(s) {
+        if (inEpic(s, epic.id)) refreshScreenEpics(s);
+      });
+    });
+    color.addEventListener("change", function() {
       setEpicColor(epic.id, color.value);
     });
     row.appendChild(color);
@@ -3237,6 +3259,11 @@
       outsideHandler = null;
     }
   }
+  function findItem(value) {
+    var items = pickerEl2.querySelectorAll(".fb-view-item");
+    for (var i = 0; i < items.length; i++) if (items[i].getAttribute("data-view") === value) return items[i];
+    return null;
+  }
   function visibleOptions() {
     var all = pickerEl2.querySelectorAll(".fb-view-item");
     var out = [];
@@ -3261,7 +3288,7 @@
       applyFilter("");
       search.focus();
     }
-    setActive(pickerEl2.querySelector('.fb-view-item[data-view="' + currentValue() + '"]'));
+    setActive(findItem(currentValue()));
     outsideHandler = function(e) {
       if (pickerEl2 && !pickerEl2.contains(e.target)) closeViewMenu();
     };
@@ -3316,7 +3343,7 @@
     e.stopPropagation();
   }
   function dot(color) {
-    return color ? '<span class="fb-view-dot" style="background:' + color + '"></span>' : '<span class="fb-view-dot fb-view-dot-all">' + ICON_LAYERS + "</span>";
+    return color ? '<span class="fb-view-dot" style="background:' + esc(color) + '"></span>' : '<span class="fb-view-dot fb-view-dot-all">' + ICON_LAYERS + "</span>";
   }
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -3489,7 +3516,8 @@
     state.focus = { type: "epic", id: epicId, savedPositions: state.positions, visible };
     var positions = {};
     screens.forEach(function(s) {
-      positions[s.id] = layout[s.id] || state.focus.savedPositions[s.id];
+      var p = layout[s.id] || state.focus.savedPositions[s.id];
+      if (p) positions[s.id] = { x: p.x, y: p.y };
     });
     state.positions = positions;
     screens.forEach(function(s) {
@@ -4125,7 +4153,7 @@
     wrapper.addEventListener("mousedown", function(e) {
       if (state.mode !== "drag") return;
       if (state.creatingArrow) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar")) return;
       if (e.button !== 0) return;
       closeArrowPopup();
       closeScreenPopup();
@@ -4159,7 +4187,7 @@
       if (state.mode !== "select") return;
       if (state.creatingArrow) return;
       if (e.button !== 0) return;
-      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar, .fb-legend")) return;
+      if (e.target.closest(".fb-screen, .fb-arrow-handle, .fb-screen-popup, .fb-arrow-popup, .fb-preset-picker, .fb-ctx-menu, .fb-mode-switch, .fb-toolbar")) return;
       closeArrowPopup();
       closeScreenPopup();
       var additive = e.metaKey || e.ctrlKey || e.shiftKey;
@@ -4245,11 +4273,7 @@
   // src/board.ts
   function cycleLayout() {
     exitFocus();
-    for (var n = 0; n < LAYOUT_STRATEGIES.length; n++) {
-      state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
-      var strat = LAYOUT_STRATEGIES[state.layoutIndex];
-      if (!strat.available || strat.available()) break;
-    }
+    state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
     var heights = {};
     var screens = state.project.screens || [];
     var arrows = state.project.arrows || [];
@@ -4271,7 +4295,6 @@
       delete a.fromSide;
       delete a.toSide;
     });
-    drawArrows();
     freezeArrowSides();
     updateLayoutButton();
     savePositions();
@@ -4280,39 +4303,40 @@
   }
   function adjustSpacing(k) {
     if (!state.project) return;
-    state.spacing = Math.max(0.4, Math.min(3, (state.spacing || 1) * k));
+    var prev = state.spacing || 1;
+    state.spacing = Math.max(0.4, Math.min(3, prev * k));
+    var kk = state.spacing / prev;
+    if (Math.abs(kk - 1) < 1e-6) return;
     var screens = state.project.screens || [];
-    var arrows = state.project.arrows || [];
-    {
-      var origin;
-      if (state.wrapperEl) {
-        var r = state.wrapperEl.getBoundingClientRect();
-        if (r.width && r.height) {
-          origin = { x: (r.width / 2 - state.panX) / state.zoom, y: (r.height / 2 - state.panY) / state.zoom };
-        }
+    var origin;
+    if (state.wrapperEl) {
+      var r = state.wrapperEl.getBoundingClientRect();
+      if (r.width && r.height) {
+        origin = { x: (r.width / 2 - state.panX) / state.zoom, y: (r.height / 2 - state.panY) / state.zoom };
       }
-      state.positions = spreadPositions(state.positions, k, origin);
-      var minX = Infinity, minY = Infinity;
+    }
+    state.positions = spreadPositions(state.positions, kk, origin);
+    var minX = Infinity, minY = Infinity;
+    screens.forEach(function(s) {
+      var p = state.positions[s.id];
+      if (p) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+      }
+    });
+    var shiftX = minX < 40 ? 40 - minX : 0, shiftY = minY < 40 ? 40 - minY : 0;
+    if (shiftX || shiftY) {
       screens.forEach(function(s) {
         var p = state.positions[s.id];
         if (p) {
-          minX = Math.min(minX, p.x);
-          minY = Math.min(minY, p.y);
+          p.x += shiftX;
+          p.y += shiftY;
         }
       });
-      var shiftX = minX < 40 ? 40 - minX : 0, shiftY = minY < 40 ? 40 - minY : 0;
-      if (shiftX || shiftY) {
-        screens.forEach(function(s) {
-          var p = state.positions[s.id];
-          if (p) {
-            p.x += shiftX;
-            p.y += shiftY;
-          }
-        });
-        state.panX -= shiftX * state.zoom;
-        state.panY -= shiftY * state.zoom;
-        applyTransform();
-      }
+      state.panX -= shiftX * state.zoom;
+      state.panY -= shiftY * state.zoom;
+      applyTransform();
+      saveZoom();
     }
     screens.forEach(function(s) {
       var el2 = state.screenEls[s.id];
@@ -4322,12 +4346,6 @@
         el2.style.top = pos.y + "px";
       }
     });
-    arrows.forEach(function(a) {
-      delete a.fromSide;
-      delete a.toSide;
-    });
-    drawArrows();
-    freezeArrowSides();
     if (!state.focus) savePositions();
     drawArrows();
   }
@@ -4365,15 +4383,9 @@
         el2.classList.remove("fb-screen-dimmed", "fb-selected");
       }
     });
-    var checkboxes = state.container.querySelectorAll(".fb-legend-checkbox");
-    for (var i = 0; i < checkboxes.length; i++) {
-      checkboxes[i].checked = true;
-      var item = checkboxes[i].closest(".fb-legend-item");
-      if (item) item.classList.remove("fb-dimmed");
-    }
     updateLayoutButton();
-    drawArrows();
     freezeArrowSides();
+    drawArrows();
     fitToContent();
     if (state.commit) state.commit();
   }

@@ -81,7 +81,7 @@ export function parse(text: string): ParseResult {
     if (sa.e) {
       // e=a, or several epics e="a b". A value that is itself a known epic id is
       // kept whole (legacy ids containing spaces).
-      var known = project.epics.some(function (ep) { return ep.id === sa.e; });
+      var known = allEpicIds[sa.e] === true;
       setEpicList(screen, known ? [sa.e] : String(sa.e).split(/\s+/));
     }
     if (sa.n) screen.notes = sa.n;
@@ -98,6 +98,15 @@ export function parse(text: string): ParseResult {
 
   // Normalize line endings so CRLF input round-trips identically to LF.
   var lines = text.replace(/\r\n?/g, '\n').split('\n');
+
+  // Epic ids declared anywhere in the doc (a screen may be written before its epic).
+  var allEpicIds: Record<string, boolean> = {};
+  lines.forEach(function (ln) {
+    var t = ln.trim();
+    if (t.charAt(0) !== '@') return;
+    var parts = splitAttrs(t.slice(1));
+    if (parts.length) allEpicIds[unquote(parts[0])] = true;
+  });
   var lastScreen: Screen | null = null;
   var i = 0;
 
