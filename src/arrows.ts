@@ -16,8 +16,8 @@ interface AnchorPoint extends Position {
 export function getBestSides(fromEl: HTMLElement, toEl: HTMLElement): SidePair {
   var fromId = fromEl.dataset.screenId;
   var toId = toEl.dataset.screenId;
-  var fp = state.positions[fromId];
-  var tp = state.positions[toId];
+  var fp = state.positions[fromId] || { x: 0, y: 0 };
+  var tp = state.positions[toId] || { x: 0, y: 0 };
   var fw = fromEl.offsetWidth;
   var fh = fromEl.offsetHeight;
   var tw = toEl.offsetWidth;
@@ -43,6 +43,7 @@ export function getAnchor(screenId: string, side: Side): Position {
   if (!el) return { x: 0, y: 0 };
 
   var pos = state.positions[screenId];
+  if (!pos) return { x: 0, y: 0 }; // screen without a position yet (mid-rebuild)
   var w = el.offsetWidth;
   var h = el.offsetHeight;
 

@@ -1303,8 +1303,8 @@
   function getBestSides(fromEl, toEl) {
     var fromId = fromEl.dataset.screenId;
     var toId = toEl.dataset.screenId;
-    var fp = state.positions[fromId];
-    var tp = state.positions[toId];
+    var fp = state.positions[fromId] || { x: 0, y: 0 };
+    var tp = state.positions[toId] || { x: 0, y: 0 };
     var fw = fromEl.offsetWidth;
     var fh = fromEl.offsetHeight;
     var tw = toEl.offsetWidth;
@@ -1325,6 +1325,7 @@
     var el2 = state.screenEls[screenId];
     if (!el2) return { x: 0, y: 0 };
     var pos = state.positions[screenId];
+    if (!pos) return { x: 0, y: 0 };
     var w = el2.offsetWidth;
     var h = el2.offsetHeight;
     var parts = side ? side.split("-") : [];
@@ -4532,7 +4533,9 @@
     initCreateMenu();
     setMode("drag");
     initSync();
+    var thisProject = state.project;
     requestAnimationFrame(function() {
+      if (state.project !== thisProject) return;
       var heights = {};
       screens.forEach(function(s) {
         var el2 = state.screenEls[s.id];

@@ -340,7 +340,11 @@ export function init(config: FlowConfig): void {
   initSync(); // Flow-ML panel ↔ diagram (fills the panel from the current board)
 
   // After DOM layout: measure heights, recompute layout, draw arrows
+  var thisProject = state.project;
   requestAnimationFrame(function () {
+    // init() was called again before this frame (another board in the same
+    // container): this pass belongs to a stale board, drop it.
+    if (state.project !== thisProject) return;
     // Measure actual screen heights
     var heights: Record<string, number> = {};
     screens.forEach(function (s: Screen) {
