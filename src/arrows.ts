@@ -447,7 +447,7 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
     var apiLines: string[] = [], noteLines: string[] = [];
     if (isCard) {
       apiLines = wrapCode(job.arrow.detail, codeSize);
-      if (job.arrow.detailNote) noteLines = wrapLabel(job.arrow.detailNote, noteSize, false);
+      if (job.arrow.note) noteLines = wrapLabel(job.arrow.note, noteSize, false);
       apiLines.forEach(function (l) { w = Math.max(w, measureCode(l, codeSize) + 8); });
       noteLines.forEach(function (l) { w = Math.max(w, measureLabel(l, noteSize, false)); });
       bw = w + 20;

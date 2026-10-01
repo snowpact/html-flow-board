@@ -273,13 +273,14 @@ describe('arrow detail card', () => {
     init({
       container: document.getElementById('app'),
       project: { name: 'ApiTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }, { id: 'C' }],
-        arrows: [{ from: 'A', to: 'B', label: 'go', detail: 'GET /x' }, { from: 'B', to: 'C', label: 'plain' }] },
+        arrows: [{ from: 'A', to: 'B', label: 'go', detail: 'GET /x', note: 'renvoie x' }, { from: 'B', to: 'C', label: 'plain' }] },
       state: { positions: { A: { x: 0, y: 0 }, B: { x: 600, y: 0 }, C: { x: 1200, y: 0 } } },
     });
     drawArrows();
     const cards = document.querySelectorAll('.fb-arrow-card');
     expect(cards.length).toBe(1);
     expect(cards[0].querySelector('.fb-arrow-detail').textContent).toBe('GET /x');
+    expect(cards[0].querySelector('.fb-arrow-note').textContent).toBe('renvoie x');
     expect(document.querySelectorAll('.fb-arrow-label-group').length).toBe(2);
   });
 });
