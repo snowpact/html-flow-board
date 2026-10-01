@@ -936,19 +936,19 @@
       }
     });
     popup.appendChild(labelInput);
-    var apiInput = document.createElement("input");
-    apiInput.type = "text";
-    apiInput.className = "fb-arrow-popup-input fb-arrow-popup-api";
-    apiInput.placeholder = "API call (e.g. POST /v1/update \xB7 UPDATE_CLOTURE)";
-    apiInput.value = arrow.api || "";
-    apiInput.setAttribute("data-testid", "arrow-api");
+    var detailInput = document.createElement("input");
+    detailInput.type = "text";
+    detailInput.className = "fb-arrow-popup-input fb-arrow-popup-detail";
+    detailInput.placeholder = "Detail (e.g. POST /v1/update \xB7 UPDATE_CLOTURE)";
+    detailInput.value = arrow.detail || "";
+    detailInput.setAttribute("data-testid", "arrow-detail");
     var noteInput = document.createElement("input");
     noteInput.type = "text";
-    noteInput.className = "fb-arrow-popup-input fb-arrow-popup-api";
-    noteInput.placeholder = "Data / note";
-    noteInput.value = arrow.apiNote || "";
-    noteInput.setAttribute("data-testid", "arrow-api-note");
-    [apiInput, noteInput].forEach(function(inp) {
+    noteInput.className = "fb-arrow-popup-input fb-arrow-popup-detail";
+    noteInput.placeholder = "Note";
+    noteInput.value = arrow.note || "";
+    noteInput.setAttribute("data-testid", "arrow-note");
+    [detailInput, noteInput].forEach(function(inp) {
       inp.addEventListener("mousedown", function(ev) {
         ev.stopPropagation();
       });
@@ -961,23 +961,23 @@
         if (ev.key === "Escape") closeArrowPopup();
       });
       inp.addEventListener("blur", function() {
-        var api = apiInput.value.trim() || void 0;
+        var detail = detailInput.value.trim() || void 0;
         var note = noteInput.value.trim() || void 0;
-        if (api !== (arrow.api || void 0) || note !== (arrow.apiNote || void 0)) {
-          if (api) arrow.api = api;
-          else delete arrow.api;
-          if (note) arrow.apiNote = note;
-          else delete arrow.apiNote;
+        if (detail !== (arrow.detail || void 0) || note !== (arrow.note || void 0)) {
+          if (detail) arrow.detail = detail;
+          else delete arrow.detail;
+          if (note) arrow.note = note;
+          else delete arrow.note;
           saveArrowMutations();
           drawArrows();
         }
       });
     });
-    var apiWrap = document.createElement("div");
-    apiWrap.className = "fb-arrow-popup-apiwrap";
-    apiWrap.appendChild(apiInput);
-    apiWrap.appendChild(noteInput);
-    popup.appendChild(apiWrap);
+    var detailWrap = document.createElement("div");
+    detailWrap.className = "fb-arrow-popup-detailwrap";
+    detailWrap.appendChild(detailInput);
+    detailWrap.appendChild(noteInput);
+    popup.appendChild(detailWrap);
     var popupSep = document.createElement("div");
     popupSep.className = "fb-arrow-popup-sep";
     popup.appendChild(popupSep);
@@ -1607,7 +1607,7 @@
     });
     return out.slice(0, 4);
   }
-  function drawApiCard(ns, g, job, at, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize) {
+  function drawDetailCard(ns, g, job, at, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize) {
     var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
     var accent = job.kind === "main" ? "#374151" : "#9ca3af";
     var bg = document.createElementNS(ns, "rect");
@@ -1652,7 +1652,7 @@
       chip.setAttribute("fill", "#f1f2f5");
       g.appendChild(chip);
       var t = document.createElementNS(ns, "text");
-      t.setAttribute("class", "fb-arrow-api");
+      t.setAttribute("class", "fb-arrow-detail");
       t.setAttribute("x", String(x0 + 14));
       t.setAttribute("y", String(y + ch * 0.72));
       t.setAttribute("font-size", String(codeSize));
@@ -1697,12 +1697,12 @@
         w = Math.max(w, measureLabel(l, fontSize, bold));
       });
       var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
-      var isCard = !!job.arrow.api;
+      var isCard = !!job.arrow.detail;
       var codeSize = 10, noteSize = 10;
       var apiLines = [], noteLines = [];
       if (isCard) {
-        apiLines = wrapCode(job.arrow.api, codeSize);
-        if (job.arrow.apiNote) noteLines = wrapLabel(job.arrow.apiNote, noteSize, false);
+        apiLines = wrapCode(job.arrow.detail, codeSize);
+        if (job.arrow.detailNote) noteLines = wrapLabel(job.arrow.detailNote, noteSize, false);
         apiLines.forEach(function(l) {
           w = Math.max(w, measureCode(l, codeSize) + 8);
         });
@@ -1729,7 +1729,7 @@
       var labelGroup = document.createElementNS(ns, "g");
       labelGroup.setAttribute("class", "fb-arrow-label-group" + (isCard ? " fb-arrow-card" : "") + (job.dimmed ? " fb-arrow-dimmed" : ""));
       if (isCard) {
-        drawApiCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize);
+        drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize);
         job.g.appendChild(labelGroup);
         return;
       }
@@ -1844,7 +1844,7 @@
       })(idx);
       g.appendChild(hitPath);
       state.svgEl.appendChild(g);
-      if (arrow.label || arrow.api) {
+      if (arrow.label || arrow.detail) {
         labelJobs.push({ g, arrow, kind, start, cp1, cp2, end, dimmed: !!isDimmed });
       }
     });
@@ -2060,8 +2060,8 @@
         if (aattrs.fs) arrow.fromSide = aattrs.fs;
         if (aattrs.ts) arrow.toSide = aattrs.ts;
         if (aattrs.k === "main" || aattrs.k === "nav") arrow.kind = aattrs.k;
-        if (aattrs.api) arrow.api = aattrs.api;
-        if (aattrs.note) arrow.apiNote = aattrs.note;
+        if (aattrs.d) arrow.detail = aattrs.d;
+        if (aattrs.n) arrow.note = aattrs.n;
         project.arrows.push(arrow);
         lastScreen = null;
         i++;
@@ -3391,8 +3391,8 @@
         if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
         if (a.toSide) attrs.push("ts=" + q(a.toSide));
         if (a.kind) attrs.push("k=" + a.kind);
-        if (a.api) attrs.push("api=" + q(a.api));
-        if (a.apiNote) attrs.push("note=" + q(a.apiNote));
+        if (a.detail) attrs.push("d=" + q(a.detail));
+        if (a.note) attrs.push("n=" + q(a.note));
         if (attrs.length) line += ", " + attrs.join(", ");
         out.push(line);
       });

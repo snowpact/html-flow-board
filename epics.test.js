@@ -258,28 +258,28 @@ describe('board: epic picker, focus, multi-epic, arrow kinds', () => {
   });
 });
 
-describe('arrow api card', () => {
-  it('round-trips api + note through Flow-ML', () => {
-    const project = { epics: [], screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', label: 'Clôturer', kind: 'main', api: 'POST /v1/update · UPDATE_CLOTURE', apiNote: 'heure de départ + compte rendu' }] };
+describe('arrow detail card', () => {
+  it('round-trips detail + note through Flow-ML', () => {
+    const project = { epics: [], screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', label: 'Clôturer', kind: 'main', detail: 'POST /v1/update · UPDATE_CLOTURE', note: 'heure de départ + compte rendu' }] };
     const out = serialize(project, {});
-    expect(out).toContain('a -> b, l=Clôturer, k=main, api="POST /v1/update · UPDATE_CLOTURE", note="heure de départ + compte rendu"');
+    expect(out).toContain('a -> b, l=Clôturer, k=main, d="POST /v1/update · UPDATE_CLOTURE", n="heure de départ + compte rendu"');
     expect(parse(out).project.arrows[0]).toEqual(project.arrows[0]);
   });
 
-  it('draws a card (code chip) for an arrow with api, a plain label otherwise', () => {
+  it('draws a card (code chip) for an arrow with detail, a plain label otherwise', () => {
     document.body.innerHTML = '<div id="app"></div>';
     try { window.localStorage.clear(); } catch (e) {}
     state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
     init({
       container: document.getElementById('app'),
       project: { name: 'ApiTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }, { id: 'C' }],
-        arrows: [{ from: 'A', to: 'B', label: 'go', api: 'GET /x' }, { from: 'B', to: 'C', label: 'plain' }] },
+        arrows: [{ from: 'A', to: 'B', label: 'go', detail: 'GET /x' }, { from: 'B', to: 'C', label: 'plain' }] },
       state: { positions: { A: { x: 0, y: 0 }, B: { x: 600, y: 0 }, C: { x: 1200, y: 0 } } },
     });
     drawArrows();
     const cards = document.querySelectorAll('.fb-arrow-card');
     expect(cards.length).toBe(1);
-    expect(cards[0].querySelector('.fb-arrow-api').textContent).toBe('GET /x');
+    expect(cards[0].querySelector('.fb-arrow-detail').textContent).toBe('GET /x');
     expect(document.querySelectorAll('.fb-arrow-label-group').length).toBe(2);
   });
 });

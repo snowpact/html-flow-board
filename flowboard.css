@@ -1525,9 +1525,9 @@
 .fb-epic-dots { display: inline-flex; gap: 4px; margin-left: 8px; flex-shrink: 0; }
 .fb-epic-dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
 
-/* Arrow API card + popup inputs */
+/* Arrow detail card + popup inputs */
 .fb-arrow-popup { flex-wrap: wrap; max-width: 420px; }
-.fb-arrow-popup-apiwrap { display: flex; flex-direction: column; gap: 4px; width: 100%; order: 10; margin-top: 4px; }
-.fb-arrow-popup-api { width: 100%; font-size: 12px; }
-.fb-arrow-api { pointer-events: none; }
+.fb-arrow-popup-detailwrap { display: flex; flex-direction: column; gap: 4px; width: 100%; order: 10; margin-top: 4px; }
+.fb-arrow-popup-detail { width: 100%; font-size: 12px; }
+.fb-arrow-detail { pointer-events: none; }
 .fb-arrow-note { pointer-events: none; }

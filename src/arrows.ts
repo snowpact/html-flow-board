@@ -364,7 +364,7 @@ function wrapCode(text: string, fontSize: number): string[] {
 }
 
 // Card: white box, title, grey code chip lines, muted note. Centered on `at`.
-function drawApiCard(ns: string, g: Element, job: LabelJob, at: Position, bw: number, bh: number,
+function drawDetailCard(ns: string, g: Element, job: LabelJob, at: Position, bw: number, bh: number,
   lines: string[], lineH: number, fontSize: number, bold: boolean,
   apiLines: string[], codeSize: number, noteLines: string[], noteSize: number): void {
   var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
@@ -404,7 +404,7 @@ function drawApiCard(ns: string, g: Element, job: LabelJob, at: Position, bw: nu
     chip.setAttribute('rx', '3'); chip.setAttribute('fill', '#f1f2f5');
     g.appendChild(chip);
     var t = document.createElementNS(ns, 'text');
-    t.setAttribute('class', 'fb-arrow-api');
+    t.setAttribute('class', 'fb-arrow-detail');
     t.setAttribute('x', String(x0 + 14)); t.setAttribute('y', String(y + ch * 0.72));
     t.setAttribute('font-size', String(codeSize)); t.setAttribute('font-family', CODE_FONT); t.setAttribute('fill', '#111827');
     t.textContent = l; g.appendChild(t);
@@ -441,13 +441,13 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
     lines.forEach(function (l) { w = Math.max(w, measureLabel(l, fontSize, bold)); });
     var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
 
-    // API card: title (label) + code line + optional note, in one bordered box.
-    var isCard = !!job.arrow.api;
+    // Detail card: title (label) + code chips + optional note, in one bordered box.
+    var isCard = !!job.arrow.detail;
     var codeSize = 10, noteSize = 10;
     var apiLines: string[] = [], noteLines: string[] = [];
     if (isCard) {
-      apiLines = wrapCode(job.arrow.api, codeSize);
-      if (job.arrow.apiNote) noteLines = wrapLabel(job.arrow.apiNote, noteSize, false);
+      apiLines = wrapCode(job.arrow.detail, codeSize);
+      if (job.arrow.detailNote) noteLines = wrapLabel(job.arrow.detailNote, noteSize, false);
       apiLines.forEach(function (l) { w = Math.max(w, measureCode(l, codeSize) + 8); });
       noteLines.forEach(function (l) { w = Math.max(w, measureLabel(l, noteSize, false)); });
       bw = w + 20;
@@ -472,7 +472,7 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
     labelGroup.setAttribute('class', 'fb-arrow-label-group' + (isCard ? ' fb-arrow-card' : '') + (job.dimmed ? ' fb-arrow-dimmed' : ''));
 
     if (isCard) {
-      drawApiCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize);
+      drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize);
       job.g.appendChild(labelGroup);
       return;
     }
@@ -612,7 +612,7 @@ export function drawArrows(skipHandles?: boolean): void {
     state.svgEl.appendChild(g);
 
     // Label: placed after every path, by priority (see placeLabels)
-    if (arrow.label || arrow.api) {
+    if (arrow.label || arrow.detail) {
       labelJobs.push({ g: g, arrow: arrow, kind: kind, start: start, cp1: cp1, cp2: cp2, end: end, dimmed: !!isDimmed });
     }
   });

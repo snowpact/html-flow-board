@@ -65,20 +65,20 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   });
   popup.appendChild(labelInput);
 
-  // API call (optional): a code line + a note, drawn as a card under the label
-  var apiInput = document.createElement('input');
-  apiInput.type = 'text';
-  apiInput.className = 'fb-arrow-popup-input fb-arrow-popup-api';
-  apiInput.placeholder = 'API call (e.g. POST /v1/update · UPDATE_CLOTURE)';
-  apiInput.value = arrow.api || '';
-  apiInput.setAttribute('data-testid', 'arrow-api');
+  // Detail (optional): a code line + a note, drawn as a card under the label
+  var detailInput = document.createElement('input');
+  detailInput.type = 'text';
+  detailInput.className = 'fb-arrow-popup-input fb-arrow-popup-detail';
+  detailInput.placeholder = 'Detail (e.g. POST /v1/update · UPDATE_CLOTURE)';
+  detailInput.value = arrow.detail || '';
+  detailInput.setAttribute('data-testid', 'arrow-detail');
   var noteInput = document.createElement('input');
   noteInput.type = 'text';
-  noteInput.className = 'fb-arrow-popup-input fb-arrow-popup-api';
-  noteInput.placeholder = 'Data / note';
-  noteInput.value = arrow.apiNote || '';
-  noteInput.setAttribute('data-testid', 'arrow-api-note');
-  [apiInput, noteInput].forEach(function (inp) {
+  noteInput.className = 'fb-arrow-popup-input fb-arrow-popup-detail';
+  noteInput.placeholder = 'Note';
+  noteInput.value = arrow.note || '';
+  noteInput.setAttribute('data-testid', 'arrow-note');
+  [detailInput, noteInput].forEach(function (inp) {
     inp.addEventListener('mousedown', function (ev: MouseEvent) { ev.stopPropagation(); });
     inp.addEventListener('keydown', function (ev: KeyboardEvent) {
       ev.stopPropagation();
@@ -86,21 +86,21 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
       if (ev.key === 'Escape') closeArrowPopup();
     });
     inp.addEventListener('blur', function () {
-      var api = apiInput.value.trim() || undefined;
+      var detail = detailInput.value.trim() || undefined;
       var note = noteInput.value.trim() || undefined;
-      if (api !== (arrow.api || undefined) || note !== (arrow.apiNote || undefined)) {
-        if (api) arrow.api = api; else delete arrow.api;
-        if (note) arrow.apiNote = note; else delete arrow.apiNote;
+      if (detail !== (arrow.detail || undefined) || note !== (arrow.note || undefined)) {
+        if (detail) arrow.detail = detail; else delete arrow.detail;
+        if (note) arrow.note = note; else delete arrow.note;
         saveArrowMutations();
         drawArrows();
       }
     });
   });
-  var apiWrap = document.createElement('div');
-  apiWrap.className = 'fb-arrow-popup-apiwrap';
-  apiWrap.appendChild(apiInput);
-  apiWrap.appendChild(noteInput);
-  popup.appendChild(apiWrap);
+  var detailWrap = document.createElement('div');
+  detailWrap.className = 'fb-arrow-popup-detailwrap';
+  detailWrap.appendChild(detailInput);
+  detailWrap.appendChild(noteInput);
+  popup.appendChild(detailWrap);
 
   // Separator
   var popupSep = document.createElement('div');
