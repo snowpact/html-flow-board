@@ -2697,6 +2697,25 @@
       state.canvasEl.style.backgroundImage = "radial-gradient(circle, " + DOT_COLOR + " " + r + "px, transparent " + r + "px)";
     }
   }
+  function isContentInView() {
+    if (!state.wrapperEl || !state.project) return true;
+    var rect = state.wrapperEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return true;
+    var vx0 = -state.panX / state.zoom, vy0 = -state.panY / state.zoom;
+    var vx1 = vx0 + rect.width / state.zoom, vy1 = vy0 + rect.height / state.zoom;
+    var screens = state.project.screens || [];
+    for (var i = 0; i < screens.length; i++) {
+      var s = screens[i];
+      if (state.hiddenScreens[s.id]) continue;
+      if (state.focus && !state.focus.visible[s.id]) continue;
+      var el2 = state.screenEls[s.id];
+      var pos = state.positions[s.id];
+      if (!el2 || !pos) continue;
+      var x1 = pos.x + el2.offsetWidth, y1 = pos.y + el2.offsetHeight;
+      if (x1 > vx0 && pos.x < vx1 && y1 > vy0 && pos.y < vy1) return true;
+    }
+    return screens.length === 0;
+  }
   function fitToContent() {
     if (!state.wrapperEl || !state.project) return;
     var screens = state.project.screens || [];
@@ -4480,7 +4499,7 @@
           }
         });
       }
-      if (!hasSavedZoom) {
+      if (!hasSavedZoom || !isContentInView()) {
         fitToContent();
       }
       drawArrows();

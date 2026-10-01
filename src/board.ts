@@ -12,7 +12,7 @@ import { renderPanel } from './render/panel';
 import { initModeKeys, setMode } from './interactions/mode';
 import { initPan } from './interactions/pan';
 import { initSelection } from './interactions/selection';
-import { applyTransform, fitToContent } from './interactions/transform';
+import { applyTransform, fitToContent, isContentInView } from './interactions/transform';
 import { LAYOUT_STRATEGIES, autoLayout, spreadPositions } from './layout';
 import { renderModeSwitch } from './render/mode-switch';
 import { renderScreen } from './render/screen';
@@ -361,7 +361,9 @@ export function init(config: FlowConfig): void {
       });
     }
 
-    if (!hasSavedZoom) {
+    // Fit when nothing was saved — and also when the saved view shows no screen
+    // at all (a stale pan would leave the user staring at an empty canvas).
+    if (!hasSavedZoom || !isContentInView()) {
       fitToContent();
     }
 

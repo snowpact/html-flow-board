@@ -4,6 +4,7 @@ import { serialize } from './src/flowml/serialize';
 import { autoLayout, layoutArrows, layoutByEpics, layoutGrid, spreadPositions, LAYOUT_STRATEGIES } from './src/layout';
 import { adjustSpacing } from './src/board';
 import { collectExportBounds, isScreenShown } from './src/export';
+import { isContentInView } from './src/interactions/transform';
 import { GAP_X, GAP_Y } from './src/core/constants';
 import { init } from './src/board';
 import { state, screenEpics, inEpic } from './src/core/state';
@@ -380,5 +381,22 @@ describe('true grid, spacing, export scope', () => {
     const xs = ['A', 'B'].map((id) => state.positions[id].x + state.screenEls[id].offsetWidth);
     expect(focused.maxX).toBeLessThanOrEqual(Math.max.apply(null, xs) + 1);
     exitFocus();
+  });
+});
+
+describe('stale saved view', () => {
+  it('isContentInView is false when the viewport shows no screen, true otherwise', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'ViewTest', epics: [], screens: [{ id: 'A' }], arrows: [] },
+      state: { positions: { A: { x: 100, y: 100 } }, zoom: 1, panX: 0, panY: 0 } });
+    // jsdom has no layout: stub the wrapper size and the screen size.
+    state.wrapperEl.getBoundingClientRect = () => ({ width: 1000, height: 800, left: 0, top: 0, right: 1000, bottom: 800 });
+    Object.defineProperty(state.screenEls.A, 'offsetWidth', { value: 260 });
+    Object.defineProperty(state.screenEls.A, 'offsetHeight', { value: 480 });
+    expect(isContentInView()).toBe(true);
+    state.panX = -5000; state.panY = -5000; // looking at an empty area
+    expect(isContentInView()).toBe(false);
   });
 });

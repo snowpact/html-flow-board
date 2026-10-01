@@ -39,6 +39,30 @@ export function applyTransform(): void {
   }
 }
 
+// Does the current viewport (zoom + pan) show at least part of a visible screen?
+// False when a saved pan points at an empty area (e.g. the board was closed in an
+// epic focus whose temporary layout sat elsewhere on the canvas).
+export function isContentInView(): boolean {
+  if (!state.wrapperEl || !state.project) return true;
+  var rect = state.wrapperEl.getBoundingClientRect();
+  if (!rect.width || !rect.height) return true; // not laid out yet (tests, hidden tab)
+  // Viewport in canvas coordinates.
+  var vx0 = -state.panX / state.zoom, vy0 = -state.panY / state.zoom;
+  var vx1 = vx0 + rect.width / state.zoom, vy1 = vy0 + rect.height / state.zoom;
+  var screens = state.project.screens || [];
+  for (var i = 0; i < screens.length; i++) {
+    var s = screens[i];
+    if (state.hiddenScreens[s.id]) continue;
+    if (state.focus && !state.focus.visible[s.id]) continue;
+    var el = state.screenEls[s.id];
+    var pos = state.positions[s.id];
+    if (!el || !pos) continue;
+    var x1 = pos.x + el.offsetWidth, y1 = pos.y + el.offsetHeight;
+    if (x1 > vx0 && pos.x < vx1 && y1 > vy0 && pos.y < vy1) return true;
+  }
+  return screens.length === 0;
+}
+
 // -- Fit to content --
 export function fitToContent(): void {
   if (!state.wrapperEl || !state.project) return;
