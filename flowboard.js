@@ -1630,6 +1630,7 @@
     title.setAttribute("font-weight", bold ? "700" : "600");
     title.setAttribute("font-family", LABEL_FONT_FAMILY);
     title.setAttribute("text-anchor", "start");
+    title.style.textAnchor = "start";
     title.setAttribute("x", String(x0 + 10));
     lines.forEach(function(l, i) {
       var ts = document.createElementNS(ns, "tspan");

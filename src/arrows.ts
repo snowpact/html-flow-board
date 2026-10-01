@@ -386,6 +386,7 @@ function drawApiCard(ns: string, g: Element, job: LabelJob, at: Position, bw: nu
   title.setAttribute('font-weight', bold ? '700' : '600');
   title.setAttribute('font-family', LABEL_FONT_FAMILY);
   title.setAttribute('text-anchor', 'start');
+  (title as SVGElement).style.textAnchor = 'start'; // the .fb-arrow-label CSS centers by default
   title.setAttribute('x', String(x0 + 10));
   lines.forEach(function (l, i) {
     var ts = document.createElementNS(ns, 'tspan');
