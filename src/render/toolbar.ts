@@ -248,10 +248,6 @@ export function renderToolbar(): HTMLElement {
     state.showNotes = on;
     toggleNotesVisibility();
   }));
-  switches.appendChild(makeSwitch('Nav', state.showNav !== false, 'Show navigation arrows (menus, back links)', 'toggle-nav', function (on) {
-    state.showNav = on;
-    drawArrows();
-  }));
   right.appendChild(switches);
 
   var zoom = el('div', 'fb-seg');

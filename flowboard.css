@@ -1510,12 +1510,6 @@ body:has(> .fb-fullpage) { margin: 0; padding: 0; overflow: hidden; }
 }
 
 /* ── Arrow kinds (main journey / nav secondary) ───────────────────────── */
-.fb-arrow-nav .fb-arrow-label-group { opacity: 0; transition: opacity .12s; }
-.fb-arrow-nav:hover .fb-arrow-label-group,
-.fb-arrow-nav.fb-arrow-hl .fb-arrow-label-group,
-/* In an epic focus the board is small and every call must be readable: nav
-   labels stay visible (and still dim with the others on hover). */
-.fb-arrows-layer.fb-focus-on .fb-arrow-nav .fb-arrow-label-group { opacity: 1; }
 .fb-arrow-group { transition: opacity .12s; }
 .fb-arrows-layer.fb-hl-active .fb-arrow-group { opacity: .12; }
 .fb-arrows-layer.fb-hl-active .fb-arrow-group.fb-arrow-hl { opacity: 1; }

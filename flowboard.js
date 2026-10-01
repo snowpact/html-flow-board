@@ -1502,7 +1502,6 @@
   var KIND_RANK = { nav: 0, default: 1, main: 2 };
   function isArrowShown(arrow) {
     if (state.focus && (!state.focus.visible[arrow.from] || !state.focus.visible[arrow.to])) return false;
-    if (arrow.kind === "nav" && state.showNav === false) return false;
     return true;
   }
   var LABEL_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -1791,7 +1790,7 @@
             if (score === 0) break outer;
           }
         }
-      if (kind !== "nav" || state.focus) placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
+      placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
       var labelGroup = document.createElementNS(ns, "g");
       labelGroup.setAttribute("class", "fb-arrow-label-group" + (isCard ? " fb-arrow-card" : "") + (job.dimmed ? " fb-arrow-dimmed" : ""));
       if (isCard) {
@@ -1858,7 +1857,6 @@
     state.arrowGroupsByScreen = byScreen;
     hlGroups = [];
     var labelJobs = [];
-    state.svgEl.classList.toggle("fb-focus-on", !!state.focus);
     var order = arrows.map(function(_a, i) {
       return i;
     });
@@ -3155,10 +3153,6 @@
       state.showNotes = on;
       toggleNotesVisibility();
     }));
-    switches.appendChild(makeSwitch("Nav", state.showNav !== false, "Show navigation arrows (menus, back links)", "toggle-nav", function(on) {
-      state.showNav = on;
-      drawArrows();
-    }));
     right.appendChild(switches);
     var zoom = el("div", "fb-seg");
     zoom.appendChild(iconBtn("fb-toolbar-btn", ICON_MINUS, "Zoom out", function() {
@@ -4289,23 +4283,7 @@
     state.spacing = Math.max(0.4, Math.min(3, (state.spacing || 1) * k));
     var screens = state.project.screens || [];
     var arrows = state.project.arrows || [];
-    if (state.focus) {
-      var members = screens.filter(function(s) {
-        return state.focus.visible[s.id];
-      });
-      var heights = {};
-      members.forEach(function(s) {
-        var el2 = state.screenEls[s.id];
-        if (el2) heights[s.id] = el2.offsetHeight;
-      });
-      var inner = arrows.filter(function(a) {
-        return state.focus.visible[a.from] && state.focus.visible[a.to];
-      });
-      var layout = autoLayout(members, inner, heights);
-      members.forEach(function(s) {
-        state.positions[s.id] = layout[s.id];
-      });
-    } else {
+    {
       var origin;
       if (state.wrapperEl) {
         var r = state.wrapperEl.getBoundingClientRect();
@@ -4352,7 +4330,6 @@
     freezeArrowSides();
     if (!state.focus) savePositions();
     drawArrows();
-    if (state.focus) fitToContent();
   }
   function doReset() {
     if (!confirm("Reset to the default layout?")) return;
@@ -4424,7 +4401,6 @@
       }
     }
     state.showNotes = true;
-    state.showNav = true;
     state.spacing = 1;
     state.focus = null;
     state.highlightScreen = null;

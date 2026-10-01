@@ -174,16 +174,6 @@ describe('board: epic picker, focus, multi-epic, arrow kinds', () => {
     expect(loadDoc()).toContain(':A, t=A, e=e1, x=10, y=10');
   });
 
-  it('marks the arrows layer while focused so nav labels stay visible', () => {
-    drawArrows();
-    expect(state.svgEl.classList.contains('fb-focus-on')).toBe(false);
-    setFocus('e1');
-    expect(state.svgEl.classList.contains('fb-focus-on')).toBe(true);
-    exitFocus();
-    drawArrows();
-    expect(state.svgEl.classList.contains('fb-focus-on')).toBe(false);
-  });
-
   it('only draws arrows between visible screens while focused', () => {
     setFocus('e2');
     expect(document.querySelectorAll('.fb-arrow-group').length).toBe(0); // C alone
@@ -243,14 +233,11 @@ describe('board: epic picker, focus, multi-epic, arrow kinds', () => {
     expect(state.screenEls.C.querySelectorAll('.fb-epic-dot').length).toBe(0);
   });
 
-  it('draws kind classes and hides nav arrows when toggled off', () => {
+  it('draws kind classes; nav arrows are always drawn (no toggle)', () => {
     drawArrows();
     expect(document.querySelectorAll('.fb-arrow-main').length).toBe(1);
     expect(document.querySelectorAll('.fb-arrow-nav').length).toBe(1);
-    const toggle = document.querySelector('[data-testid="toggle-nav"]');
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event('change'));
-    expect(document.querySelectorAll('.fb-arrow-nav').length).toBe(0);
+    expect(document.querySelector('[data-testid="toggle-nav"]')).toBeNull();
   });
 
   it('hover emphasis only marks the hovered screen arrows', () => {

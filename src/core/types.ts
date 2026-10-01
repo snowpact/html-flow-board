@@ -46,7 +46,8 @@ export interface Arrow {
   label?: string;
   dashed?: boolean;
   // Visual weight. 'main' = the user journey (a tunnel step, drawn bold);
-  // 'nav' = secondary navigation (menus, back links: drawn thin, label on hover).
+  // 'nav' = secondary navigation (menus, back links: drawn thin, ignored by the
+  // auto-layout).
   // Absent ⇒ the classic default style.
   kind?: ArrowKind;
   // Optional technical detail behind this action (an API call, an event, a
@@ -115,7 +116,6 @@ export interface FlowState {
   layoutIndex: number;
   screenPopup: any;
   panDrag: any;
-  showNav?: boolean;       // draw 'nav' arrows (toolbar toggle)
   focus?: FocusState | null; // active epic focus view, or null
   spacing?: number;          // gap factor for the auto-layouts (toolbar − / +), default 1
   // Escape hatch for the various ad-hoc fields touched across modules.

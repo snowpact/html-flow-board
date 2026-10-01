@@ -221,11 +221,9 @@ var KIND_STYLE: Record<string, { color: string; width: string; marker: string }>
 // Draw order: nav under default under main, so the journey always stays on top.
 var KIND_RANK: Record<string, number> = { nav: 0, default: 1, main: 2 };
 
-// Is this arrow drawn at all? Hidden when an end is out of the current focus, or
-// when it is a nav arrow and nav arrows are toggled off.
+// Is this arrow drawn at all? Hidden when an end is out of the current focus.
 export function isArrowShown(arrow: Arrow): boolean {
   if (state.focus && (!state.focus.visible[arrow.from] || !state.focus.visible[arrow.to])) return false;
-  if (arrow.kind === 'nav' && state.showNav === false) return false;
   return true;
 }
 
@@ -513,9 +511,7 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
         if (score === 0) break outer;
       }
     }
-    // Nav labels only show on hover: they don't reserve room from the others —
-    // except in an epic focus, where they are always visible.
-    if (kind !== 'nav' || state.focus) placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
+    placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
 
     var labelGroup = document.createElementNS(ns, 'g');
     labelGroup.setAttribute('class', 'fb-arrow-label-group' + (isCard ? ' fb-arrow-card' : '') + (job.dimmed ? ' fb-arrow-dimmed' : ''));
@@ -589,8 +585,6 @@ export function drawArrows(skipHandles?: boolean): void {
   hlGroups = [];
 
   var labelJobs: LabelJob[] = [];
-
-  state.svgEl.classList.toggle('fb-focus-on', !!state.focus);
 
   var order = arrows.map(function (_a: Arrow, i: number) { return i; });
   order.sort(function (a: number, b: number) {

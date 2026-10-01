@@ -67,16 +67,9 @@ export function adjustSpacing(k: number): void {
   state.spacing = Math.max(0.4, Math.min(3, (state.spacing || 1) * k));
   var screens = state.project.screens || [];
   var arrows = state.project.arrows || [];
-  if (state.focus) {
-    // In a focus view, re-run the focus layout with the new factor.
-    var members = screens.filter(function (s: Screen) { return state.focus.visible[s.id]; });
-    var heights: Record<string, number> = {};
-    members.forEach(function (s: Screen) { var el = state.screenEls[s.id]; if (el) heights[s.id] = el.offsetHeight; });
-    var inner = arrows.filter(function (a) { return state.focus.visible[a.from] && state.focus.visible[a.to]; });
-    var layout = autoLayout(members, inner, heights);
-    members.forEach(function (s: Screen) { state.positions[s.id] = layout[s.id]; });
-  } else {
-    // Scale around the point under the viewport center: the view does not jump.
+  {
+    // Scale the CURRENT arrangement (auto, hand-made, or a focus view) around the
+    // point under the viewport center, so the view does not jump.
     var origin: Position | undefined;
     if (state.wrapperEl) {
       var r = state.wrapperEl.getBoundingClientRect();
@@ -106,11 +99,8 @@ export function adjustSpacing(k: number): void {
   arrows.forEach(function (a) { delete a.fromSide; delete a.toSide; });
   drawArrows();
   freezeArrowSides();
-  if (!state.focus) savePositions();
+  if (!state.focus) savePositions(); // a focus view is temporary: not persisted
   drawArrows();
-  // Keep zoom and pan: the change is visible in place. (A focus view is re-laid
-  // out from scratch, so it is refitted.)
-  if (state.focus) fitToContent();
 }
 
 export function doReset(): void {
@@ -198,7 +188,6 @@ export function init(config: FlowConfig): void {
   }
 
   state.showNotes = true;
-  state.showNav = true;
   state.spacing = 1;
   state.focus = null;
   state.highlightScreen = null;
