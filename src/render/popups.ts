@@ -65,6 +65,43 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   });
   popup.appendChild(labelInput);
 
+  // API call (optional): a code line + a note, drawn as a card under the label
+  var apiInput = document.createElement('input');
+  apiInput.type = 'text';
+  apiInput.className = 'fb-arrow-popup-input fb-arrow-popup-api';
+  apiInput.placeholder = 'API call (e.g. POST /v1/update · UPDATE_CLOTURE)';
+  apiInput.value = arrow.api || '';
+  apiInput.setAttribute('data-testid', 'arrow-api');
+  var noteInput = document.createElement('input');
+  noteInput.type = 'text';
+  noteInput.className = 'fb-arrow-popup-input fb-arrow-popup-api';
+  noteInput.placeholder = 'Data / note';
+  noteInput.value = arrow.apiNote || '';
+  noteInput.setAttribute('data-testid', 'arrow-api-note');
+  [apiInput, noteInput].forEach(function (inp) {
+    inp.addEventListener('mousedown', function (ev: MouseEvent) { ev.stopPropagation(); });
+    inp.addEventListener('keydown', function (ev: KeyboardEvent) {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { inp.blur(); closeArrowPopup(); }
+      if (ev.key === 'Escape') closeArrowPopup();
+    });
+    inp.addEventListener('blur', function () {
+      var api = apiInput.value.trim() || undefined;
+      var note = noteInput.value.trim() || undefined;
+      if (api !== (arrow.api || undefined) || note !== (arrow.apiNote || undefined)) {
+        if (api) arrow.api = api; else delete arrow.api;
+        if (note) arrow.apiNote = note; else delete arrow.apiNote;
+        saveArrowMutations();
+        drawArrows();
+      }
+    });
+  });
+  var apiWrap = document.createElement('div');
+  apiWrap.className = 'fb-arrow-popup-apiwrap';
+  apiWrap.appendChild(apiInput);
+  apiWrap.appendChild(noteInput);
+  popup.appendChild(apiWrap);
+
   // Separator
   var popupSep = document.createElement('div');
   popupSep.className = 'fb-arrow-popup-sep';

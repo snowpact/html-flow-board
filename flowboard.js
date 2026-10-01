@@ -936,6 +936,48 @@
       }
     });
     popup.appendChild(labelInput);
+    var apiInput = document.createElement("input");
+    apiInput.type = "text";
+    apiInput.className = "fb-arrow-popup-input fb-arrow-popup-api";
+    apiInput.placeholder = "API call (e.g. POST /v1/update \xB7 UPDATE_CLOTURE)";
+    apiInput.value = arrow.api || "";
+    apiInput.setAttribute("data-testid", "arrow-api");
+    var noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.className = "fb-arrow-popup-input fb-arrow-popup-api";
+    noteInput.placeholder = "Data / note";
+    noteInput.value = arrow.apiNote || "";
+    noteInput.setAttribute("data-testid", "arrow-api-note");
+    [apiInput, noteInput].forEach(function(inp) {
+      inp.addEventListener("mousedown", function(ev) {
+        ev.stopPropagation();
+      });
+      inp.addEventListener("keydown", function(ev) {
+        ev.stopPropagation();
+        if (ev.key === "Enter") {
+          inp.blur();
+          closeArrowPopup();
+        }
+        if (ev.key === "Escape") closeArrowPopup();
+      });
+      inp.addEventListener("blur", function() {
+        var api = apiInput.value.trim() || void 0;
+        var note = noteInput.value.trim() || void 0;
+        if (api !== (arrow.api || void 0) || note !== (arrow.apiNote || void 0)) {
+          if (api) arrow.api = api;
+          else delete arrow.api;
+          if (note) arrow.apiNote = note;
+          else delete arrow.apiNote;
+          saveArrowMutations();
+          drawArrows();
+        }
+      });
+    });
+    var apiWrap = document.createElement("div");
+    apiWrap.className = "fb-arrow-popup-apiwrap";
+    apiWrap.appendChild(apiInput);
+    apiWrap.appendChild(noteInput);
+    popup.appendChild(apiWrap);
     var popupSep = document.createElement("div");
     popupSep.className = "fb-arrow-popup-sep";
     popup.appendChild(popupSep);
@@ -1525,6 +1567,117 @@
     return out;
   }
   var KIND_PRIORITY = { main: 0, default: 1, nav: 2 };
+  var CODE_FONT = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  var codeWidthCache = {};
+  function measureCode(text, fontSize) {
+    var key = fontSize + "|" + text;
+    if (codeWidthCache[key] !== void 0) return codeWidthCache[key];
+    var w;
+    if (measureCtx === void 0) {
+      try {
+        measureCtx = document.createElement("canvas").getContext("2d");
+      } catch (e) {
+        measureCtx = null;
+      }
+    }
+    if (measureCtx) {
+      measureCtx.font = fontSize + "px " + CODE_FONT;
+      w = measureCtx.measureText(text).width;
+    } else w = text.length * fontSize * 0.6;
+    codeWidthCache[key] = w;
+    return w;
+  }
+  function wrapCode(text, fontSize) {
+    var parts = String(text).split(/\s·\s/);
+    var out = [];
+    parts.forEach(function(p) {
+      if (measureCode(p, fontSize) <= LABEL_MAX_W + 40) {
+        out.push(p);
+        return;
+      }
+      var words = p.split(/\s+/), cur = "";
+      words.forEach(function(wd) {
+        var next = cur ? cur + " " + wd : wd;
+        if (cur && measureCode(next, fontSize) > LABEL_MAX_W + 40) {
+          out.push(cur);
+          cur = wd;
+        } else cur = next;
+      });
+      if (cur) out.push(cur);
+    });
+    return out.slice(0, 4);
+  }
+  function drawApiCard(ns, g, job, at, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize) {
+    var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
+    var accent = job.kind === "main" ? "#374151" : "#9ca3af";
+    var bg = document.createElementNS(ns, "rect");
+    bg.setAttribute("x", String(x0));
+    bg.setAttribute("y", String(y0));
+    bg.setAttribute("width", String(bw));
+    bg.setAttribute("height", String(bh));
+    bg.setAttribute("rx", "6");
+    bg.setAttribute("ry", "6");
+    bg.setAttribute("class", "fb-arrow-label-bg");
+    bg.setAttribute("fill", "#ffffff");
+    bg.setAttribute("stroke", accent);
+    bg.setAttribute("stroke-width", "1");
+    g.appendChild(bg);
+    var y = y0 + 8;
+    var title = document.createElementNS(ns, "text");
+    title.setAttribute("class", "fb-arrow-label");
+    title.setAttribute("fill", "#1f2937");
+    title.setAttribute("font-size", String(fontSize));
+    title.setAttribute("font-weight", bold ? "700" : "600");
+    title.setAttribute("font-family", LABEL_FONT_FAMILY);
+    title.setAttribute("text-anchor", "start");
+    title.setAttribute("x", String(x0 + 10));
+    lines.forEach(function(l, i) {
+      var ts = document.createElementNS(ns, "tspan");
+      ts.setAttribute("x", String(x0 + 10));
+      ts.setAttribute("y", String(y + i * lineH + lineH * 0.78));
+      ts.textContent = l;
+      title.appendChild(ts);
+    });
+    g.appendChild(title);
+    y += lines.length * lineH + 4;
+    apiLines.forEach(function(l) {
+      var cw = measureCode(l, codeSize) + 8, ch = codeSize + 5;
+      var chip = document.createElementNS(ns, "rect");
+      chip.setAttribute("x", String(x0 + 10));
+      chip.setAttribute("y", String(y));
+      chip.setAttribute("width", String(cw));
+      chip.setAttribute("height", String(ch - 1));
+      chip.setAttribute("rx", "3");
+      chip.setAttribute("fill", "#f1f2f5");
+      g.appendChild(chip);
+      var t = document.createElementNS(ns, "text");
+      t.setAttribute("class", "fb-arrow-api");
+      t.setAttribute("x", String(x0 + 14));
+      t.setAttribute("y", String(y + ch * 0.72));
+      t.setAttribute("font-size", String(codeSize));
+      t.setAttribute("font-family", CODE_FONT);
+      t.setAttribute("fill", "#111827");
+      t.textContent = l;
+      g.appendChild(t);
+      y += ch;
+    });
+    if (noteLines.length) {
+      y += 3;
+      var n = document.createElementNS(ns, "text");
+      n.setAttribute("class", "fb-arrow-note");
+      n.setAttribute("font-size", String(noteSize));
+      n.setAttribute("font-family", LABEL_FONT_FAMILY);
+      n.setAttribute("fill", "#6b7280");
+      noteLines.forEach(function(l, i) {
+        var ts = document.createElementNS(ns, "tspan");
+        ts.setAttribute("x", String(x0 + 10));
+        ts.setAttribute("y", String(y + i * (noteSize + 3) + noteSize * 0.8));
+        ts.textContent = l;
+        n.appendChild(ts);
+      });
+      g.appendChild(n);
+    }
+  }
   function placeLabels(ns, jobs) {
     if (!jobs.length) return;
     var screens = screenBoxes();
@@ -1537,12 +1690,27 @@
       var bold = kind === "main";
       var fontSize = kind === "nav" ? 10 : 11;
       var lineH = Math.round(fontSize * 1.3);
-      var lines = wrapLabel(job.arrow.label, fontSize, bold);
+      var lines = job.arrow.label ? wrapLabel(job.arrow.label, fontSize, bold) : [];
       var w = 0;
       lines.forEach(function(l) {
         w = Math.max(w, measureLabel(l, fontSize, bold));
       });
-      var bw = w + 10, bh = lines.length * lineH + 6;
+      var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
+      var isCard = !!job.arrow.api;
+      var codeSize = 10, noteSize = 10;
+      var apiLines = [], noteLines = [];
+      if (isCard) {
+        apiLines = wrapCode(job.arrow.api, codeSize);
+        if (job.arrow.apiNote) noteLines = wrapLabel(job.arrow.apiNote, noteSize, false);
+        apiLines.forEach(function(l) {
+          w = Math.max(w, measureCode(l, codeSize) + 8);
+        });
+        noteLines.forEach(function(l) {
+          w = Math.max(w, measureLabel(l, noteSize, false));
+        });
+        bw = w + 20;
+        bh = 8 + lines.length * lineH + 4 + apiLines.length * (codeSize + 5) + (noteLines.length ? 3 + noteLines.length * (noteSize + 3) : 0) + 8;
+      }
       var best = null, bestScore = Infinity;
       for (var k = 0; k < LABEL_TS.length; k++) {
         var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, LABEL_TS[k]);
@@ -1558,7 +1726,12 @@
       }
       if (kind !== "nav") placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
       var labelGroup = document.createElementNS(ns, "g");
-      labelGroup.setAttribute("class", "fb-arrow-label-group" + (job.dimmed ? " fb-arrow-dimmed" : ""));
+      labelGroup.setAttribute("class", "fb-arrow-label-group" + (isCard ? " fb-arrow-card" : "") + (job.dimmed ? " fb-arrow-dimmed" : ""));
+      if (isCard) {
+        drawApiCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize);
+        job.g.appendChild(labelGroup);
+        return;
+      }
       var bgRect = document.createElementNS(ns, "rect");
       bgRect.setAttribute("x", String(best.x - bw / 2));
       bgRect.setAttribute("y", String(best.y - bh / 2));
@@ -1670,7 +1843,7 @@
       })(idx);
       g.appendChild(hitPath);
       state.svgEl.appendChild(g);
-      if (arrow.label) {
+      if (arrow.label || arrow.api) {
         labelJobs.push({ g, arrow, kind, start, cp1, cp2, end, dimmed: !!isDimmed });
       }
     });
@@ -1886,6 +2059,8 @@
         if (aattrs.fs) arrow.fromSide = aattrs.fs;
         if (aattrs.ts) arrow.toSide = aattrs.ts;
         if (aattrs.k === "main" || aattrs.k === "nav") arrow.kind = aattrs.k;
+        if (aattrs.api) arrow.api = aattrs.api;
+        if (aattrs.note) arrow.apiNote = aattrs.note;
         project.arrows.push(arrow);
         lastScreen = null;
         i++;
@@ -3215,6 +3390,8 @@
         if (a.fromSide) attrs.push("fs=" + q(a.fromSide));
         if (a.toSide) attrs.push("ts=" + q(a.toSide));
         if (a.kind) attrs.push("k=" + a.kind);
+        if (a.api) attrs.push("api=" + q(a.api));
+        if (a.apiNote) attrs.push("note=" + q(a.apiNote));
         if (attrs.length) line += ", " + attrs.join(", ");
         out.push(line);
       });

@@ -49,6 +49,10 @@ export interface Arrow {
   // 'nav' = secondary navigation (menus, back links: drawn thin, label on hover).
   // Absent ⇒ the classic default style.
   kind?: ArrowKind;
+  // Optional API call behind this action. When set, the label is drawn as a
+  // card: label (title) + a code line (`api`) + an optional detail line.
+  api?: string;      // e.g. 'POST /v1/update · UPDATE_CLOTURE'
+  apiNote?: string;  // e.g. 'heure de départ + compte rendu'
   [k: string]: any;
 }
 

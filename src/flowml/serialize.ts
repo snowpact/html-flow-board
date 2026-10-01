@@ -97,6 +97,8 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
       if (a.fromSide) attrs.push('fs=' + q(a.fromSide));
       if (a.toSide) attrs.push('ts=' + q(a.toSide));
       if (a.kind) attrs.push('k=' + a.kind);
+      if (a.api) attrs.push('api=' + q(a.api));
+      if (a.apiNote) attrs.push('note=' + q(a.apiNote));
       if (attrs.length) line += ', ' + attrs.join(', ');
       out.push(line);
     });

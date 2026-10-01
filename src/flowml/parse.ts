@@ -160,6 +160,8 @@ export function parse(text: string): ParseResult {
       if (aattrs.fs) arrow.fromSide = aattrs.fs;
       if (aattrs.ts) arrow.toSide = aattrs.ts;
       if (aattrs.k === 'main' || aattrs.k === 'nav') arrow.kind = aattrs.k;
+      if (aattrs.api) arrow.api = aattrs.api;
+      if (aattrs.note) arrow.apiNote = aattrs.note;
       project.arrows.push(arrow);
       lastScreen = null;
       i++; continue;
