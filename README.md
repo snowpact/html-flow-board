@@ -60,7 +60,7 @@ Download `flowboard.js` (or `flowboard.min.js`) and `flowboard.css` and include 
 <link rel="stylesheet" href="flowboard.css">
 <script src="flowboard.js"></script>
 
-<div id="app" style="width:100vw;height:100vh"></div>
+<div id="app"></div>
 
 <script>
 FlowBoard.init({

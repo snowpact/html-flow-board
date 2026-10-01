@@ -246,6 +246,10 @@ export function init(config: FlowConfig): void {
   }
 
   // Build root
+  // Host = direct child of <body> → treat as a full-page board (zero body margin,
+  // no page scrollbars). An embedded host (inside an app layout) is left alone.
+  if (containerEl.parentElement === document.body) containerEl.classList.add('fb-fullpage');
+
   var root = document.createElement('div');
   root.className = 'fb-container';
   containerEl.innerHTML = '';

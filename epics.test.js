@@ -427,3 +427,20 @@ describe('spreadPositions around an origin', () => {
     expect(pos.b.x).toBe(1500);
   });
 });
+
+describe('full-page host', () => {
+  it('marks a body-level host as full page (no body margin / scrollbars)', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
+    init({ container: document.getElementById('app'), project: { name: 'FullPage', epics: [], screens: [{ id: 'A' }], arrows: [] } });
+    expect(document.getElementById('app').classList.contains('fb-fullpage')).toBe(true);
+  });
+  it('leaves an embedded host alone', () => {
+    document.body.innerHTML = '<div id="layout"><div id="app"></div></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
+    init({ container: document.getElementById('app'), project: { name: 'Embedded', epics: [], screens: [{ id: 'A' }], arrows: [] } });
+    expect(document.getElementById('app').classList.contains('fb-fullpage')).toBe(false);
+  });
+});

@@ -36,7 +36,7 @@ Always produce a **single self-contained HTML file**. Pin a released version whe
   <script src="https://cdn.jsdelivr.net/gh/snowpact/html-flow-board@main/flowboard.js"></script>
 </head>
 <body>
-<div id="app" style="width:100vw;height:100vh"></div>
+<div id="app"></div>
 <script>
 FlowBoard.init({
   container: '#app',
@@ -247,6 +247,6 @@ The generated `<script>` is real JavaScript — a single bad quote blanks the wh
 - Keep wireframes low-fi — `fb-img` placeholders, no real images.
 - Screen ids unique + kebab-case; every screen's `epic` / `epics` must exist in `epics`.
 - Epic ids kebab-case (no spaces: `e="a b"` means two epics).
-- Container must be `#app` with `width:100vw;height:100vh`.
+- Container must be `#app`, a direct child of `<body>` (FlowBoard then sizes it to the viewport with no page scrollbars).
 - Prefer `preset` skeletons; use inline styles for custom layout, `fb-*` classes for components.
 - Quote human text with backticks (see [Quoting](#quoting)) — this is the #1 cause of a blank page.

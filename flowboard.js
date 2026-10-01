@@ -4433,6 +4433,7 @@
       console.error("FlowBoard.init: container not found");
       return;
     }
+    if (containerEl.parentElement === document.body) containerEl.classList.add("fb-fullpage");
     var root = document.createElement("div");
     root.className = "fb-container";
     containerEl.innerHTML = "";
