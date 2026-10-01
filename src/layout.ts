@@ -1,6 +1,7 @@
 import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y } from './core/constants';
 import { screenWidth, state } from './core/state';
 import { Arrow, Position, Screen } from './core/types';
+import { labelMetrics } from './arrows';
 
 export function bfsDepth(screens: Screen[], arrows: Arrow[]): Record<string, number> {
   var children: Record<string, string[]> = {};
@@ -94,6 +95,34 @@ export var MAX_PER_COLUMN = 6;
 // Max screens in one row before it wraps (Epics rows).
 export var MAX_PER_ROW = 8;
 
+// Room an arrow's label needs between its two screens: the label box plus a
+// margin on each side, so the box never touches a screen. 0 when no label.
+var LABEL_MARGIN = 36;
+export function arrowRoom(a: Arrow): { w: number; h: number } {
+  var m = labelMetrics(a);
+  if (!m) return { w: 0, h: 0 };
+  return { w: m.w + LABEL_MARGIN * 2, h: m.h + LABEL_MARGIN * 2 };
+}
+
+// Gap to leave between two groups of screens (column i → i+1, or row i → i+1):
+// the default, or the widest label of any arrow crossing between them.
+function gapBetween(fromIds: Record<string, boolean>, toIds: Record<string, boolean>, arrows: Arrow[], axis: 'w' | 'h', base: number): number {
+  var gap = base;
+  arrows.forEach(function (a) {
+    var crosses = (fromIds[a.from] && toIds[a.to]) || (fromIds[a.to] && toIds[a.from]);
+    if (!crosses) return;
+    var room = arrowRoom(a)[axis];
+    if (room > gap) gap = room;
+  });
+  return gap;
+}
+
+function idSet(list: Screen[]): Record<string, boolean> {
+  var out: Record<string, boolean> = {};
+  list.forEach(function (s) { out[s.id] = true; });
+  return out;
+}
+
 // -- Auto layout (Flow) --
 export function autoLayout(screens: Screen[], arrows: Arrow[], heights?: Record<string, number>): Record<string, Position> {
   var core = layoutArrows(arrows);
@@ -136,7 +165,8 @@ export function autoLayout(screens: Screen[], arrows: Arrow[], heights?: Record<
 
   var positions: Record<string, Position> = {};
   var offsetX = 0;
-  colKeys.forEach(function (c) {
+  var lastGap = 0;
+  colKeys.forEach(function (c, ci) {
     var colScreens = columns[c];
     var maxW = 0;
     colScreens.forEach(function (s) {
@@ -149,9 +179,11 @@ export function autoLayout(screens: Screen[], arrows: Arrow[], heights?: Record<
       positions[s.id] = { x: offsetX, y: offsetY };
       offsetY += h(s) + GAP_Y;
     });
-    offsetX += maxW + GAP_X;
+    var next = colKeys[ci + 1];
+    lastGap = next === undefined ? 0 : gapBetween(idSet(colScreens), idSet(columns[next]), arrows, 'w', GAP_X);
+    offsetX += maxW + lastGap;
   });
-  var totalW = offsetX - GAP_X;
+  var totalW = offsetX;
 
   centerPositions(positions, screens, totalW, totalH);
   return positions;
@@ -181,20 +213,25 @@ export function layoutByEpics(screens: Screen[], arrows: Arrow[], heights?: Reco
   var positions: Record<string, Position> = {};
   var offsetY = 0;
   var totalW = 0;
-  rows.forEach(function (row) {
+  rows.forEach(function (row, ri) {
     var offsetX = 0;
     var rowH = 0;
-    row.forEach(function (s) {
+    row.forEach(function (s, si) {
       positions[s.id] = { x: offsetX, y: offsetY };
-      offsetX += screenWidth(s) + GAP_X;
+      var one: Record<string, boolean> = {}; one[s.id] = true;
+      var nxt = row[si + 1];
+      var g = nxt ? gapBetween(one, (function () { var o: Record<string, boolean> = {}; o[nxt.id] = true; return o; })(), arrows, 'w', GAP_X) : 0;
+      offsetX += screenWidth(s) + g;
       var hh = (heights && heights[s.id]) ? heights[s.id] : 200;
       if (hh > rowH) rowH = hh;
     });
-    if (offsetX - GAP_X > totalW) totalW = offsetX - GAP_X;
-    offsetY += rowH + GAP_Y * 2;
+    if (offsetX > totalW) totalW = offsetX;
+    var nextRow = rows[ri + 1];
+    var vg = nextRow ? gapBetween(idSet(row), idSet(nextRow), arrows, 'h', GAP_Y * 2) : 0;
+    offsetY += rowH + vg;
   });
 
-  centerPositions(positions, screens, totalW, offsetY - GAP_Y * 2);
+  centerPositions(positions, screens, totalW, offsetY);
   return positions;
 }
 

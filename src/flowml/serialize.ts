@@ -99,6 +99,7 @@ export function serialize(project: FlowProject, positions: Record<string, Positi
       if (a.kind) attrs.push('k=' + a.kind);
       if (a.detail) attrs.push('d=' + q(a.detail));
       if (a.note) attrs.push('n=' + q(a.note));
+      if (a.color) attrs.push('c=' + q(a.color));
       if (attrs.length) line += ', ' + attrs.join(', ');
       out.push(line);
     });

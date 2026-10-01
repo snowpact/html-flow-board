@@ -96,10 +96,31 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
       }
     });
   });
+  var colorInput = document.createElement('input');
+  colorInput.type = 'text';
+  colorInput.className = 'fb-arrow-popup-input fb-arrow-popup-detail';
+  colorInput.placeholder = 'Color: indigo, amber, green, red, grey, teal, pink or #hex';
+  colorInput.value = arrow.color || '';
+  colorInput.setAttribute('data-testid', 'arrow-color');
+  colorInput.addEventListener('mousedown', function (ev: MouseEvent) { ev.stopPropagation(); });
+  colorInput.addEventListener('keydown', function (ev: KeyboardEvent) {
+    ev.stopPropagation();
+    if (ev.key === 'Enter') { colorInput.blur(); closeArrowPopup(); }
+    if (ev.key === 'Escape') closeArrowPopup();
+  });
+  colorInput.addEventListener('blur', function () {
+    var c = colorInput.value.trim() || undefined;
+    if (c !== (arrow.color || undefined)) {
+      if (c) arrow.color = c; else delete arrow.color;
+      saveArrowMutations();
+      drawArrows();
+    }
+  });
   var detailWrap = document.createElement('div');
   detailWrap.className = 'fb-arrow-popup-detailwrap';
   detailWrap.appendChild(detailInput);
   detailWrap.appendChild(noteInput);
+  detailWrap.appendChild(colorInput);
   popup.appendChild(detailWrap);
 
   // Separator

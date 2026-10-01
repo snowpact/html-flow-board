@@ -366,16 +366,17 @@ function wrapCode(text: string, fontSize: number): string[] {
 // Card: white box, title, grey code chip lines, muted note. Centered on `at`.
 function drawDetailCard(ns: string, g: Element, job: LabelJob, at: Position, bw: number, bh: number,
   lines: string[], lineH: number, fontSize: number, bold: boolean,
-  apiLines: string[], codeSize: number, noteLines: string[], noteSize: number): void {
+  apiLines: string[], codeSize: number, noteLines: string[], noteSize: number, tint?: { fill: string; stroke: string } | null): void {
   var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
-  var accent = job.kind === 'main' ? '#374151' : '#9ca3af';
+  var accent = tint ? tint.stroke : (job.kind === 'main' ? '#374151' : '#9ca3af');
+  var fill = tint ? tint.fill : '#ffffff';
 
   var bg = document.createElementNS(ns, 'rect');
   bg.setAttribute('x', String(x0)); bg.setAttribute('y', String(y0));
   bg.setAttribute('width', String(bw)); bg.setAttribute('height', String(bh));
   bg.setAttribute('rx', '6'); bg.setAttribute('ry', '6');
   bg.setAttribute('class', 'fb-arrow-label-bg');
-  bg.setAttribute('fill', '#ffffff'); bg.setAttribute('stroke', accent); bg.setAttribute('stroke-width', '1');
+  bg.setAttribute('fill', fill); bg.setAttribute('stroke', accent); bg.setAttribute('stroke-width', '1');
   g.appendChild(bg);
 
   var y = y0 + 8;
@@ -401,7 +402,7 @@ function drawDetailCard(ns: string, g: Element, job: LabelJob, at: Position, bw:
     var chip = document.createElementNS(ns, 'rect');
     chip.setAttribute('x', String(x0 + 10)); chip.setAttribute('y', String(y));
     chip.setAttribute('width', String(cw)); chip.setAttribute('height', String(ch - 1));
-    chip.setAttribute('rx', '3'); chip.setAttribute('fill', '#f1f2f5');
+    chip.setAttribute('rx', '3'); chip.setAttribute('fill', tint ? '#ffffff' : '#f1f2f5');
     g.appendChild(chip);
     var t = document.createElementNS(ns, 'text');
     t.setAttribute('class', 'fb-arrow-detail');
@@ -425,6 +426,54 @@ function drawDetailCard(ns: string, g: Element, job: LabelJob, at: Position, bw:
   }
 }
 
+// Named tints for arrow labels / cards. Any other value is used as the border
+// color, with a 12 % alpha fill when it is a 6-digit hex.
+var TINTS: Record<string, { fill: string; stroke: string }> = {
+  indigo: { fill: '#eef0ff', stroke: '#6366f1' },
+  amber:  { fill: '#fff4d6', stroke: '#d97706' },
+  green:  { fill: '#e6f4ea', stroke: '#1a7f37' },
+  red:    { fill: '#fdecea', stroke: '#dc2626' },
+  grey:   { fill: '#f3f4f6', stroke: '#6b7280' },
+  teal:   { fill: '#e0f7f4', stroke: '#0f766e' },
+  pink:   { fill: '#fce7f3', stroke: '#db2777' },
+};
+export function arrowTint(color: string | undefined): { fill: string; stroke: string } | null {
+  if (!color) return null;
+  if (TINTS[color]) return TINTS[color];
+  var hex = /^#([0-9a-f]{6})$/i.test(color) ? color + '1f' : color;
+  return { fill: hex, stroke: color };
+}
+
+// Measured size of an arrow's label box (plain label or detail card), without
+// drawing it. Used by the layouts to leave enough room between screens.
+export interface LabelMetrics {
+  w: number; h: number; isCard: boolean; lines: string[]; lineH: number; fontSize: number; bold: boolean;
+  codeLines: string[]; codeSize: number; noteLines: string[]; noteSize: number;
+}
+export function labelMetrics(arrow: Arrow): LabelMetrics | null {
+  if (!arrow.label && !arrow.detail) return null;
+  var kind = arrow.kind || 'default';
+  var bold = kind === 'main';
+  var fontSize = kind === 'nav' ? 10 : 11;
+  var lineH = Math.round(fontSize * 1.3);
+  var lines = arrow.label ? wrapLabel(arrow.label, fontSize, bold) : [];
+  var w = 0;
+  lines.forEach(function (l) { w = Math.max(w, measureLabel(l, fontSize, bold)); });
+  var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
+  var isCard = !!arrow.detail;
+  var codeSize = 10, noteSize = 10;
+  var codeLines: string[] = [], noteLines: string[] = [];
+  if (isCard) {
+    codeLines = wrapCode(arrow.detail, codeSize);
+    if (arrow.note) noteLines = wrapLabel(arrow.note, noteSize, false);
+    codeLines.forEach(function (l) { w = Math.max(w, measureCode(l, codeSize) + 8); });
+    noteLines.forEach(function (l) { w = Math.max(w, measureLabel(l, noteSize, false)); });
+    bw = w + 20;
+    bh = 8 + lines.length * lineH + 4 + codeLines.length * (codeSize + 5) + (noteLines.length ? 3 + noteLines.length * (noteSize + 3) : 0) + 8;
+  }
+  return { w: bw, h: bh, isCard: isCard, lines: lines, lineH: lineH, fontSize: fontSize, bold: bold, codeLines: codeLines, codeSize: codeSize, noteLines: noteLines, noteSize: noteSize };
+}
+
 function placeLabels(ns: string, jobs: LabelJob[]): void {
   if (!jobs.length) return;
   var screens = screenBoxes();
@@ -433,26 +482,12 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
 
   jobs.forEach(function (job) {
     var kind = job.kind;
-    var bold = kind === 'main';
-    var fontSize = kind === 'nav' ? 10 : 11;
-    var lineH = Math.round(fontSize * 1.3);
-    var lines = job.arrow.label ? wrapLabel(job.arrow.label, fontSize, bold) : [];
-    var w = 0;
-    lines.forEach(function (l) { w = Math.max(w, measureLabel(l, fontSize, bold)); });
-    var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
-
-    // Detail card: title (label) + code chips + optional note, in one bordered box.
-    var isCard = !!job.arrow.detail;
-    var codeSize = 10, noteSize = 10;
-    var apiLines: string[] = [], noteLines: string[] = [];
-    if (isCard) {
-      apiLines = wrapCode(job.arrow.detail, codeSize);
-      if (job.arrow.note) noteLines = wrapLabel(job.arrow.note, noteSize, false);
-      apiLines.forEach(function (l) { w = Math.max(w, measureCode(l, codeSize) + 8); });
-      noteLines.forEach(function (l) { w = Math.max(w, measureLabel(l, noteSize, false)); });
-      bw = w + 20;
-      bh = 8 + lines.length * lineH + 4 + apiLines.length * (codeSize + 5) + (noteLines.length ? 3 + noteLines.length * (noteSize + 3) : 0) + 8;
-    }
+    var m = labelMetrics(job.arrow);
+    if (!m) return;
+    var bold = m.bold, fontSize = m.fontSize, lineH = m.lineH, lines = m.lines;
+    var bw = m.w, bh = m.h, isCard = m.isCard;
+    var apiLines = m.codeLines, codeSize = m.codeSize, noteLines = m.noteLines, noteSize = m.noteSize;
+    var tint = arrowTint(job.arrow.color);
 
     // Try spots along the curve; keep the first free one, else the least covered.
     var best: Position = null, bestScore = Infinity;
@@ -472,7 +507,7 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
     labelGroup.setAttribute('class', 'fb-arrow-label-group' + (isCard ? ' fb-arrow-card' : '') + (job.dimmed ? ' fb-arrow-dimmed' : ''));
 
     if (isCard) {
-      drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize);
+      drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize, tint);
       job.g.appendChild(labelGroup);
       return;
     }
@@ -483,8 +518,9 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
     bgRect.setAttribute('width', String(bw));
     bgRect.setAttribute('height', String(bh));
     bgRect.setAttribute('class', 'fb-arrow-label-bg');
-    bgRect.setAttribute('fill', kind === 'main' ? '#ffffff' : '#f0f2f5');
-    if (kind === 'main') { bgRect.setAttribute('stroke', '#374151'); bgRect.setAttribute('stroke-width', '1'); }
+    bgRect.setAttribute('fill', tint ? tint.fill : (kind === 'main' ? '#ffffff' : '#f0f2f5'));
+    if (tint) { bgRect.setAttribute('stroke', tint.stroke); bgRect.setAttribute('stroke-width', '1'); }
+    else if (kind === 'main') { bgRect.setAttribute('stroke', '#374151'); bgRect.setAttribute('stroke-width', '1'); }
     bgRect.setAttribute('rx', '4');
     bgRect.setAttribute('ry', '4');
 

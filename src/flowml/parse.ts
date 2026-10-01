@@ -162,6 +162,7 @@ export function parse(text: string): ParseResult {
       if (aattrs.k === 'main' || aattrs.k === 'nav') arrow.kind = aattrs.k;
       if (aattrs.d) arrow.detail = aattrs.d;
       if (aattrs.n) arrow.note = aattrs.n;
+      if (aattrs.c) arrow.color = aattrs.c;
       project.arrows.push(arrow);
       lastScreen = null;
       i++; continue;

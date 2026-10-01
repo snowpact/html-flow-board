@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from './src/flowml/parse';
 import { serialize } from './src/flowml/serialize';
 import { autoLayout, layoutArrows, layoutByEpics, LAYOUT_STRATEGIES } from './src/layout';
+import { GAP_X } from './src/core/constants';
 import { init } from './src/board';
 import { state, screenEpics, inEpic } from './src/core/state';
 import { setFocus, exitFocus, persistedPositions } from './src/focus';
@@ -282,5 +283,37 @@ describe('arrow detail card', () => {
     expect(cards[0].querySelector('.fb-arrow-detail').textContent).toBe('GET /x');
     expect(cards[0].querySelector('.fb-arrow-note').textContent).toBe('renvoie x');
     expect(document.querySelectorAll('.fb-arrow-label-group').length).toBe(2);
+  });
+});
+
+describe('arrow color + adaptive gaps', () => {
+  it('round-trips color through Flow-ML and tints the card', () => {
+    const project = { epics: [], screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', label: 'x', detail: 'GET /x', color: 'amber' }] };
+    const out = serialize(project, {});
+    expect(out).toContain('a -> b, l=x, d="GET /x", c=amber');
+    expect(parse(out).project.arrows[0]).toEqual(project.arrows[0]);
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
+    init({ container: document.getElementById('app'), project: { name: 'ColorTest', ...project }, state: { positions: { a: { x: 0, y: 0 }, b: { x: 700, y: 0 } } } });
+    drawArrows();
+    const bg = document.querySelector('.fb-arrow-card .fb-arrow-label-bg');
+    expect(bg.getAttribute('stroke')).toBe('#d97706');
+    expect(bg.getAttribute('fill')).toBe('#fff4d6');
+  });
+
+  it('Flow layout widens the gap between two columns when a card must fit between them', () => {
+    const screens = [{ id: 'a', size: 'md' }, { id: 'b', size: 'md' }];
+    const plain = autoLayout(screens, [{ from: 'a', to: 'b' }]);
+    const card = autoLayout(screens, [{ from: 'a', to: 'b', label: 'Clôturer', detail: 'POST /v1/update/une/route/vraiment/tres/longue/sans/espace' }]);
+    expect(plain.b.x - plain.a.x).toBe(320 + GAP_X);
+    expect(card.b.x - card.a.x).toBeGreaterThan(320 + GAP_X);
+  });
+
+  it('Epics layout widens the vertical gap between rows for a card on a cross-row arrow', () => {
+    const screens = [{ id: 'a', epic: 'e1', size: 'md' }, { id: 'b', epic: 'e2', size: 'md' }];
+    const plain = layoutByEpics(screens, [{ from: 'a', to: 'b' }], { a: 100, b: 100 });
+    const card = layoutByEpics(screens, [{ from: 'a', to: 'b', label: 'x', detail: 'A · B · C · D', note: 'un\nlong texte de note qui prend plusieurs lignes' }], { a: 100, b: 100 });
+    expect(card.b.y - card.a.y).toBeGreaterThan(plain.b.y - plain.a.y);
   });
 });

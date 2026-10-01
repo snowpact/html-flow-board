@@ -973,10 +973,37 @@
         }
       });
     });
+    var colorInput = document.createElement("input");
+    colorInput.type = "text";
+    colorInput.className = "fb-arrow-popup-input fb-arrow-popup-detail";
+    colorInput.placeholder = "Color: indigo, amber, green, red, grey, teal, pink or #hex";
+    colorInput.value = arrow.color || "";
+    colorInput.setAttribute("data-testid", "arrow-color");
+    colorInput.addEventListener("mousedown", function(ev) {
+      ev.stopPropagation();
+    });
+    colorInput.addEventListener("keydown", function(ev) {
+      ev.stopPropagation();
+      if (ev.key === "Enter") {
+        colorInput.blur();
+        closeArrowPopup();
+      }
+      if (ev.key === "Escape") closeArrowPopup();
+    });
+    colorInput.addEventListener("blur", function() {
+      var c = colorInput.value.trim() || void 0;
+      if (c !== (arrow.color || void 0)) {
+        if (c) arrow.color = c;
+        else delete arrow.color;
+        saveArrowMutations();
+        drawArrows();
+      }
+    });
     var detailWrap = document.createElement("div");
     detailWrap.className = "fb-arrow-popup-detailwrap";
     detailWrap.appendChild(detailInput);
     detailWrap.appendChild(noteInput);
+    detailWrap.appendChild(colorInput);
     popup.appendChild(detailWrap);
     var popupSep = document.createElement("div");
     popupSep.className = "fb-arrow-popup-sep";
@@ -1607,9 +1634,10 @@
     });
     return out.slice(0, 4);
   }
-  function drawDetailCard(ns, g, job, at, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize) {
+  function drawDetailCard(ns, g, job, at, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize, tint) {
     var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
-    var accent = job.kind === "main" ? "#374151" : "#9ca3af";
+    var accent = tint ? tint.stroke : job.kind === "main" ? "#374151" : "#9ca3af";
+    var fill = tint ? tint.fill : "#ffffff";
     var bg = document.createElementNS(ns, "rect");
     bg.setAttribute("x", String(x0));
     bg.setAttribute("y", String(y0));
@@ -1618,7 +1646,7 @@
     bg.setAttribute("rx", "6");
     bg.setAttribute("ry", "6");
     bg.setAttribute("class", "fb-arrow-label-bg");
-    bg.setAttribute("fill", "#ffffff");
+    bg.setAttribute("fill", fill);
     bg.setAttribute("stroke", accent);
     bg.setAttribute("stroke-width", "1");
     g.appendChild(bg);
@@ -1649,7 +1677,7 @@
       chip.setAttribute("width", String(cw));
       chip.setAttribute("height", String(ch - 1));
       chip.setAttribute("rx", "3");
-      chip.setAttribute("fill", "#f1f2f5");
+      chip.setAttribute("fill", tint ? "#ffffff" : "#f1f2f5");
       g.appendChild(chip);
       var t = document.createElementNS(ns, "text");
       t.setAttribute("class", "fb-arrow-detail");
@@ -1679,6 +1707,50 @@
       g.appendChild(n);
     }
   }
+  var TINTS = {
+    indigo: { fill: "#eef0ff", stroke: "#6366f1" },
+    amber: { fill: "#fff4d6", stroke: "#d97706" },
+    green: { fill: "#e6f4ea", stroke: "#1a7f37" },
+    red: { fill: "#fdecea", stroke: "#dc2626" },
+    grey: { fill: "#f3f4f6", stroke: "#6b7280" },
+    teal: { fill: "#e0f7f4", stroke: "#0f766e" },
+    pink: { fill: "#fce7f3", stroke: "#db2777" }
+  };
+  function arrowTint(color) {
+    if (!color) return null;
+    if (TINTS[color]) return TINTS[color];
+    var hex = /^#([0-9a-f]{6})$/i.test(color) ? color + "1f" : color;
+    return { fill: hex, stroke: color };
+  }
+  function labelMetrics(arrow) {
+    if (!arrow.label && !arrow.detail) return null;
+    var kind = arrow.kind || "default";
+    var bold = kind === "main";
+    var fontSize = kind === "nav" ? 10 : 11;
+    var lineH = Math.round(fontSize * 1.3);
+    var lines = arrow.label ? wrapLabel(arrow.label, fontSize, bold) : [];
+    var w = 0;
+    lines.forEach(function(l) {
+      w = Math.max(w, measureLabel(l, fontSize, bold));
+    });
+    var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
+    var isCard = !!arrow.detail;
+    var codeSize = 10, noteSize = 10;
+    var codeLines = [], noteLines = [];
+    if (isCard) {
+      codeLines = wrapCode(arrow.detail, codeSize);
+      if (arrow.note) noteLines = wrapLabel(arrow.note, noteSize, false);
+      codeLines.forEach(function(l) {
+        w = Math.max(w, measureCode(l, codeSize) + 8);
+      });
+      noteLines.forEach(function(l) {
+        w = Math.max(w, measureLabel(l, noteSize, false));
+      });
+      bw = w + 20;
+      bh = 8 + lines.length * lineH + 4 + codeLines.length * (codeSize + 5) + (noteLines.length ? 3 + noteLines.length * (noteSize + 3) : 0) + 8;
+    }
+    return { w: bw, h: bh, isCard, lines, lineH, fontSize, bold, codeLines, codeSize, noteLines, noteSize };
+  }
   function placeLabels(ns, jobs) {
     if (!jobs.length) return;
     var screens = screenBoxes();
@@ -1688,30 +1760,12 @@
     });
     jobs.forEach(function(job) {
       var kind = job.kind;
-      var bold = kind === "main";
-      var fontSize = kind === "nav" ? 10 : 11;
-      var lineH = Math.round(fontSize * 1.3);
-      var lines = job.arrow.label ? wrapLabel(job.arrow.label, fontSize, bold) : [];
-      var w = 0;
-      lines.forEach(function(l) {
-        w = Math.max(w, measureLabel(l, fontSize, bold));
-      });
-      var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
-      var isCard = !!job.arrow.detail;
-      var codeSize = 10, noteSize = 10;
-      var apiLines = [], noteLines = [];
-      if (isCard) {
-        apiLines = wrapCode(job.arrow.detail, codeSize);
-        if (job.arrow.note) noteLines = wrapLabel(job.arrow.note, noteSize, false);
-        apiLines.forEach(function(l) {
-          w = Math.max(w, measureCode(l, codeSize) + 8);
-        });
-        noteLines.forEach(function(l) {
-          w = Math.max(w, measureLabel(l, noteSize, false));
-        });
-        bw = w + 20;
-        bh = 8 + lines.length * lineH + 4 + apiLines.length * (codeSize + 5) + (noteLines.length ? 3 + noteLines.length * (noteSize + 3) : 0) + 8;
-      }
+      var m = labelMetrics(job.arrow);
+      if (!m) return;
+      var bold = m.bold, fontSize = m.fontSize, lineH = m.lineH, lines = m.lines;
+      var bw = m.w, bh = m.h, isCard = m.isCard;
+      var apiLines = m.codeLines, codeSize = m.codeSize, noteLines = m.noteLines, noteSize = m.noteSize;
+      var tint = arrowTint(job.arrow.color);
       var best = null, bestScore = Infinity;
       for (var k = 0; k < LABEL_TS.length; k++) {
         var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, LABEL_TS[k]);
@@ -1729,7 +1783,7 @@
       var labelGroup = document.createElementNS(ns, "g");
       labelGroup.setAttribute("class", "fb-arrow-label-group" + (isCard ? " fb-arrow-card" : "") + (job.dimmed ? " fb-arrow-dimmed" : ""));
       if (isCard) {
-        drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize);
+        drawDetailCard(ns, labelGroup, job, best, bw, bh, lines, lineH, fontSize, bold, apiLines, codeSize, noteLines, noteSize, tint);
         job.g.appendChild(labelGroup);
         return;
       }
@@ -1739,8 +1793,11 @@
       bgRect.setAttribute("width", String(bw));
       bgRect.setAttribute("height", String(bh));
       bgRect.setAttribute("class", "fb-arrow-label-bg");
-      bgRect.setAttribute("fill", kind === "main" ? "#ffffff" : "#f0f2f5");
-      if (kind === "main") {
+      bgRect.setAttribute("fill", tint ? tint.fill : kind === "main" ? "#ffffff" : "#f0f2f5");
+      if (tint) {
+        bgRect.setAttribute("stroke", tint.stroke);
+        bgRect.setAttribute("stroke-width", "1");
+      } else if (kind === "main") {
         bgRect.setAttribute("stroke", "#374151");
         bgRect.setAttribute("stroke-width", "1");
       }
@@ -2062,6 +2119,7 @@
         if (aattrs.k === "main" || aattrs.k === "nav") arrow.kind = aattrs.k;
         if (aattrs.d) arrow.detail = aattrs.d;
         if (aattrs.n) arrow.note = aattrs.n;
+        if (aattrs.c) arrow.color = aattrs.c;
         project.arrows.push(arrow);
         lastScreen = null;
         i++;
@@ -2422,6 +2480,29 @@
   }
   var MAX_PER_COLUMN = 6;
   var MAX_PER_ROW = 8;
+  var LABEL_MARGIN = 36;
+  function arrowRoom(a) {
+    var m = labelMetrics(a);
+    if (!m) return { w: 0, h: 0 };
+    return { w: m.w + LABEL_MARGIN * 2, h: m.h + LABEL_MARGIN * 2 };
+  }
+  function gapBetween(fromIds, toIds, arrows, axis, base) {
+    var gap = base;
+    arrows.forEach(function(a) {
+      var crosses = fromIds[a.from] && toIds[a.to] || fromIds[a.to] && toIds[a.from];
+      if (!crosses) return;
+      var room = arrowRoom(a)[axis];
+      if (room > gap) gap = room;
+    });
+    return gap;
+  }
+  function idSet(list) {
+    var out = {};
+    list.forEach(function(s) {
+      out[s.id] = true;
+    });
+    return out;
+  }
   function autoLayout(screens, arrows, heights) {
     var core = layoutArrows(arrows);
     var col = bfsDepth(screens, core);
@@ -2464,7 +2545,8 @@
     });
     var positions = {};
     var offsetX = 0;
-    colKeys.forEach(function(c) {
+    var lastGap = 0;
+    colKeys.forEach(function(c, ci) {
       var colScreens = columns[c];
       var maxW = 0;
       colScreens.forEach(function(s) {
@@ -2476,9 +2558,11 @@
         positions[s.id] = { x: offsetX, y: offsetY };
         offsetY += h(s) + GAP_Y;
       });
-      offsetX += maxW + GAP_X;
+      var next = colKeys[ci + 1];
+      lastGap = next === void 0 ? 0 : gapBetween(idSet(colScreens), idSet(columns[next]), arrows, "w", GAP_X);
+      offsetX += maxW + lastGap;
     });
-    var totalW = offsetX - GAP_X;
+    var totalW = offsetX;
     centerPositions(positions, screens, totalW, totalH);
     return positions;
   }
@@ -2509,19 +2593,29 @@
     var positions = {};
     var offsetY = 0;
     var totalW = 0;
-    rows.forEach(function(row) {
+    rows.forEach(function(row, ri) {
       var offsetX = 0;
       var rowH = 0;
-      row.forEach(function(s) {
+      row.forEach(function(s, si) {
         positions[s.id] = { x: offsetX, y: offsetY };
-        offsetX += screenWidth(s) + GAP_X;
+        var one = {};
+        one[s.id] = true;
+        var nxt = row[si + 1];
+        var g = nxt ? gapBetween(one, (function() {
+          var o = {};
+          o[nxt.id] = true;
+          return o;
+        })(), arrows, "w", GAP_X) : 0;
+        offsetX += screenWidth(s) + g;
         var hh = heights && heights[s.id] ? heights[s.id] : 200;
         if (hh > rowH) rowH = hh;
       });
-      if (offsetX - GAP_X > totalW) totalW = offsetX - GAP_X;
-      offsetY += rowH + GAP_Y * 2;
+      if (offsetX > totalW) totalW = offsetX;
+      var nextRow = rows[ri + 1];
+      var vg = nextRow ? gapBetween(idSet(row), idSet(nextRow), arrows, "h", GAP_Y * 2) : 0;
+      offsetY += rowH + vg;
     });
-    centerPositions(positions, screens, totalW, offsetY - GAP_Y * 2);
+    centerPositions(positions, screens, totalW, offsetY);
     return positions;
   }
   function layoutGrid(screens, arrows, heights) {
@@ -3393,6 +3487,7 @@
         if (a.kind) attrs.push("k=" + a.kind);
         if (a.detail) attrs.push("d=" + q(a.detail));
         if (a.note) attrs.push("n=" + q(a.note));
+        if (a.color) attrs.push("c=" + q(a.color));
         if (attrs.length) line += ", " + attrs.join(", ");
         out.push(line);
       });

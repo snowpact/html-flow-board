@@ -54,6 +54,9 @@ export interface Arrow {
   // chips (`detail`, split on ' · ') + an optional note line.
   detail?: string;   // e.g. 'POST /v1/update · UPDATE_CLOTURE'
   note?: string;     // e.g. 'heure de départ + compte rendu'
+  // Tint of the label / card: a palette name ('indigo' | 'amber' | 'green' |
+  // 'red' | 'grey' | 'teal' | 'pink') or any CSS color (border; fill = light tint).
+  color?: string;
   [k: string]: any;
 }
 
