@@ -130,49 +130,68 @@ export function doExport(): void {
   var svgStr = new XMLSerializer().serializeToString(svgClone);
   var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
   var url = URL.createObjectURL(blob);
-  var img = new Image();
 
-  img.onload = function () {
+  // Output scale: crisp on Retina (device pixel ratio, at least 2), capped by a
+  // pixel budget so very large boards stay within the browsers' canvas limits
+  // (Safari refuses canvases past ~16 M pixels; Chrome ~268 M).
+  var dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  var scale = Math.max(2, Math.min(3, dpr));
+  var budget = exportPixelBudget();
+  if (vw * vh * scale * scale > budget) scale = Math.max(1, Math.sqrt(budget / (vw * vh)));
+  // Browsers also cap each canvas side (≈16 k px): a huge board exports smaller
+  // rather than blurry or blank.
+  var MAX_SIDE = 16000;
+  if (vw * scale > MAX_SIDE) scale = MAX_SIDE / vw;
+  if (vh * scale > MAX_SIDE) scale = MAX_SIDE / vh;
+  var outW = Math.round(vw * scale), outH = Math.round(vh * scale);
+
+  // 1. Screens: html2canvas renders the DOM clone once, at `scale`.
+  document.body.appendChild(tmp);
+  var screensDone = loadHtml2Canvas().then(function (html2canvas: any) {
+    return html2canvas(tmp, { width: vw, height: vh, scale: scale, backgroundColor: null, useCORS: true, logging: false });
+  });
+
+  // 2. Arrows: the SVG is rasterized straight at `scale` (no intermediate 1× pass).
+  var arrowsDone = new Promise<HTMLImageElement>(function (resolve, reject) {
+    var img = new Image();
+    img.onload = function () { resolve(img); };
+    img.onerror = function () { reject(new Error('Arrow rasterization failed')); };
+    img.src = url;
+  });
+
+  // 3. Composite: background, screens, arrows on top — a single pass each.
+  Promise.all([screensDone, arrowsDone]).then(function (res) {
+    var screensCanvas = res[0] as HTMLCanvasElement;
+    var arrowsImg = res[1] as HTMLImageElement;
     URL.revokeObjectURL(url);
+    if (tmp.parentNode) document.body.removeChild(tmp);
 
-    // Draw arrows onto a canvas element (2x resolution)
-    var ac = document.createElement('canvas');
-    ac.width = vw * 2;
-    ac.height = vh * 2;
-    ac.style.cssText = 'position:absolute;top:0;left:0;width:' + vw + 'px;height:' + vh + 'px;pointer-events:none;';
-    ac.getContext('2d').drawImage(img, 0, 0, vw * 2, vh * 2);
-    tmp.appendChild(ac);
+    var out = document.createElement('canvas');
+    out.width = outW; out.height = outH;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#f0f2f5';
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.drawImage(screensCanvas, 0, 0, outW, outH);
+    ctx.drawImage(arrowsImg, 0, 0, outW, outH);
 
-    document.body.appendChild(tmp);
-
-    // Capture the small temp container at 2x
-    loadHtml2Canvas().then(function (html2canvas: any) {
-      return html2canvas(tmp, {
-        width: vw,
-        height: vh,
-        scale: 2,
-        backgroundColor: '#f0f2f5',
-        useCORS: true
-      });
-    }).then(function (resultCanvas: HTMLCanvasElement) {
-      document.body.removeChild(tmp);
-      var link = document.createElement('a');
-      var suffix = state.focus ? ' - ' + state.focus.id : '';
-      link.download = (state.project.name || 'flowboard') + suffix + '.png';
-      link.href = resultCanvas.toDataURL('image/png');
-      link.click();
-    }).catch(function (err: any) {
-      if (tmp.parentNode) document.body.removeChild(tmp);
-      console.error('Export failed:', err);
-    });
-  };
-
-  img.onerror = function () {
+    var suffix = state.focus ? ' - ' + state.focus.id : '';
+    var link = document.createElement('a');
+    link.download = (state.project.name || 'flowboard') + suffix + '.png';
+    link.href = out.toDataURL('image/png');
+    link.click();
+  }).catch(function (err: any) {
     URL.revokeObjectURL(url);
-    console.error('Arrow rasterization failed');
-  };
+    if (tmp.parentNode) document.body.removeChild(tmp);
+    console.error('Export failed:', err);
+  });
+}
 
-  img.src = url;
+// Max output pixels for the export canvas. Safari caps a canvas around 16 M
+// pixels; other browsers go much higher. Detected by user agent, generously.
+export function exportPixelBudget(): number {
+  var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
+  return isSafari ? 16000000 : 120000000;
 }
 
 // -- Init --

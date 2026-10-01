@@ -2873,41 +2873,56 @@
     var svgStr = new XMLSerializer().serializeToString(svgClone);
     var blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
     var url = URL.createObjectURL(blob);
-    var img = new Image();
-    img.onload = function() {
+    var dpr = typeof window !== "undefined" && window.devicePixelRatio || 1;
+    var scale = Math.max(2, Math.min(3, dpr));
+    var budget = exportPixelBudget();
+    if (vw * vh * scale * scale > budget) scale = Math.max(1, Math.sqrt(budget / (vw * vh)));
+    var MAX_SIDE = 16e3;
+    if (vw * scale > MAX_SIDE) scale = MAX_SIDE / vw;
+    if (vh * scale > MAX_SIDE) scale = MAX_SIDE / vh;
+    var outW = Math.round(vw * scale), outH = Math.round(vh * scale);
+    document.body.appendChild(tmp);
+    var screensDone = loadHtml2Canvas().then(function(html2canvas) {
+      return html2canvas(tmp, { width: vw, height: vh, scale, backgroundColor: null, useCORS: true, logging: false });
+    });
+    var arrowsDone = new Promise(function(resolve, reject) {
+      var img = new Image();
+      img.onload = function() {
+        resolve(img);
+      };
+      img.onerror = function() {
+        reject(new Error("Arrow rasterization failed"));
+      };
+      img.src = url;
+    });
+    Promise.all([screensDone, arrowsDone]).then(function(res) {
+      var screensCanvas = res[0];
+      var arrowsImg = res[1];
       URL.revokeObjectURL(url);
-      var ac = document.createElement("canvas");
-      ac.width = vw * 2;
-      ac.height = vh * 2;
-      ac.style.cssText = "position:absolute;top:0;left:0;width:" + vw + "px;height:" + vh + "px;pointer-events:none;";
-      ac.getContext("2d").drawImage(img, 0, 0, vw * 2, vh * 2);
-      tmp.appendChild(ac);
-      document.body.appendChild(tmp);
-      loadHtml2Canvas().then(function(html2canvas) {
-        return html2canvas(tmp, {
-          width: vw,
-          height: vh,
-          scale: 2,
-          backgroundColor: "#f0f2f5",
-          useCORS: true
-        });
-      }).then(function(resultCanvas) {
-        document.body.removeChild(tmp);
-        var link = document.createElement("a");
-        var suffix = state.focus ? " - " + state.focus.id : "";
-        link.download = (state.project.name || "flowboard") + suffix + ".png";
-        link.href = resultCanvas.toDataURL("image/png");
-        link.click();
-      }).catch(function(err) {
-        if (tmp.parentNode) document.body.removeChild(tmp);
-        console.error("Export failed:", err);
-      });
-    };
-    img.onerror = function() {
+      if (tmp.parentNode) document.body.removeChild(tmp);
+      var out = document.createElement("canvas");
+      out.width = outW;
+      out.height = outH;
+      var ctx = out.getContext("2d");
+      ctx.fillStyle = "#f0f2f5";
+      ctx.fillRect(0, 0, outW, outH);
+      ctx.drawImage(screensCanvas, 0, 0, outW, outH);
+      ctx.drawImage(arrowsImg, 0, 0, outW, outH);
+      var suffix = state.focus ? " - " + state.focus.id : "";
+      var link = document.createElement("a");
+      link.download = (state.project.name || "flowboard") + suffix + ".png";
+      link.href = out.toDataURL("image/png");
+      link.click();
+    }).catch(function(err) {
       URL.revokeObjectURL(url);
-      console.error("Arrow rasterization failed");
-    };
-    img.src = url;
+      if (tmp.parentNode) document.body.removeChild(tmp);
+      console.error("Export failed:", err);
+    });
+  }
+  function exportPixelBudget() {
+    var ua = typeof navigator !== "undefined" && navigator.userAgent || "";
+    var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
+    return isSafari ? 16e6 : 12e7;
   }
 
   // src/render/toolbar.ts

@@ -444,3 +444,10 @@ describe('full-page host', () => {
     expect(document.getElementById('app').classList.contains('fb-fullpage')).toBe(false);
   });
 });
+
+describe('export pixel budget', () => {
+  it('is a positive number', async () => {
+    const { exportPixelBudget } = await import('./src/export');
+    expect(exportPixelBudget()).toBeGreaterThan(1000000);
+  });
+});
