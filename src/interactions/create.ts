@@ -40,6 +40,9 @@ export function createScreen(preset: PresetId, clientX: number, clientY: number)
 
   state.project.screens.push(screen);
   state.positions[id] = { x: x, y: y };
+  // In an epic focus state.positions is the temporary layout: give the new screen
+  // a real position too, so it survives exitFocus().
+  if (state.focus) state.focus.savedPositions[id] = { x: x, y: y };
 
   var el = renderScreen(screen);
   state.canvasEl.appendChild(el);

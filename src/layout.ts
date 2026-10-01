@@ -1,6 +1,11 @@
-import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y } from './core/constants';
+import { CANVAS_H, CANVAS_W, FORMATS, GAP_X, GAP_Y } from './core/constants';
 import { screenWidth, state } from './core/state';
 import { Arrow, Position, Screen } from './core/types';
+import { labelMetrics } from './arrows';
+
+// Every layout places screens on a TRUE grid (placeGrid): aligned columns and
+// rows, top-left anchored (no per-column centering, which staggers screens),
+// and gaps that leave room for the label cards drawn between neighbours.
 
 export function bfsDepth(screens: Screen[], arrows: Arrow[]): Record<string, number> {
   var children: Record<string, string[]> = {};
@@ -91,15 +96,114 @@ export function orderColumns(columns: Record<string, Screen[]>, colKeys: number[
 
 // Max screens stacked in one column before it is split (Flow layout).
 export var MAX_PER_COLUMN = 6;
-// Max screens in one row before it wraps (Epics rows).
+// Max screens in one row before it wraps (Epics / Grid rows).
 export var MAX_PER_ROW = 8;
+// Vertical gap between two epic rows (swimlanes).
+export var EPIC_ROW_GAP = GAP_Y * 2 + 40;
 
-// -- Auto layout (Flow) --
+// Room an arrow's label needs between its two screens: the label box plus a
+// margin on each side, so the box never touches a screen. 0 when no label.
+var LABEL_MARGIN = 36;
+export function arrowRoom(a: Arrow): { w: number; h: number } {
+  var m = labelMetrics(a);
+  if (!m) return { w: 0, h: 0 };
+  return { w: m.w + LABEL_MARGIN * 2, h: m.h + LABEL_MARGIN * 2 };
+}
+
+// User spacing factor (toolbar − / +), applied to the base gaps of every layout.
+export function spacingFactor(): number {
+  var f = state.spacing;
+  return (typeof f === 'number' && f > 0) ? f : 1;
+}
+
+// Measured height when known, else the format's minimum, else 200.
+function heightOf(s: Screen, heights?: Record<string, number>): number {
+  if (heights && heights[s.id]) return heights[s.id];
+  if (s.height) return s.height;
+  if (s.format && FORMATS[s.format]) return FORMATS[s.format].height;
+  return 200;
+}
+
+// -- Core: place a matrix of cells on a true grid --
+// cells[r][c] = screen or null. Column c is as wide as its widest screen, row r
+// as tall as its tallest. The gap after column c (or row r) is the base gap or,
+// if larger, the room needed by the biggest label of any arrow between a screen
+// of that column (row) and one of the next.
+export function placeGrid(cells: (Screen | null)[][], arrows: Arrow[], heights?: Record<string, number>, baseGapX?: number, baseGapY?: number): Record<string, Position> {
+  var gx = (baseGapX === undefined ? GAP_X : baseGapX) * spacingFactor();
+  var gy = (baseGapY === undefined ? GAP_Y : baseGapY) * spacingFactor();
+  var nRows = cells.length;
+  var nCols = 0;
+  cells.forEach(function (r) { if (r.length > nCols) nCols = r.length; });
+
+  var colW: number[] = [], rowH: number[] = [];
+  var colOf: Record<string, number> = {}, rowOf: Record<string, number> = {};
+  for (var c = 0; c < nCols; c++) colW[c] = 0;
+  for (var r = 0; r < nRows; r++) {
+    rowH[r] = 0;
+    for (var c2 = 0; c2 < cells[r].length; c2++) {
+      var s = cells[r][c2];
+      if (!s) continue;
+      colOf[s.id] = c2; rowOf[s.id] = r;
+      colW[c2] = Math.max(colW[c2], screenWidth(s));
+      rowH[r] = Math.max(rowH[r], heightOf(s, heights));
+    }
+  }
+
+  // Gaps: widest / tallest label room among arrows that cross each boundary.
+  var gapX: number[] = [], gapY: number[] = [];
+  for (var i = 0; i < nCols; i++) gapX[i] = gx;
+  for (var j = 0; j < nRows; j++) gapY[j] = gy;
+  arrows.forEach(function (a) {
+    if (colOf[a.from] === undefined || colOf[a.to] === undefined) return;
+    var room = arrowRoom(a);
+    if (!room.w) return;
+    var c1 = colOf[a.from], c2 = colOf[a.to];
+    if (Math.abs(c1 - c2) === 1) { var ci = Math.min(c1, c2); gapX[ci] = Math.max(gapX[ci], room.w); }
+    var r1 = rowOf[a.from], r2 = rowOf[a.to];
+    // Vertical room only for an arrow between two stacked screens; a diagonal
+    // one already got its room from the column gap.
+    if (c1 === c2 && Math.abs(r1 - r2) === 1) { var ri = Math.min(r1, r2); gapY[ri] = Math.max(gapY[ri], room.h); }
+  });
+
+  var colX: number[] = [], rowY: number[] = [];
+  var x = 0;
+  for (var c3 = 0; c3 < nCols; c3++) { colX[c3] = x; x += colW[c3] + gapX[c3]; }
+  var y = 0;
+  for (var r3 = 0; r3 < nRows; r3++) { rowY[r3] = y; y += rowH[r3] + gapY[r3]; }
+
+  var positions: Record<string, Position> = {};
+  var all: Screen[] = [];
+  cells.forEach(function (row, r4) {
+    row.forEach(function (s2, c4) {
+      if (!s2) return;
+      positions[s2.id] = { x: colX[c4], y: rowY[r4] };
+      all.push(s2);
+    });
+  });
+  var totalW = nCols ? colX[nCols - 1] + colW[nCols - 1] : 0;
+  var totalH = nRows ? rowY[nRows - 1] + rowH[nRows - 1] : 0;
+  centerPositions(positions, all, totalW, totalH);
+  return positions;
+}
+
+// Columns (each a top → bottom list) → cells[row][col].
+function columnsToCells(columns: Screen[][]): (Screen | null)[][] {
+  var nRows = 0;
+  columns.forEach(function (c) { if (c.length > nRows) nRows = c.length; });
+  var cells: (Screen | null)[][] = [];
+  for (var r = 0; r < nRows; r++) {
+    cells[r] = [];
+    for (var c = 0; c < columns.length; c++) cells[r][c] = columns[c][r] || null;
+  }
+  return cells;
+}
+
+// -- Flow: columns by journey depth (BFS on main/default arrows) --
 export function autoLayout(screens: Screen[], arrows: Arrow[], heights?: Record<string, number>): Record<string, Position> {
   var core = layoutArrows(arrows);
   var col = bfsDepth(screens, core);
 
-  // Group by column
   var columns: Record<string, Screen[]> = {};
   screens.forEach(function (s) {
     var c = col[s.id];
@@ -118,47 +222,11 @@ export function autoLayout(screens: Screen[], arrows: Arrow[], heights?: Record<
     var per = Math.ceil(list.length / parts);
     for (var i = 0; i < list.length; i += per) split.push(list.slice(i, i + per));
   });
-  columns = {};
-  colKeys = split.map(function (_l, i) { return i; });
-  split.forEach(function (l, i) { columns[i] = l; });
 
-  function h(s: Screen): number { return (heights && heights[s.id]) ? heights[s.id] : 200; }
-
-  // Column heights first, so each column can be centered on the tallest one.
-  var colH: Record<number, number> = {};
-  var totalH = 0;
-  colKeys.forEach(function (c) {
-    var sum = 0;
-    columns[c].forEach(function (s) { sum += h(s) + GAP_Y; });
-    colH[c] = sum - GAP_Y;
-    if (colH[c] > totalH) totalH = colH[c];
-  });
-
-  var positions: Record<string, Position> = {};
-  var offsetX = 0;
-  colKeys.forEach(function (c) {
-    var colScreens = columns[c];
-    var maxW = 0;
-    colScreens.forEach(function (s) {
-      var w = screenWidth(s);
-      if (w > maxW) maxW = w;
-    });
-
-    var offsetY = Math.round((totalH - colH[c]) / 2);
-    colScreens.forEach(function (s) {
-      positions[s.id] = { x: offsetX, y: offsetY };
-      offsetY += h(s) + GAP_Y;
-    });
-    offsetX += maxW + GAP_X;
-  });
-  var totalW = offsetX - GAP_X;
-
-  centerPositions(positions, screens, totalW, totalH);
-  return positions;
+  return placeGrid(columnsToCells(split), arrows, heights);
 }
 
-// -- Layout by Epics: one row (swimlane) per epic, screens left → right in
-// journey order (BFS depth), wrapping after MAX_PER_ROW. --
+// -- Epics: one row (swimlane) per epic, screens left → right in journey order --
 export function layoutByEpics(screens: Screen[], arrows: Arrow[], heights?: Record<string, number>): Record<string, Position> {
   var epicGroups: Record<string, Screen[]> = {};
   var epicOrder: string[] = [];
@@ -178,59 +246,56 @@ export function layoutByEpics(screens: Screen[], arrows: Arrow[], heights?: Reco
     for (var i = 0; i < group.length; i += MAX_PER_ROW) rows.push(group.slice(i, i + MAX_PER_ROW));
   });
 
-  var positions: Record<string, Position> = {};
-  var offsetY = 0;
-  var totalW = 0;
-  rows.forEach(function (row) {
-    var offsetX = 0;
-    var rowH = 0;
-    row.forEach(function (s) {
-      positions[s.id] = { x: offsetX, y: offsetY };
-      offsetX += screenWidth(s) + GAP_X;
-      var hh = (heights && heights[s.id]) ? heights[s.id] : 200;
-      if (hh > rowH) rowH = hh;
-    });
-    if (offsetX - GAP_X > totalW) totalW = offsetX - GAP_X;
-    offsetY += rowH + GAP_Y * 2;
-  });
-
-  centerPositions(positions, screens, totalW, offsetY - GAP_Y * 2);
-  return positions;
+  // Rows of different epics are separated a bit more (double base gap).
+  return placeGrid(rows, arrows, heights, GAP_X, EPIC_ROW_GAP);
 }
 
-// -- Layout Grid --
-export function layoutGrid(screens: Screen[], arrows: Arrow[], heights: Record<string, number>): Record<string, Position> {
-  var cols = Math.max(1, Math.round(Math.sqrt(screens.length)));
-  var positions: Record<string, Position> = {};
-  var offsetX = 0, offsetY = 0;
-  var rowMaxH = 0;
-  var totalW = 0, totalH = 0;
-
-  screens.forEach(function (s, i) {
-    var colIdx = i % cols;
-    if (colIdx === 0 && i > 0) {
-      offsetY += rowMaxH + GAP_Y;
-      offsetX = 0;
-      rowMaxH = 0;
-    }
-    positions[s.id] = { x: offsetX, y: offsetY };
-    var w = screenWidth(s);
-    var h = (heights && heights[s.id]) ? heights[s.id] : 200;
-    if (h > rowMaxH) rowMaxH = h;
-    offsetX += w + GAP_X;
-    if (offsetX > totalW) totalW = offsetX;
+// -- Grid: rows of up to MAX_PER_ROW, screens grouped by epic then input order --
+export function layoutGrid(screens: Screen[], arrows: Arrow[], heights?: Record<string, number>): Record<string, Position> {
+  var n = screens.length;
+  var perRow = Math.max(1, Math.min(MAX_PER_ROW, Math.ceil(Math.sqrt(n))));
+  var ordered = screens.slice();
+  var idx: Record<string, number> = {};
+  screens.forEach(function (s, i) { idx[s.id] = i; });
+  var epicRank: Record<string, number> = {};
+  ((state.project && state.project.epics) || []).forEach(function (e, i) { epicRank[e.id] = i; });
+  ordered.sort(function (a, b) {
+    var ea = a.epic ? (epicRank[a.epic] !== undefined ? epicRank[a.epic] : 9999) : 10000;
+    var eb = b.epic ? (epicRank[b.epic] !== undefined ? epicRank[b.epic] : 9999) : 10000;
+    return (ea - eb) || (idx[a.id] - idx[b.id]);
   });
-  totalH = offsetY + rowMaxH;
+  var rows: Screen[][] = [];
+  for (var i = 0; i < ordered.length; i += perRow) rows.push(ordered.slice(i, i + perRow));
+  return placeGrid(rows, arrows, heights);
+}
 
-  centerPositions(positions, screens, totalW - GAP_X, totalH);
-  return positions;
+// -- Spacing: scale the gaps of the CURRENT positions (auto or hand-made) --
+// Positions are scaled around `origin` (default: the top-left of the bounding
+// box), so every gap grows (or shrinks) by `k` while screens keep their size.
+// Passing the point under the viewport center keeps what the user is looking
+// at in place.
+export function spreadPositions(positions: Record<string, Position>, k: number, origin?: Position): Record<string, Position> {
+  var ids = Object.keys(positions);
+  if (!ids.length) return positions;
+  var ox: number, oy: number;
+  if (origin) { ox = origin.x; oy = origin.y; }
+  else {
+    ox = Infinity; oy = Infinity;
+    ids.forEach(function (id) { ox = Math.min(ox, positions[id].x); oy = Math.min(oy, positions[id].y); });
+  }
+  var out: Record<string, Position> = {};
+  ids.forEach(function (id) {
+    out[id] = {
+      x: Math.round(ox + (positions[id].x - ox) * k),
+      y: Math.round(oy + (positions[id].y - oy) * k),
+    };
+  });
+  return out;
 }
 
 // -- Layout strategies --
-export var LAYOUT_STRATEGIES: { name: string; fn: (screens: Screen[], arrows: Arrow[], heights: Record<string, number>) => Record<string, Position>; available?: () => boolean }[] = [
+export var LAYOUT_STRATEGIES: { name: string; fn: (screens: Screen[], arrows: Arrow[], heights: Record<string, number>) => Record<string, Position> }[] = [
   { name: 'Flow', fn: autoLayout },
   { name: 'Epics', fn: layoutByEpics },
   { name: 'Grid', fn: layoutGrid }
 ];
-
-// -- Cycle layout --

@@ -4,10 +4,17 @@
    ============================================ */
 
 /* --- Container & Layout --- */
+/* A full-page board: the host element is sized by the embedder (100vw/100vh
+   in the generated files). The default body margin would otherwise add 8px on
+   each side and show scrollbars, so a full-viewport host zeroes it. */
+html:has(> body > .fb-fullpage) { overflow: hidden; }
+body:has(> .fb-fullpage) { margin: 0; padding: 0; overflow: hidden; }
+.fb-fullpage { width: 100vw; height: 100vh; }
+
 .fb-container {
   position: relative;
   width: 100%;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: #f0f2f5;
@@ -1503,9 +1510,6 @@
 }
 
 /* ── Arrow kinds (main journey / nav secondary) ───────────────────────── */
-.fb-arrow-nav .fb-arrow-label-group { opacity: 0; transition: opacity .12s; }
-.fb-arrow-nav:hover .fb-arrow-label-group,
-.fb-arrow-nav.fb-arrow-hl .fb-arrow-label-group { opacity: 1; }
 .fb-arrow-group { transition: opacity .12s; }
 .fb-arrows-layer.fb-hl-active .fb-arrow-group { opacity: .12; }
 .fb-arrows-layer.fb-hl-active .fb-arrow-group.fb-arrow-hl { opacity: 1; }
@@ -1524,3 +1528,12 @@
 /* Secondary epics of a screen: small dots in its header */
 .fb-epic-dots { display: inline-flex; gap: 4px; margin-left: 8px; flex-shrink: 0; }
 .fb-epic-dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 0 1.5px rgba(255,255,255,.9); }
+
+/* Arrow detail card + popup inputs */
+.fb-arrow-popup { flex-wrap: wrap; max-width: 420px; }
+.fb-arrow-popup-detailwrap { display: flex; flex-direction: column; gap: 4px; width: 100%; order: 10; margin-top: 4px; }
+.fb-arrow-popup-detail { width: 100%; font-size: 12px; }
+.fb-arrow-detail { pointer-events: none; }
+.fb-arrow-note { pointer-events: none; }
+
+.fb-seg-icon { display: inline-flex; align-items: center; color: #9ca3af; padding: 0 4px 0 6px; }

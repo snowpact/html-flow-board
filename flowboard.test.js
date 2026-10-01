@@ -5,7 +5,7 @@ import {
   getAnchor, computeControlPoints, getAllAnchorPoints,
   getBestSides, buildSpreadMap, resolveArrowSides,
 } from './src/arrows';
-import { autoLayout, bfsDepth, centerPositions, layoutByEpics, layoutGrid } from './src/layout';
+import { autoLayout, bfsDepth, centerPositions, layoutByEpics, layoutGrid, EPIC_ROW_GAP } from './src/layout';
 import { CANVAS_H, CANVAS_W, GAP_X, GAP_Y } from './src/core/constants';
 import { PRESETS, getPreset, isCustomPreset, skeletonHtml } from './src/render/presets';
 import { renderScreen } from './src/render/screen';
@@ -601,7 +601,7 @@ describe('layoutByEpics', () => {
       { id: 'b', epic: 'e2', size: 'md' },
     ];
     var pos = layoutByEpics(screens, [], { a: 150, b: 150 });
-    expect(pos.b.y - pos.a.y).toBe(150 + GAP_Y * 2);
+    expect(pos.b.y - pos.a.y).toBe(150 + EPIC_ROW_GAP);
   });
 
   it('wraps a long epic after MAX_PER_ROW screens', () => {
@@ -676,9 +676,11 @@ describe('layoutGrid', () => {
       { id: 'd', size: 'md' },
     ];
     var pos = layoutGrid(screens, []);
-    // 4 screens → cols = round(sqrt(4)) = 2
-    // a is sm (240), gap = 100 → b.x - a.x = 340
-    expect(pos.b.x - pos.a.x).toBe(240 + GAP_X); // sm width + gap
+    // 4 screens → 2 cols. A TRUE grid: column 0 is as wide as its widest screen
+    // (a sm 240, c md 320 → 320), and c sits exactly under a.
+    expect(pos.b.x - pos.a.x).toBe(320 + GAP_X);
+    expect(pos.c.x).toBe(pos.a.x);
+    expect(pos.d.x).toBe(pos.b.x);
   });
 });
 

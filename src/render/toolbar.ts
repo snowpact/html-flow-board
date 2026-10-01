@@ -1,16 +1,16 @@
 import { drawArrows } from '../arrows';
-import { cycleLayout, doReset } from '../board';
+import { adjustSpacing, cycleLayout, doReset } from '../board';
 import { ZOOM_STEP } from '../core/constants';
 import { getEpic, inEpic, screenEpics, setEpicList, state } from '../core/state';
 import { saveHiddenScreens } from '../core/storage';
 import { doExport } from '../export';
 import { setZoom } from '../interactions/transform';
 import { LAYOUT_STRATEGIES } from '../layout';
-import { ICON_DOWNLOAD, ICON_FIT, ICON_GRID, ICON_MINUS, ICON_PLUS, ICON_RESET, ICON_TRASH } from './icons';
+import { ICON_DOWNLOAD, ICON_FIT, ICON_GRID, ICON_MINUS, ICON_PLUS, ICON_RESET, ICON_SPACING, ICON_TRASH } from './icons';
 import { applyScreenVisibility } from './screen';
 import { renderViewPicker } from './view-picker';
 import { refreshScreenEpics } from './screen';
-import { exitFocus } from '../focus';
+import { setFocus } from '../focus';
 import { fitToContent } from '../interactions/transform';
 import { Epic, Screen } from '../core/types';
 
@@ -95,7 +95,7 @@ export function deleteEpic(id: string): boolean {
       refreshScreenEpics(s);
     }
   });
-  if (state.focus && state.focus.id === id) exitFocus();
+  if (state.focus && state.focus.id === id) setFocus('');
   syncToolbar();
   drawArrows();
   if (state.commit) state.commit();
@@ -123,7 +123,13 @@ function epicRow(epic: Epic): HTMLElement {
   color.className = 'fb-epic-color';
   color.value = epic.color || '#666666';
   color.title = 'Color';
-  color.addEventListener('input', function () { setEpicColor(epic.id, color.value); });
+  // Live recolor while dragging the picker; persist (and rebuild the epic
+  // picker) once on change.
+  color.addEventListener('input', function () {
+    epic.color = color.value;
+    (state.project.screens || []).forEach(function (s: Screen) { if (inEpic(s, epic.id)) refreshScreenEpics(s); });
+  });
+  color.addEventListener('change', function () { setEpicColor(epic.id, color.value); });
   row.appendChild(color);
 
   var name = document.createElement('input');
@@ -248,10 +254,6 @@ export function renderToolbar(): HTMLElement {
     state.showNotes = on;
     toggleNotesVisibility();
   }));
-  switches.appendChild(makeSwitch('Nav', state.showNav !== false, 'Show navigation arrows (menus, back links)', 'toggle-nav', function (on) {
-    state.showNav = on;
-    drawArrows();
-  }));
   right.appendChild(switches);
 
   var zoom = el('div', 'fb-seg');
@@ -267,6 +269,19 @@ export function renderToolbar(): HTMLElement {
   var layoutBtn = iconBtn('fb-action-btn', ICON_GRID + '<span class="fb-layout-name">' + LAYOUT_STRATEGIES[state.layoutIndex].name + '</span>', 'Auto-layout: switch strategy', cycleLayout);
   layoutBtn.id = 'fb-layout-btn';
   right.appendChild(layoutBtn);
+
+  // Spacing between screens: − / +
+  var spacing = el('div', 'fb-seg');
+  spacing.title = 'Spacing between screens';
+  var spIcon = el('span', 'fb-seg-icon', ICON_SPACING);
+  spacing.appendChild(spIcon);
+  var spMinus = iconBtn('fb-toolbar-btn', ICON_MINUS, 'Tighter', function () { adjustSpacing(1 / 1.2); });
+  spMinus.setAttribute('data-testid', 'spacing-minus');
+  spacing.appendChild(spMinus);
+  var spPlus = iconBtn('fb-toolbar-btn', ICON_PLUS, 'Looser', function () { adjustSpacing(1.2); });
+  spPlus.setAttribute('data-testid', 'spacing-plus');
+  spacing.appendChild(spPlus);
+  right.appendChild(spacing);
 
   right.appendChild(iconBtn('fb-action-btn', ICON_DOWNLOAD + '<span>PNG</span>', 'Export as PNG', doExport));
 
@@ -303,21 +318,6 @@ export function toggleEpic(epicId: string): void {
     state.hiddenEpics[epicId] = true;
   } else {
     delete state.hiddenEpics[epicId];
-  }
-
-  // Update legend item dimming
-  var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
-  for (var i = 0; i < checkboxes.length; i++) {
-    var cb = checkboxes[i] as HTMLInputElement;
-    var item = cb.closest('.fb-legend-item') as HTMLElement;
-    if (cb.dataset.epicId === epicId) {
-      cb.checked = !isHiding;
-      if (isHiding) {
-        item.classList.add('fb-dimmed');
-      } else {
-        item.classList.remove('fb-dimmed');
-      }
-    }
   }
 
   // Toggle each screen of this epic individually

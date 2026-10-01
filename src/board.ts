@@ -1,8 +1,8 @@
 import { drawArrows, freezeArrowSides } from './arrows';
 import { CANVAS_H, CANVAS_W } from './core/constants';
 import { recomputeHiddenEpics, state } from './core/state';
-import { FlowConfig, Screen } from './core/types';
-import { loadArrowMutations, loadDoc, loadHiddenScreens, loadPositions, loadZoom, savePositions, storageKey } from './core/storage';
+import { FlowConfig, Position, Screen } from './core/types';
+import { loadArrowMutations, loadDoc, loadHiddenScreens, loadPositions, loadZoom, savePositions, saveZoom, storageKey } from './core/storage';
 import { parse } from './flowml/parse';
 import { initArrowDrag } from './interactions/arrow-drag';
 import { initCreateMenu } from './interactions/create';
@@ -12,8 +12,8 @@ import { renderPanel } from './render/panel';
 import { initModeKeys, setMode } from './interactions/mode';
 import { initPan } from './interactions/pan';
 import { initSelection } from './interactions/selection';
-import { applyTransform, fitToContent } from './interactions/transform';
-import { LAYOUT_STRATEGIES, autoLayout } from './layout';
+import { applyTransform, fitToContent, isContentInView } from './interactions/transform';
+import { LAYOUT_STRATEGIES, autoLayout, spreadPositions } from './layout';
 import { renderModeSwitch } from './render/mode-switch';
 import { renderScreen } from './render/screen';
 import { renderToolbar, updateLayoutButton } from './render/toolbar';
@@ -21,13 +21,7 @@ import { exitFocus } from './focus';
 
 export function cycleLayout(): void {
   exitFocus();
-  // Next strategy, skipping those not applicable to this board (e.g. Stories
-  // without any story).
-  for (var n = 0; n < LAYOUT_STRATEGIES.length; n++) {
-    state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
-    var strat = LAYOUT_STRATEGIES[state.layoutIndex];
-    if (!strat.available || strat.available()) break;
-  }
+  state.layoutIndex = (state.layoutIndex + 1) % LAYOUT_STRATEGIES.length;
 
   var heights: Record<string, number> = {};
   var screens = state.project.screens || [];
@@ -51,13 +45,57 @@ export function cycleLayout(): void {
 
   // A new layout moves everything: re-pick every arrow's anchor sides for it.
   arrows.forEach(function (a) { delete a.fromSide; delete a.toSide; });
-  drawArrows();
   freezeArrowSides();
 
   updateLayoutButton();
   savePositions();
   drawArrows();
   fitToContent();
+}
+
+// Toolbar − / + : scale every gap of the current arrangement by `k` (1.2 or 1/1.2)
+// and remember the factor for the next auto-layout.
+export function adjustSpacing(k: number): void {
+  if (!state.project) return;
+  // The factor is clamped; the applied scale is the clamped step, so repeated
+  // presses stop at the bounds and − / + stay symmetric.
+  var prev = state.spacing || 1;
+  state.spacing = Math.max(0.4, Math.min(3, prev * k));
+  var kk = state.spacing / prev;
+  if (Math.abs(kk - 1) < 1e-6) return;
+  var screens = state.project.screens || [];
+
+  // Scale the CURRENT arrangement (auto, hand-made, or a focus view) around the
+  // point under the viewport center, so the view does not jump. A uniform scale
+  // keeps every arrow's direction, so anchor sides are left untouched.
+  var origin: Position | undefined;
+  if (state.wrapperEl) {
+    var r = state.wrapperEl.getBoundingClientRect();
+    if (r.width && r.height) {
+      origin = { x: (r.width / 2 - state.panX) / state.zoom, y: (r.height / 2 - state.panY) / state.zoom };
+    }
+  }
+  state.positions = spreadPositions(state.positions, kk, origin);
+  // The canvas starts at (0,0): if the spread pushed screens past the top or
+  // left edge, shift everything back in and pan by the same amount so what is
+  // on screen does not move.
+  var minX = Infinity, minY = Infinity;
+  screens.forEach(function (s: Screen) { var p = state.positions[s.id]; if (p) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); } });
+  var shiftX = minX < 40 ? 40 - minX : 0, shiftY = minY < 40 ? 40 - minY : 0;
+  if (shiftX || shiftY) {
+    screens.forEach(function (s: Screen) { var p = state.positions[s.id]; if (p) { p.x += shiftX; p.y += shiftY; } });
+    state.panX -= shiftX * state.zoom;
+    state.panY -= shiftY * state.zoom;
+    applyTransform();
+    saveZoom();
+  }
+  screens.forEach(function (s: Screen) {
+    var el = state.screenEls[s.id];
+    var pos = state.positions[s.id];
+    if (el && pos) { el.style.left = pos.x + 'px'; el.style.top = pos.y + 'px'; }
+  });
+  if (!state.focus) savePositions(); // a focus view is temporary: not persisted
+  drawArrows();
 }
 
 export function doReset(): void {
@@ -100,16 +138,9 @@ export function doReset(): void {
     }
   });
 
-  var checkboxes = state.container.querySelectorAll('.fb-legend-checkbox');
-  for (var i = 0; i < checkboxes.length; i++) {
-    (checkboxes[i] as HTMLInputElement).checked = true;
-    var item = checkboxes[i].closest('.fb-legend-item');
-    if (item) item.classList.remove('fb-dimmed');
-  }
-
   updateLayoutButton();
-  drawArrows();
   freezeArrowSides();
+  drawArrows();
   fitToContent();
   if (state.commit) state.commit(); // persist the reset layout into the Flow-ML doc
 }
@@ -145,7 +176,7 @@ export function init(config: FlowConfig): void {
   }
 
   state.showNotes = true;
-  state.showNav = true;
+  state.spacing = 1;
   state.focus = null;
   state.highlightScreen = null;
   state.hiddenScreens = {};
@@ -192,6 +223,10 @@ export function init(config: FlowConfig): void {
   }
 
   // Build root
+  // Host = direct child of <body> → treat as a full-page board (zero body margin,
+  // no page scrollbars). An embedded host (inside an app layout) is left alone.
+  if (containerEl.parentElement === document.body) containerEl.classList.add('fb-fullpage');
+
   var root = document.createElement('div');
   root.className = 'fb-container';
   containerEl.innerHTML = '';
@@ -305,7 +340,11 @@ export function init(config: FlowConfig): void {
   initSync(); // Flow-ML panel ↔ diagram (fills the panel from the current board)
 
   // After DOM layout: measure heights, recompute layout, draw arrows
+  var thisProject = state.project;
   requestAnimationFrame(function () {
+    // init() was called again before this frame (another board in the same
+    // container): this pass belongs to a stale board, drop it.
+    if (state.project !== thisProject) return;
     // Measure actual screen heights
     var heights: Record<string, number> = {};
     screens.forEach(function (s: Screen) {
@@ -329,7 +368,9 @@ export function init(config: FlowConfig): void {
       });
     }
 
-    if (!hasSavedZoom) {
+    // Fit when nothing was saved — and also when the saved view shows no screen
+    // at all (a stale pan would leave the user staring at an empty canvas).
+    if (!hasSavedZoom || !isContentInView()) {
       fitToContent();
     }
 

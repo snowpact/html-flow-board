@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { parse } from './src/flowml/parse';
 import { serialize } from './src/flowml/serialize';
-import { autoLayout, layoutArrows, layoutByEpics, LAYOUT_STRATEGIES } from './src/layout';
+import { autoLayout, layoutArrows, layoutByEpics, layoutGrid, spreadPositions, LAYOUT_STRATEGIES } from './src/layout';
+import { adjustSpacing } from './src/board';
+import { collectExportBounds, isScreenShown } from './src/export';
+import { isContentInView } from './src/interactions/transform';
+import { GAP_X, GAP_Y } from './src/core/constants';
 import { init } from './src/board';
 import { state, screenEpics, inEpic } from './src/core/state';
 import { setFocus, exitFocus, persistedPositions } from './src/focus';
@@ -9,6 +13,7 @@ import { commit } from './src/interactions/sync';
 import { loadDoc } from './src/core/storage';
 import { cycleArrowKind } from './src/render/popups';
 import { toggleScreenEpic, setScreenEpic } from './src/render/screen';
+import { createScreen } from './src/interactions/create';
 import { deleteEpic } from './src/render/toolbar';
 import { drawArrows, wrapLabel, bezierPoint } from './src/arrows';
 
@@ -229,14 +234,11 @@ describe('board: epic picker, focus, multi-epic, arrow kinds', () => {
     expect(state.screenEls.C.querySelectorAll('.fb-epic-dot').length).toBe(0);
   });
 
-  it('draws kind classes and hides nav arrows when toggled off', () => {
+  it('draws kind classes; nav arrows are always drawn (no toggle)', () => {
     drawArrows();
     expect(document.querySelectorAll('.fb-arrow-main').length).toBe(1);
     expect(document.querySelectorAll('.fb-arrow-nav').length).toBe(1);
-    const toggle = document.querySelector('[data-testid="toggle-nav"]');
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event('change'));
-    expect(document.querySelectorAll('.fb-arrow-nav').length).toBe(0);
+    expect(document.querySelector('[data-testid="toggle-nav"]')).toBeNull();
   });
 
   it('hover emphasis only marks the hovered screen arrows', () => {
@@ -255,5 +257,271 @@ describe('board: epic picker, focus, multi-epic, arrow kinds', () => {
     expect(state.project.arrows[2].kind).toBe('nav');
     cycleArrowKind(2);
     expect(state.project.arrows[2].kind).toBeUndefined();
+  });
+});
+
+describe('arrow detail card', () => {
+  it('round-trips detail + note through Flow-ML', () => {
+    const project = { epics: [], screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', label: 'Clôturer', kind: 'main', detail: 'POST /v1/update · UPDATE_CLOTURE', note: 'heure de départ + compte rendu' }] };
+    const out = serialize(project, {});
+    expect(out).toContain('a -> b, l=Clôturer, k=main, d="POST /v1/update · UPDATE_CLOTURE", n="heure de départ + compte rendu"');
+    expect(parse(out).project.arrows[0]).toEqual(project.arrows[0]);
+  });
+
+  it('draws a card (code chip) for an arrow with detail, a plain label otherwise', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
+    init({
+      container: document.getElementById('app'),
+      project: { name: 'ApiTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }, { id: 'C' }],
+        arrows: [{ from: 'A', to: 'B', label: 'go', detail: 'GET /x', note: 'renvoie x' }, { from: 'B', to: 'C', label: 'plain' }] },
+      state: { positions: { A: { x: 0, y: 0 }, B: { x: 600, y: 0 }, C: { x: 1200, y: 0 } } },
+    });
+    drawArrows();
+    const cards = document.querySelectorAll('.fb-arrow-card');
+    expect(cards.length).toBe(1);
+    expect(cards[0].querySelector('.fb-arrow-detail').textContent).toBe('GET /x');
+    expect(cards[0].querySelector('.fb-arrow-note').textContent).toBe('renvoie x');
+    expect(document.querySelectorAll('.fb-arrow-label-group').length).toBe(2);
+  });
+});
+
+describe('arrow color + adaptive gaps', () => {
+  it('round-trips color through Flow-ML and tints the card', () => {
+    const project = { epics: [], screens: [{ id: 'a' }, { id: 'b' }], arrows: [{ from: 'a', to: 'b', label: 'x', detail: 'GET /x', color: 'amber' }] };
+    const out = serialize(project, {});
+    expect(out).toContain('a -> b, l=x, d="GET /x", c=amber');
+    expect(parse(out).project.arrows[0]).toEqual(project.arrows[0]);
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
+    init({ container: document.getElementById('app'), project: { name: 'ColorTest', ...project }, state: { positions: { a: { x: 0, y: 0 }, b: { x: 700, y: 0 } } } });
+    drawArrows();
+    const bg = document.querySelector('.fb-arrow-card .fb-arrow-label-bg');
+    expect(bg.getAttribute('stroke')).toBe('#d97706');
+    expect(bg.getAttribute('fill')).toBe('#fff4d6');
+  });
+
+  it('Flow layout widens the gap between two columns when a card must fit between them', () => {
+    const screens = [{ id: 'a', size: 'md' }, { id: 'b', size: 'md' }];
+    const plain = autoLayout(screens, [{ from: 'a', to: 'b' }]);
+    const card = autoLayout(screens, [{ from: 'a', to: 'b', label: 'Clôturer', detail: 'POST /v1/update/une/route/vraiment/tres/longue/sans/espace' }]);
+    expect(plain.b.x - plain.a.x).toBe(320 + GAP_X);
+    expect(card.b.x - card.a.x).toBeGreaterThan(320 + GAP_X);
+  });
+
+  it('Epics layout widens the vertical gap between rows for a card on a cross-row arrow', () => {
+    const screens = [{ id: 'a', epic: 'e1', size: 'md' }, { id: 'b', epic: 'e2', size: 'md' }];
+    const plain = layoutByEpics(screens, [{ from: 'a', to: 'b' }], { a: 100, b: 100 });
+    const card = layoutByEpics(screens, [{ from: 'a', to: 'b', label: 'Une action avec un long libellé qui se replie', detail: 'POST /v1/update · UPDATE_CLOTURE · UPDATE_HISTO · UPDATE_DOCUMENT · UPDATE_ARRIVEESITE', note: 'heure de départ, compte rendu, signatures technicien et client, photos annotées, consommables, retour matériel' }], { a: 100, b: 100 });
+    // Same column, adjacent rows: the full card height is reserved.
+    expect(card.b.y - card.a.y).toBeGreaterThan(plain.b.y - plain.a.y);
+  });
+});
+
+describe('true grid, spacing, export scope', () => {
+  it('Flow lays columns on a true grid: rows aligned across columns, top-anchored', () => {
+    const screens = [{ id: 'r', size: 'md' }, { id: 'a', size: 'md' }, { id: 'b', size: 'md' }, { id: 'c', size: 'md' }];
+    const arrows = [{ from: 'r', to: 'a' }, { from: 'r', to: 'b' }, { from: 'r', to: 'c' }];
+    const pos = autoLayout(screens, arrows, { r: 100, a: 100, b: 100, c: 100 });
+    expect(pos.r.y).toBe(pos.a.y);            // first row aligned (no centering stagger)
+    expect(pos.a.x).toBe(pos.b.x);
+    expect(pos.b.y - pos.a.y).toBe(100 + GAP_Y);
+  });
+
+  it('Grid groups screens by epic and wraps after ceil(sqrt(n))', () => {
+    state.project = { epics: [{ id: 'e1' }, { id: 'e2' }], screens: [], arrows: [] };
+    const screens = [{ id: 'a', epic: 'e2', size: 'md' }, { id: 'b', epic: 'e1', size: 'md' }, { id: 'c', epic: 'e1', size: 'md' }, { id: 'd', epic: 'e2', size: 'md' }];
+    const pos = layoutGrid(screens, [], {});
+    expect(pos.b.y).toBe(pos.c.y);            // e1 pair on the first row
+    expect(pos.b.x).toBeLessThan(pos.c.x);
+    expect(pos.a.y).toBeGreaterThan(pos.b.y); // e2 on the second row
+    state.project = null;
+  });
+
+  it('spreadPositions scales every gap from the top-left corner', () => {
+    const pos = spreadPositions({ a: { x: 100, y: 100 }, b: { x: 600, y: 100 }, c: { x: 100, y: 800 } }, 1.2);
+    expect(pos.a).toEqual({ x: 100, y: 100 });
+    expect(pos.b).toEqual({ x: 700, y: 100 });
+    expect(pos.c).toEqual({ x: 100, y: 940 });
+  });
+
+  it('the spacing buttons spread the current positions and persist', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'SpaceTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [{ from: 'A', to: 'B' }] },
+      state: { positions: { A: { x: 100, y: 100 }, B: { x: 600, y: 100 } } } });
+    // jsdom: no layout → no viewport origin → scaled from the top-left corner (A stays put).
+    const zoom = state.zoom, panX = state.panX, panY = state.panY;
+    document.querySelector('[data-testid="spacing-plus"]').click();
+    expect(state.positions.A.x).toBe(100);
+    expect(state.positions.B.x).toBe(700);
+    expect(state.spacing).toBeCloseTo(1.2);
+    expect(loadDoc()).toContain('x=700');
+    // The view must not jump: zoom and pan are untouched.
+    expect([state.zoom, state.panX, state.panY]).toEqual([zoom, panX, panY]);
+    document.querySelector('[data-testid="spacing-minus"]').click();
+    expect(state.positions.B.x).toBe(600);
+  });
+
+  it('spreading past the canvas edge shifts the screens back in and pans by the same amount', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'EdgeTest', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [] },
+      state: { positions: { A: { x: 0, y: 0 }, B: { x: 500, y: 0 } }, zoom: 1, panX: 0, panY: 0 } });
+    state.wrapperEl.getBoundingClientRect = () => ({ width: 1000, height: 800, left: 0, top: 0, right: 1000, bottom: 800 });
+    document.querySelector('[data-testid="spacing-plus"]').click();
+    // Scaled around (500, 400): A would land at x=-100 → shifted to the 40px margin, pan compensates.
+    expect(state.positions.A.x).toBe(40);
+    expect(state.positions.B.x).toBe(640);
+    expect(state.panX).toBe(-140);
+  });
+
+  it('export bounds only cover the focused epic', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'ExportTest', epics: [{ id: 'e1', label: 'E1', color: '#f00' }, { id: 'e2', label: 'E2', color: '#0f0' }],
+      screens: [{ id: 'A', epic: 'e1' }, { id: 'B', epic: 'e1' }, { id: 'Z', epic: 'e2' }], arrows: [{ from: 'A', to: 'B' }, { from: 'B', to: 'Z' }] },
+      state: { positions: { A: { x: 0, y: 0 }, B: { x: 500, y: 0 }, Z: { x: 5000, y: 5000 } } } });
+    drawArrows();
+    const all = collectExportBounds();
+    expect(all.maxX).toBeGreaterThanOrEqual(5000);
+    setFocus('e1');
+    drawArrows();
+    expect(isScreenShown('Z')).toBe(false);
+    const focused = collectExportBounds();
+    // Only A and B (re-laid out by the focus) count: the bounds match their boxes.
+    const xs = ['A', 'B'].map((id) => state.positions[id].x + state.screenEls[id].offsetWidth);
+    expect(focused.maxX).toBeLessThanOrEqual(Math.max.apply(null, xs) + 1);
+    exitFocus();
+  });
+});
+
+describe('stale saved view', () => {
+  it('isContentInView is false when the viewport shows no screen, true otherwise', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project: { name: 'ViewTest', epics: [], screens: [{ id: 'A' }], arrows: [] },
+      state: { positions: { A: { x: 100, y: 100 } }, zoom: 1, panX: 0, panY: 0 } });
+    // jsdom has no layout: stub the wrapper size and the screen size.
+    state.wrapperEl.getBoundingClientRect = () => ({ width: 1000, height: 800, left: 0, top: 0, right: 1000, bottom: 800 });
+    Object.defineProperty(state.screenEls.A, 'offsetWidth', { value: 260 });
+    Object.defineProperty(state.screenEls.A, 'offsetHeight', { value: 480 });
+    expect(isContentInView()).toBe(true);
+    state.panX = -5000; state.panY = -5000; // looking at an empty area
+    expect(isContentInView()).toBe(false);
+  });
+});
+
+describe('spreadPositions around an origin', () => {
+  it('keeps the origin point fixed', () => {
+    const pos = spreadPositions({ a: { x: 0, y: 0 }, b: { x: 1000, y: 0 } }, 2, { x: 500, y: 0 });
+    expect(pos.a.x).toBe(-500);
+    expect(pos.b.x).toBe(1500);
+  });
+});
+
+describe('full-page host', () => {
+  it('marks a body-level host as full page (no body margin / scrollbars)', () => {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
+    init({ container: document.getElementById('app'), project: { name: 'FullPage', epics: [], screens: [{ id: 'A' }], arrows: [] } });
+    expect(document.getElementById('app').classList.contains('fb-fullpage')).toBe(true);
+  });
+  it('leaves an embedded host alone', () => {
+    document.body.innerHTML = '<div id="layout"><div id="app"></div></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {};
+    init({ container: document.getElementById('app'), project: { name: 'Embedded', epics: [], screens: [{ id: 'A' }], arrows: [] } });
+    expect(document.getElementById('app').classList.contains('fb-fullpage')).toBe(false);
+  });
+});
+
+describe('export pixel budget', () => {
+  it('is a positive number', async () => {
+    const { exportPixelBudget } = await import('./src/export');
+    expect(exportPixelBudget()).toBeGreaterThan(1000000);
+  });
+});
+
+describe('review fixes', () => {
+  function board(project, positions) {
+    document.body.innerHTML = '<div id="app"></div>';
+    try { window.localStorage.clear(); } catch (e) {}
+    state.focus = null; state.selected = {}; state.hiddenScreens = {}; state.screenEls = {}; state.spacing = 1;
+    init({ container: document.getElementById('app'), project, state: { positions, zoom: 1, panX: 0, panY: 0 } });
+    state.wrapperEl.getBoundingClientRect = () => ({ width: 1000, height: 800, left: 0, top: 0, right: 1000, bottom: 800 });
+  }
+
+  it('spacing in a focus keeps the real positions and the hand-set anchor sides', () => {
+    board({ name: 'FocusSpace', epics: [{ id: 'e1', label: 'E1', color: '#f00' }], screens: [{ id: 'A', epic: 'e1' }, { id: 'B', epic: 'e1' }, { id: 'Z' }],
+      arrows: [{ from: 'A', to: 'B', fromSide: 'bottom', toSide: 'top' }] }, { A: { x: 100, y: 100 }, B: { x: 100, y: 900 }, Z: { x: 3000, y: 100 } });
+    setFocus('e1');
+    adjustSpacing(1.2);
+    expect(state.project.arrows[0].fromSide).toBe('bottom'); // untouched
+    expect(persistedPositions().A).toEqual({ x: 100, y: 100 });
+    exitFocus();
+    expect(state.positions.B).toEqual({ x: 100, y: 900 });
+  });
+
+  it('spacing stops at the clamp bounds and stays symmetric', () => {
+    // Screens far from the canvas edge, so the edge shift never kicks in.
+    board({ name: 'Clamp', epics: [], screens: [{ id: 'A' }, { id: 'B' }], arrows: [] }, { A: { x: 2000, y: 2000 }, B: { x: 2500, y: 2000 } });
+    for (let i = 0; i < 3; i++) adjustSpacing(1.2);
+    for (let i = 0; i < 3; i++) adjustSpacing(1 / 1.2);
+    expect(state.spacing).toBeCloseTo(1, 5);
+    expect(Math.abs(state.positions.B.x - 2500)).toBeLessThanOrEqual(2); // symmetric (rounding aside)
+    for (let i = 0; i < 10; i++) adjustSpacing(1.2);
+    expect(state.spacing).toBe(3);
+    const bx = state.positions.B.x;
+    adjustSpacing(1.2); // at the bound: no-op
+    expect(state.positions.B.x).toBe(bx);
+  });
+
+  it('a screen created during a focus keeps a real position after exit', () => {
+    board({ name: 'CreateFocus', epics: [{ id: 'e1', label: 'E1', color: '#f00' }], screens: [{ id: 'A', epic: 'e1' }, { id: 'Z' }], arrows: [] },
+      { A: { x: 100, y: 100 }, Z: { x: 3000, y: 100 } });
+    setFocus('e1');
+    const id = createScreen('form', 400, 300);
+    exitFocus();
+    expect(state.positions[id]).toBeDefined();
+    expect(() => drawArrows()).not.toThrow();
+  });
+
+  it('no arrow handles while focused', () => {
+    board({ name: 'Handles', epics: [{ id: 'e1', label: 'E1', color: '#f00' }], screens: [{ id: 'A', epic: 'e1' }, { id: 'B', epic: 'e1' }], arrows: [{ from: 'A', to: 'B' }] },
+      { A: { x: 100, y: 100 }, B: { x: 700, y: 100 } });
+    drawArrows();
+    expect(state.handleEls.length).toBe(2);
+    setFocus('e1');
+    expect(state.handleEls.length).toBe(0);
+    exitFocus(); drawArrows();
+    expect(state.handleEls.length).toBe(2);
+  });
+
+  it('layouts use the format height when nothing is measured', () => {
+    const pos = autoLayout([{ id: 'a', format: 'phone' }, { id: 'b', format: 'phone' }], [{ from: 'a', to: 'b' }, { from: 'a', to: 'b', kind: 'nav' }]);
+    // two phones side by side: x differs; and a stacked pair would be ≥ 480 apart
+    const stacked = autoLayout([{ id: 'r', format: 'phone' }, { id: 'c1', format: 'phone' }, { id: 'c2', format: 'phone' }], [{ from: 'r', to: 'c1' }, { from: 'r', to: 'c2' }]);
+    expect(stacked.c2.y - stacked.c1.y).toBeGreaterThanOrEqual(480 + GAP_Y);
+    expect(pos.b.x).toBeGreaterThan(pos.a.x);
+  });
+
+  it('parses e="my epic" whole even when the epic is declared after the screen', () => {
+    const r = parse(':s1, e="my epic"\n@"my epic", t=Mine\n');
+    expect(r.project.screens[0].epic).toBe('my epic');
+    expect(r.project.screens[0].epics).toBeUndefined();
+  });
+
+  it('arrowTint: a CSS color name keeps a white fill', async () => {
+    const { arrowTint } = await import('./src/arrows');
+    expect(arrowTint('navy')).toEqual({ fill: '#ffffff', stroke: 'navy' });
+    expect(arrowTint('#123456').fill).toBe('#1234561f');
   });
 });

@@ -42,6 +42,12 @@ export function closeViewMenu(): void {
   if (outsideHandler) { document.removeEventListener('mousedown', outsideHandler, true); outsideHandler = null; }
 }
 
+function findItem(value: string): HTMLElement | null {
+  var items = pickerEl.querySelectorAll('.fb-view-item');
+  for (var i = 0; i < items.length; i++) if (items[i].getAttribute('data-view') === value) return items[i] as HTMLElement;
+  return null;
+}
+
 function visibleOptions(): HTMLElement[] {
   var all = pickerEl.querySelectorAll('.fb-view-item');
   var out: HTMLElement[] = [];
@@ -61,7 +67,7 @@ export function openViewMenu(): void {
   pickerEl.querySelector('.fb-view-btn').setAttribute('aria-expanded', 'true');
   var search = pickerEl.querySelector('.fb-view-search') as HTMLInputElement;
   if (search) { search.value = ''; applyFilter(''); search.focus(); }
-  setActive(pickerEl.querySelector('.fb-view-item[data-view="' + currentValue() + '"]') as HTMLElement);
+  setActive(findItem(currentValue()));
   outsideHandler = function (e: MouseEvent) {
     if (pickerEl && !pickerEl.contains(e.target as Node)) closeViewMenu();
   };
@@ -107,7 +113,7 @@ function onKey(e: KeyboardEvent): void {
 }
 
 function dot(color: string): string {
-  return color ? '<span class="fb-view-dot" style="background:' + color + '"></span>' : '<span class="fb-view-dot fb-view-dot-all">' + ICON_LAYERS + '</span>';
+  return color ? '<span class="fb-view-dot" style="background:' + esc(color) + '"></span>' : '<span class="fb-view-dot fb-view-dot-all">' + ICON_LAYERS + '</span>';
 }
 
 function esc(s: string): string {

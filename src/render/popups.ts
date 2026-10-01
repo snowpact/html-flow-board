@@ -65,6 +65,64 @@ export function showArrowPopup(e: MouseEvent, arrowIndex: number): void {
   });
   popup.appendChild(labelInput);
 
+  // Detail (optional): a code line + a note, drawn as a card under the label
+  var detailInput = document.createElement('input');
+  detailInput.type = 'text';
+  detailInput.className = 'fb-arrow-popup-input fb-arrow-popup-detail';
+  detailInput.placeholder = 'Detail (e.g. POST /v1/update · UPDATE_CLOTURE)';
+  detailInput.value = arrow.detail || '';
+  detailInput.setAttribute('data-testid', 'arrow-detail');
+  var noteInput = document.createElement('input');
+  noteInput.type = 'text';
+  noteInput.className = 'fb-arrow-popup-input fb-arrow-popup-detail';
+  noteInput.placeholder = 'Note';
+  noteInput.value = arrow.note || '';
+  noteInput.setAttribute('data-testid', 'arrow-note');
+  [detailInput, noteInput].forEach(function (inp) {
+    inp.addEventListener('mousedown', function (ev: MouseEvent) { ev.stopPropagation(); });
+    inp.addEventListener('keydown', function (ev: KeyboardEvent) {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { inp.blur(); closeArrowPopup(); }
+      if (ev.key === 'Escape') closeArrowPopup();
+    });
+    inp.addEventListener('blur', function () {
+      var detail = detailInput.value.trim() || undefined;
+      var note = noteInput.value.trim() || undefined;
+      if (detail !== (arrow.detail || undefined) || note !== (arrow.note || undefined)) {
+        if (detail) arrow.detail = detail; else delete arrow.detail;
+        if (note) arrow.note = note; else delete arrow.note;
+        saveArrowMutations();
+        drawArrows();
+      }
+    });
+  });
+  var colorInput = document.createElement('input');
+  colorInput.type = 'text';
+  colorInput.className = 'fb-arrow-popup-input fb-arrow-popup-detail';
+  colorInput.placeholder = 'Color: indigo, amber, green, red, grey, teal, pink or #hex';
+  colorInput.value = arrow.color || '';
+  colorInput.setAttribute('data-testid', 'arrow-color');
+  colorInput.addEventListener('mousedown', function (ev: MouseEvent) { ev.stopPropagation(); });
+  colorInput.addEventListener('keydown', function (ev: KeyboardEvent) {
+    ev.stopPropagation();
+    if (ev.key === 'Enter') { colorInput.blur(); closeArrowPopup(); }
+    if (ev.key === 'Escape') closeArrowPopup();
+  });
+  colorInput.addEventListener('blur', function () {
+    var c = colorInput.value.trim() || undefined;
+    if (c !== (arrow.color || undefined)) {
+      if (c) arrow.color = c; else delete arrow.color;
+      saveArrowMutations();
+      drawArrows();
+    }
+  });
+  var detailWrap = document.createElement('div');
+  detailWrap.className = 'fb-arrow-popup-detailwrap';
+  detailWrap.appendChild(detailInput);
+  detailWrap.appendChild(noteInput);
+  detailWrap.appendChild(colorInput);
+  popup.appendChild(detailWrap);
+
   // Separator
   var popupSep = document.createElement('div');
   popupSep.className = 'fb-arrow-popup-sep';

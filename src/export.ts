@@ -1,4 +1,4 @@
-import { buildSpreadMap, computeControlPoints, getAnchor, resolveArrowSides } from './arrows';
+import { buildSpreadMap, computeControlPoints, getAnchor, isArrowShown, resolveArrowSides } from './arrows';
 import { state } from './core/state';
 import { Arrow, Position, Screen } from './core/types';
 
@@ -17,13 +17,22 @@ export function loadHtml2Canvas(): Promise<any> {
   return html2canvasLoaded;
 }
 
+// Is this screen part of what the board currently shows? (eye toggle + epic focus)
+export function isScreenShown(id: string): boolean {
+  if (state.hiddenScreens[id]) return false;
+  if (state.focus && !state.focus.visible[id]) return false;
+  return true;
+}
+
+// The export covers exactly what is on screen: the shown screens, the drawn
+// arrows and their label cards. An epic focus therefore exports that epic alone.
 export function collectExportBounds(): { minX: number; minY: number; maxX: number; maxY: number } {
   var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
   var arrows: Arrow[] = state.project.arrows || [];
   var spreadMap = buildSpreadMap();
 
   state.project.screens.forEach(function (s: Screen) {
-    if (state.hiddenScreens[s.id]) return;
+    if (!isScreenShown(s.id)) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (!el || !pos) return;
@@ -35,7 +44,7 @@ export function collectExportBounds(): { minX: number; minY: number; maxX: numbe
 
   // Include arrow control points so arrows aren't clipped
   arrows.forEach(function (arrow: Arrow, idx: number) {
-    if (state.hiddenScreens[arrow.from] || state.hiddenScreens[arrow.to]) return;
+    if (!isScreenShown(arrow.from) || !isScreenShown(arrow.to) || !isArrowShown(arrow)) return;
 
     var fromEl = state.screenEls[arrow.from];
     var toEl = state.screenEls[arrow.to];
@@ -58,6 +67,18 @@ export function collectExportBounds(): { minX: number; minY: number; maxX: numbe
     });
   });
 
+  // Label boxes (cards) as drawn, so a wide card at the edge is never cropped.
+  if (state.svgEl) {
+    var boxes = state.svgEl.querySelectorAll('.fb-arrow-group:not(.fb-arrow-dimmed) .fb-arrow-label-bg');
+    for (var i = 0; i < boxes.length; i++) {
+      var bx = parseFloat(boxes[i].getAttribute('x')), by = parseFloat(boxes[i].getAttribute('y'));
+      var bw = parseFloat(boxes[i].getAttribute('width')), bh = parseFloat(boxes[i].getAttribute('height'));
+      if (isNaN(bx) || isNaN(by)) continue;
+      minX = Math.min(minX, bx); minY = Math.min(minY, by);
+      maxX = Math.max(maxX, bx + bw); maxY = Math.max(maxY, by + bh);
+    }
+  }
+
   return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
 }
 
@@ -70,8 +91,8 @@ export function doExport(): void {
   var padding = 40;
   var vx = Math.max(0, bounds.minX - padding);
   var vy = Math.max(0, bounds.minY - padding);
-  var vw = bounds.maxX - bounds.minX + padding * 2;
-  var vh = bounds.maxY - bounds.minY + padding * 2;
+  var vw = bounds.maxX + padding - vx;
+  var vh = bounds.maxY + padding - vy;
 
   // Build a small, clean temporary container (no transform, exact size)
   var tmp = document.createElement('div');
@@ -80,12 +101,12 @@ export function doExport(): void {
 
   // Clone visible screens, offset to crop origin
   state.project.screens.forEach(function (s: Screen) {
-    if (state.hiddenScreens[s.id]) return;
+    if (!isScreenShown(s.id)) return;
     var el = state.screenEls[s.id];
     var pos = state.positions[s.id];
     if (!el || !pos) return;
     var clone = el.cloneNode(true) as HTMLElement;
-    clone.classList.remove('fb-selected', 'fb-dragging');
+    clone.classList.remove('fb-selected', 'fb-dragging', 'fb-focus-out');
     clone.style.left = (pos.x - vx) + 'px';
     clone.style.top = (pos.y - vy) + 'px';
     tmp.appendChild(clone);
@@ -93,6 +114,9 @@ export function doExport(): void {
 
   // Rasterize SVG arrows (cropped via viewBox)
   var svgClone = state.svgEl.cloneNode(true) as SVGSVGElement;
+  svgClone.classList.remove('fb-hl-active'); // no hover emphasis in the export
+  var hl = svgClone.querySelectorAll('.fb-arrow-hl');
+  for (var hi = 0; hi < hl.length; hi++) hl[hi].classList.remove('fb-arrow-hl');
   // Remove dimmed arrows from export
   var dimmedEls = svgClone.querySelectorAll('.fb-arrow-dimmed');
   for (var di = 0; di < dimmedEls.length; di++) {
@@ -106,48 +130,68 @@ export function doExport(): void {
   var svgStr = new XMLSerializer().serializeToString(svgClone);
   var blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
   var url = URL.createObjectURL(blob);
-  var img = new Image();
 
-  img.onload = function () {
+  // Output scale: crisp on Retina (device pixel ratio, at least 2), capped by a
+  // pixel budget so very large boards stay within the browsers' canvas limits
+  // (Safari refuses canvases past ~16 M pixels; Chrome ~268 M).
+  var dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  var scale = Math.max(2, Math.min(3, dpr));
+  var budget = exportPixelBudget();
+  if (vw * vh * scale * scale > budget) scale = Math.max(0.25, Math.sqrt(budget / (vw * vh)));
+  // Browsers also cap each canvas side (≈16 k px): a huge board exports smaller
+  // rather than blurry or blank.
+  var MAX_SIDE = 16000;
+  if (vw * scale > MAX_SIDE) scale = MAX_SIDE / vw;
+  if (vh * scale > MAX_SIDE) scale = MAX_SIDE / vh;
+  var outW = Math.round(vw * scale), outH = Math.round(vh * scale);
+
+  // 1. Screens: html2canvas renders the DOM clone once, at `scale`.
+  document.body.appendChild(tmp);
+  var screensDone = loadHtml2Canvas().then(function (html2canvas: any) {
+    return html2canvas(tmp, { width: vw, height: vh, scale: scale, backgroundColor: null, useCORS: true, logging: false });
+  });
+
+  // 2. Arrows: the SVG is rasterized straight at `scale` (no intermediate 1× pass).
+  var arrowsDone = new Promise<HTMLImageElement>(function (resolve, reject) {
+    var img = new Image();
+    img.onload = function () { resolve(img); };
+    img.onerror = function () { reject(new Error('Arrow rasterization failed')); };
+    img.src = url;
+  });
+
+  // 3. Composite: background, screens, arrows on top — a single pass each.
+  Promise.all([screensDone, arrowsDone]).then(function (res) {
+    var screensCanvas = res[0] as HTMLCanvasElement;
+    var arrowsImg = res[1] as HTMLImageElement;
     URL.revokeObjectURL(url);
+    if (tmp.parentNode) document.body.removeChild(tmp);
 
-    // Draw arrows onto a canvas element (2x resolution)
-    var ac = document.createElement('canvas');
-    ac.width = vw * 2;
-    ac.height = vh * 2;
-    ac.style.cssText = 'position:absolute;top:0;left:0;width:' + vw + 'px;height:' + vh + 'px;pointer-events:none;';
-    ac.getContext('2d').drawImage(img, 0, 0, vw * 2, vh * 2);
-    tmp.appendChild(ac);
+    var out = document.createElement('canvas');
+    out.width = outW; out.height = outH;
+    var ctx = out.getContext('2d');
+    ctx.fillStyle = '#f0f2f5';
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.drawImage(screensCanvas, 0, 0, outW, outH);
+    ctx.drawImage(arrowsImg, 0, 0, outW, outH);
 
-    document.body.appendChild(tmp);
-
-    // Capture the small temp container at 2x
-    loadHtml2Canvas().then(function (html2canvas: any) {
-      return html2canvas(tmp, {
-        width: vw,
-        height: vh,
-        scale: 2,
-        backgroundColor: '#f0f2f5',
-        useCORS: true
-      });
-    }).then(function (resultCanvas: HTMLCanvasElement) {
-      document.body.removeChild(tmp);
-      var link = document.createElement('a');
-      link.download = (state.project.name || 'flowboard') + '.png';
-      link.href = resultCanvas.toDataURL('image/png');
-      link.click();
-    }).catch(function (err: any) {
-      if (tmp.parentNode) document.body.removeChild(tmp);
-      console.error('Export failed:', err);
-    });
-  };
-
-  img.onerror = function () {
+    var suffix = state.focus ? ' - ' + state.focus.id : '';
+    var link = document.createElement('a');
+    link.download = (state.project.name || 'flowboard') + suffix + '.png';
+    link.href = out.toDataURL('image/png');
+    link.click();
+  }).catch(function (err: any) {
     URL.revokeObjectURL(url);
-    console.error('Arrow rasterization failed');
-  };
+    if (tmp.parentNode) document.body.removeChild(tmp);
+    console.error('Export failed:', err);
+  });
+}
 
-  img.src = url;
+// Max output pixels for the export canvas. Safari caps a canvas around 16 M
+// pixels; other browsers go much higher. Detected by user agent, generously.
+export function exportPixelBudget(): number {
+  var ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|Edg/.test(ua);
+  return isSafari ? 16000000 : 120000000;
 }
 
 // -- Init --

@@ -16,8 +16,8 @@ interface AnchorPoint extends Position {
 export function getBestSides(fromEl: HTMLElement, toEl: HTMLElement): SidePair {
   var fromId = fromEl.dataset.screenId;
   var toId = toEl.dataset.screenId;
-  var fp = state.positions[fromId];
-  var tp = state.positions[toId];
+  var fp = state.positions[fromId] || { x: 0, y: 0 };
+  var tp = state.positions[toId] || { x: 0, y: 0 };
   var fw = fromEl.offsetWidth;
   var fh = fromEl.offsetHeight;
   var tw = toEl.offsetWidth;
@@ -43,6 +43,7 @@ export function getAnchor(screenId: string, side: Side): Position {
   if (!el) return { x: 0, y: 0 };
 
   var pos = state.positions[screenId];
+  if (!pos) return { x: 0, y: 0 }; // screen without a position yet (mid-rebuild)
   var w = el.offsetWidth;
   var h = el.offsetHeight;
 
@@ -105,7 +106,17 @@ export function resolveArrowSides(arrow: Arrow, idx: number, spreadMap: Record<n
   // the wrong way, so pick the best sides from the focus positions.
   if (state.focus) {
     var fe = state.screenEls[arrow.from], te = state.screenEls[arrow.to];
-    if (fe && te) return getBestSides(fe, te);
+    if (fe && te) {
+      var base = getBestSides(fe, te);
+      // Keep the auto-spread (parallel arrows) by re-applying its sub-position.
+      var sp = spreadMap && spreadMap[idx];
+      if (sp) {
+        var sf = sp.from.indexOf('-') === -1 ? '' : sp.from.slice(sp.from.indexOf('-'));
+        var st = sp.to.indexOf('-') === -1 ? '' : sp.to.slice(sp.to.indexOf('-'));
+        return { from: base.from + sf, to: base.to + st };
+      }
+      return base;
+    }
   }
   if (arrow.fromSide && arrow.toSide) {
     return { from: arrow.fromSide, to: arrow.toSide };
@@ -221,11 +232,9 @@ var KIND_STYLE: Record<string, { color: string; width: string; marker: string }>
 // Draw order: nav under default under main, so the journey always stays on top.
 var KIND_RANK: Record<string, number> = { nav: 0, default: 1, main: 2 };
 
-// Is this arrow drawn at all? Hidden when an end is out of the current focus, or
-// when it is a nav arrow and nav arrows are toggled off.
+// Is this arrow drawn at all? Hidden when an end is out of the current focus.
 export function isArrowShown(arrow: Arrow): boolean {
   if (state.focus && (!state.focus.visible[arrow.from] || !state.focus.visible[arrow.to])) return false;
-  if (arrow.kind === 'nav' && state.showNav === false) return false;
   return true;
 }
 
@@ -236,17 +245,22 @@ var LABEL_FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, 
 var measureCtx: CanvasRenderingContext2D | null | undefined;
 var widthCache: Record<string, number> = {};
 
+function getMeasureCtx(): CanvasRenderingContext2D | null {
+  if (measureCtx === undefined) {
+    try { measureCtx = document.createElement('canvas').getContext('2d'); } catch (e) { measureCtx = null; }
+  }
+  return measureCtx;
+}
+
 export function measureLabel(text: string, fontSize: number, bold: boolean): number {
   var key = fontSize + (bold ? 'b' : '') + '|' + text;
   var hit = widthCache[key];
   if (hit !== undefined) return hit;
-  if (measureCtx === undefined) {
-    try { measureCtx = document.createElement('canvas').getContext('2d'); } catch (e) { measureCtx = null; }
-  }
+  var ctx = getMeasureCtx();
   var w: number;
-  if (measureCtx) {
-    measureCtx.font = (bold ? '600 ' : '') + fontSize + 'px ' + LABEL_FONT_FAMILY;
-    w = measureCtx.measureText(text).width;
+  if (ctx) {
+    ctx.font = (bold ? '600 ' : '') + fontSize + 'px ' + LABEL_FONT_FAMILY;
+    w = ctx.measureText(text).width;
   } else {
     w = text.length * fontSize * 0.56; // no canvas (e.g. jsdom): close estimate
   }
@@ -332,6 +346,148 @@ function screenBoxes(): Box[] {
 
 var KIND_PRIORITY: Record<string, number> = { main: 0, default: 1, nav: 2 };
 
+var CODE_FONT = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+var codeWidthCache: Record<string, number> = {};
+export function measureCode(text: string, fontSize: number): number {
+  var key = fontSize + '|' + text;
+  if (codeWidthCache[key] !== undefined) return codeWidthCache[key];
+  var w: number;
+  var ctx = getMeasureCtx();
+  if (ctx) { ctx.font = fontSize + 'px ' + CODE_FONT; w = ctx.measureText(text).width; }
+  else w = text.length * fontSize * 0.6;
+  codeWidthCache[key] = w;
+  return w;
+}
+
+// Code lines wrap on ' · ' separators first (one call per line), then by width.
+function wrapCode(text: string, fontSize: number): string[] {
+  var parts = String(text).split(/\s·\s/);
+  var out: string[] = [];
+  parts.forEach(function (p) {
+    if (measureCode(p, fontSize) <= LABEL_MAX_W + 40) { out.push(p); return; }
+    var words = p.split(/\s+/), cur = '';
+    words.forEach(function (wd) {
+      var next = cur ? cur + ' ' + wd : wd;
+      if (cur && measureCode(next, fontSize) > LABEL_MAX_W + 40) { out.push(cur); cur = wd; } else cur = next;
+    });
+    if (cur) out.push(cur);
+  });
+  return out.slice(0, 4);
+}
+
+// Card: white box, title, grey code chip lines, muted note. Centered on `at`.
+function drawDetailCard(ns: string, g: Element, job: LabelJob, at: Position, m: LabelMetrics, tint?: { fill: string; stroke: string } | null): void {
+  var bw = m.w, bh = m.h, lines = m.lines, lineH = m.lineH, fontSize = m.fontSize, bold = m.bold;
+  var apiLines = m.codeLines, codeSize = m.codeSize, noteLines = m.noteLines, noteSize = m.noteSize;
+  var x0 = at.x - bw / 2, y0 = at.y - bh / 2;
+  var accent = tint ? tint.stroke : (job.kind === 'main' ? '#374151' : '#9ca3af');
+  var fill = tint ? tint.fill : '#ffffff';
+
+  var bg = document.createElementNS(ns, 'rect');
+  bg.setAttribute('x', String(x0)); bg.setAttribute('y', String(y0));
+  bg.setAttribute('width', String(bw)); bg.setAttribute('height', String(bh));
+  bg.setAttribute('rx', '6'); bg.setAttribute('ry', '6');
+  bg.setAttribute('class', 'fb-arrow-label-bg');
+  bg.setAttribute('fill', fill); bg.setAttribute('stroke', accent); bg.setAttribute('stroke-width', '1');
+  g.appendChild(bg);
+
+  var y = y0 + 8;
+  var title = document.createElementNS(ns, 'text');
+  title.setAttribute('class', 'fb-arrow-label');
+  title.setAttribute('fill', '#1f2937');
+  title.setAttribute('font-size', String(fontSize));
+  title.setAttribute('font-weight', bold ? '700' : '600');
+  title.setAttribute('font-family', LABEL_FONT_FAMILY);
+  title.setAttribute('text-anchor', 'start');
+  (title as SVGElement).style.textAnchor = 'start'; // the .fb-arrow-label CSS centers by default
+  title.setAttribute('x', String(x0 + 10));
+  lines.forEach(function (l, i) {
+    var ts = document.createElementNS(ns, 'tspan');
+    ts.setAttribute('x', String(x0 + 10)); ts.setAttribute('y', String(y + i * lineH + lineH * 0.78));
+    ts.textContent = l; title.appendChild(ts);
+  });
+  g.appendChild(title);
+  y += lines.length * lineH + 4;
+
+  apiLines.forEach(function (l) {
+    var cw = measureCode(l, codeSize) + 8, ch = codeSize + 5;
+    var chip = document.createElementNS(ns, 'rect');
+    chip.setAttribute('x', String(x0 + 10)); chip.setAttribute('y', String(y));
+    chip.setAttribute('width', String(cw)); chip.setAttribute('height', String(ch - 1));
+    chip.setAttribute('rx', '3'); chip.setAttribute('fill', tint ? '#ffffff' : '#f1f2f5');
+    g.appendChild(chip);
+    var t = document.createElementNS(ns, 'text');
+    t.setAttribute('class', 'fb-arrow-detail');
+    t.setAttribute('x', String(x0 + 14)); t.setAttribute('y', String(y + ch * 0.72));
+    t.setAttribute('font-size', String(codeSize)); t.setAttribute('font-family', CODE_FONT); t.setAttribute('fill', '#111827');
+    t.textContent = l; g.appendChild(t);
+    y += ch;
+  });
+
+  if (noteLines.length) {
+    y += 3;
+    var n = document.createElementNS(ns, 'text');
+    n.setAttribute('class', 'fb-arrow-note');
+    n.setAttribute('font-size', String(noteSize)); n.setAttribute('font-family', LABEL_FONT_FAMILY); n.setAttribute('fill', '#6b7280');
+    noteLines.forEach(function (l, i) {
+      var ts = document.createElementNS(ns, 'tspan');
+      ts.setAttribute('x', String(x0 + 10)); ts.setAttribute('y', String(y + i * (noteSize + 3) + noteSize * 0.8));
+      ts.textContent = l; n.appendChild(ts);
+    });
+    g.appendChild(n);
+  }
+}
+
+// Named tints for arrow labels / cards. Any other value is used as the border
+// color, with a 12 % alpha fill when it is a 6-digit hex.
+var TINTS: Record<string, { fill: string; stroke: string }> = {
+  indigo: { fill: '#eef0ff', stroke: '#6366f1' },
+  amber:  { fill: '#fff4d6', stroke: '#d97706' },
+  green:  { fill: '#e6f4ea', stroke: '#1a7f37' },
+  red:    { fill: '#fdecea', stroke: '#dc2626' },
+  grey:   { fill: '#f3f4f6', stroke: '#6b7280' },
+  teal:   { fill: '#e0f7f4', stroke: '#0f766e' },
+  pink:   { fill: '#fce7f3', stroke: '#db2777' },
+};
+export function arrowTint(color: string | undefined): { fill: string; stroke: string } | null {
+  if (!color) return null;
+  if (TINTS[color]) return TINTS[color];
+  // Any other CSS color: used for the border; the fill is a light tint when it is
+  // a 6-digit hex (alpha appended), else plain white so the text stays readable.
+  var fill = /^#[0-9a-f]{6}$/i.test(color) ? color + '1f' : '#ffffff';
+  return { fill: fill, stroke: color };
+}
+
+// Measured size of an arrow's label box (plain label or detail card), without
+// drawing it. Used by the layouts to leave enough room between screens.
+export interface LabelMetrics {
+  w: number; h: number; isCard: boolean; lines: string[]; lineH: number; fontSize: number; bold: boolean;
+  codeLines: string[]; codeSize: number; noteLines: string[]; noteSize: number;
+}
+export function labelMetrics(arrow: Arrow): LabelMetrics | null {
+  if (!arrow.label && !arrow.detail) return null;
+  var kind = arrow.kind || 'default';
+  var bold = kind === 'main';
+  var fontSize = kind === 'nav' ? 10 : 11;
+  var lineH = Math.round(fontSize * 1.3);
+  var lines = arrow.label ? wrapLabel(arrow.label, fontSize, bold) : [];
+  var w = 0;
+  lines.forEach(function (l) { w = Math.max(w, measureLabel(l, fontSize, bold)); });
+  var bw = w + 10, bh = Math.max(1, lines.length) * lineH + 6;
+  var isCard = !!arrow.detail;
+  var codeSize = 10, noteSize = 10;
+  var codeLines: string[] = [], noteLines: string[] = [];
+  if (isCard) {
+    codeLines = wrapCode(arrow.detail, codeSize);
+    if (arrow.note) noteLines = wrapLabel(arrow.note, noteSize, false);
+    codeLines.forEach(function (l) { w = Math.max(w, measureCode(l, codeSize) + 8); });
+    noteLines.forEach(function (l) { w = Math.max(w, measureLabel(l, noteSize, false)); });
+    bw = w + 20;
+    bh = 8 + lines.length * lineH + 4 + codeLines.length * (codeSize + 5) + (noteLines.length ? 3 + noteLines.length * (noteSize + 3) : 0) + 8;
+  }
+  return { w: bw, h: bh, isCard: isCard, lines: lines, lineH: lineH, fontSize: fontSize, bold: bold, codeLines: codeLines, codeSize: codeSize, noteLines: noteLines, noteSize: noteSize };
+}
+
 function placeLabels(ns: string, jobs: LabelJob[]): void {
   if (!jobs.length) return;
   var screens = screenBoxes();
@@ -340,30 +496,47 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
 
   jobs.forEach(function (job) {
     var kind = job.kind;
-    var bold = kind === 'main';
-    var fontSize = kind === 'nav' ? 10 : 11;
-    var lineH = Math.round(fontSize * 1.3);
-    var lines = wrapLabel(job.arrow.label, fontSize, bold);
-    var w = 0;
-    lines.forEach(function (l) { w = Math.max(w, measureLabel(l, fontSize, bold)); });
-    var bw = w + 10, bh = lines.length * lineH + 6;
+    var m = labelMetrics(job.arrow);
+    if (!m) return;
+    var bold = m.bold, fontSize = m.fontSize, lineH = m.lineH, lines = m.lines;
+    var bw = m.w, bh = m.h, isCard = m.isCard;
+    var apiLines = m.codeLines, codeSize = m.codeSize, noteLines = m.noteLines, noteSize = m.noteSize;
+    var tint = arrowTint(job.arrow.color);
 
     // Try spots along the curve; keep the first free one, else the least covered.
     var best: Position = null, bestScore = Infinity;
+    // Candidates: points along the curve, each also nudged to either side of it
+    // (perpendicular), so a box can slide off a crowded spot instead of covering it.
+    var off = Math.max(bh, 40) / 2 + 10;
+    outer:
     for (var k = 0; k < LABEL_TS.length; k++) {
-      var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, LABEL_TS[k]);
-      var box = { x: pt.x - bw / 2, y: pt.y - bh / 2, w: bw, h: bh };
-      var score = 0;
-      for (var si = 0; si < screens.length; si++) score += overlapArea(box, screens[si]) * 3;
-      for (var li = 0; li < placed.length; li++) score += overlapArea(box, placed[li]);
-      if (score < bestScore) { bestScore = score; best = pt; }
-      if (score === 0) break;
+      var t = LABEL_TS[k];
+      var pt = bezierPoint(job.start, job.cp1, job.cp2, job.end, t);
+      var ahead = bezierPoint(job.start, job.cp1, job.cp2, job.end, Math.min(1, t + 0.02));
+      var tx = ahead.x - pt.x, ty = ahead.y - pt.y;
+      var len = Math.sqrt(tx * tx + ty * ty) || 1;
+      var nx = -ty / len, ny = tx / len; // unit normal
+      var cands = [pt, { x: pt.x + nx * off, y: pt.y + ny * off }, { x: pt.x - nx * off, y: pt.y - ny * off }];
+      for (var ci = 0; ci < cands.length; ci++) {
+        var c = cands[ci];
+        var box = { x: c.x - bw / 2, y: c.y - bh / 2, w: bw, h: bh };
+        var score = ci === 0 ? 0 : 1; // prefer sitting on the curve when free
+        for (var si = 0; si < screens.length; si++) score += overlapArea(box, screens[si]) * 3;
+        for (var li = 0; li < placed.length; li++) score += overlapArea(box, placed[li]);
+        if (score < bestScore) { bestScore = score; best = c; }
+        if (score === 0) break outer;
+      }
     }
-    // Nav labels only show on hover: they never reserve room from the others.
-    if (kind !== 'nav') placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
+    placed.push({ x: best.x - bw / 2, y: best.y - bh / 2, w: bw, h: bh });
 
     var labelGroup = document.createElementNS(ns, 'g');
-    labelGroup.setAttribute('class', 'fb-arrow-label-group' + (job.dimmed ? ' fb-arrow-dimmed' : ''));
+    labelGroup.setAttribute('class', 'fb-arrow-label-group' + (isCard ? ' fb-arrow-card' : '') + (job.dimmed ? ' fb-arrow-dimmed' : ''));
+
+    if (isCard) {
+      drawDetailCard(ns, labelGroup, job, best, m, tint);
+      job.g.appendChild(labelGroup);
+      return;
+    }
 
     var bgRect = document.createElementNS(ns, 'rect');
     bgRect.setAttribute('x', String(best.x - bw / 2));
@@ -371,8 +544,9 @@ function placeLabels(ns: string, jobs: LabelJob[]): void {
     bgRect.setAttribute('width', String(bw));
     bgRect.setAttribute('height', String(bh));
     bgRect.setAttribute('class', 'fb-arrow-label-bg');
-    bgRect.setAttribute('fill', kind === 'main' ? '#ffffff' : '#f0f2f5');
-    if (kind === 'main') { bgRect.setAttribute('stroke', '#374151'); bgRect.setAttribute('stroke-width', '1'); }
+    bgRect.setAttribute('fill', tint ? tint.fill : (kind === 'main' ? '#ffffff' : '#f0f2f5'));
+    if (tint) { bgRect.setAttribute('stroke', tint.stroke); bgRect.setAttribute('stroke-width', '1'); }
+    else if (kind === 'main') { bgRect.setAttribute('stroke', '#374151'); bgRect.setAttribute('stroke-width', '1'); }
     bgRect.setAttribute('rx', '4');
     bgRect.setAttribute('ry', '4');
 
@@ -500,7 +674,7 @@ export function drawArrows(skipHandles?: boolean): void {
     state.svgEl.appendChild(g);
 
     // Label: placed after every path, by priority (see placeLabels)
-    if (arrow.label) {
+    if (arrow.label || arrow.detail) {
       labelJobs.push({ g: g, arrow: arrow, kind: kind, start: start, cp1: cp1, cp2: cp2, end: end, dimmed: !!isDimmed });
     }
   });
@@ -561,6 +735,9 @@ export function updateHandles(): void {
   // Remove old handle divs
   state.handleEls.forEach(function (el: HTMLElement) { if (el.parentNode) el.parentNode.removeChild(el); });
   state.handleEls = [];
+  // A focus view is a temporary layout: anchor sides dragged there would be
+  // wrong on the real board, so arrows are not editable while focused.
+  if (state.focus) return;
 
   if (!state.project) return;
 
